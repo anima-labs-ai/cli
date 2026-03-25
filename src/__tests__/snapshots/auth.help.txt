@@ -1,0 +1,12 @@
+Usage: am auth [options] [command]
+
+Authentication and session management
+
+Options:
+  -h, --help       display help for command
+
+Commands:
+  login [options]  Authenticate with Anima
+  logout           Clear stored authentication credentials
+  whoami           Display current authentication status
+  help [command]   display help for command

@@ -1,0 +1,20 @@
+Usage: am vault [options] [command]
+
+Manage password vault credentials
+
+Options:
+  -h, --help                       display help for command
+
+Commands:
+  provision [options]              Provision vault for an agent
+  deprovision [options]            Deprovision vault for an agent
+  status [options]                 Check vault status
+  sync [options]                   Force vault sync
+  store [options]                  Store/create a vault credential
+  get [options] <credentialId>     Get credential by ID
+  list [options]                   List credentials
+  search [options]                 Search credentials
+  delete [options] <credentialId>  Delete credential
+  generate [options]               Generate password
+  totp [options] <credentialId>    Get TOTP code
+  help [command]                   display help for command

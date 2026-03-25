@@ -1,0 +1,12 @@
+Usage: am init [options]
+
+Set up Anima CLI with guided wizard
+
+Options:
+  --non-interactive  Use defaults without prompting
+  --api-key <key>    API key (required in non-interactive mode)
+  --api-url <url>    API URL
+  --org <org>        Default organization
+  --identity <id>    Default identity
+  --format <format>  Output format (table/json/yaml)
+  -h, --help         display help for command

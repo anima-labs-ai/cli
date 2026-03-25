@@ -1,0 +1,14 @@
+Usage: am admin [options] [command]
+
+Organization and team administration
+
+Options:
+  -h, --help       display help for command
+
+Commands:
+  org              Organization management
+  member           Team member management
+  key              Organization API key management
+  kyb              Know-Your-Business verification
+  usage [options]  Show usage summary
+  help [command]   display help for command

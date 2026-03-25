@@ -1,0 +1,46 @@
+{
+  "name": "@anima-labs/cli",
+  "version": "0.1.0",
+  "description": "Official Anima CLI — Identity infrastructure for AI agents. Manage identities, email, phone numbers, cards, vault secrets, and runtime configuration.",
+  "type": "module",
+  "bin": {
+    "am": "./src/cli.ts",
+    "anima": "./src/cli.ts"
+  },
+  "files": ["src/", "package.json", "README.md", "LICENSE", "CHANGELOG.md"],
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.0.0"
+  },
+  "author": "Anima Labs <support@anima.email>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anima-labs-ai/cli"
+  },
+  "homepage": "https://github.com/anima-labs-ai/cli",
+  "bugs": {
+    "url": "https://github.com/anima-labs-ai/cli/issues"
+  },
+  "keywords": ["anima", "cli", "ai-agents", "email", "identity"],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "bun build --compile --outfile dist/am src/cli.ts"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "picocolors": "^1.1.0",
+    "ora": "^8.2.0",
+    "cli-table3": "^0.6.5",
+    "env-paths": "^3.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/bun": "latest"
+  }
+}

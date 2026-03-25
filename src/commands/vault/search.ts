@@ -1,0 +1,124 @@
+import { Command } from 'commander';
+import { Output } from '../../lib/output.js';
+import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
+import { ApiError } from '../../lib/api-client.js';
+
+type CredentialType = 'login' | 'secure_note' | 'card' | 'identity';
+
+interface CredentialUri {
+  uri: string;
+  match?: 'domain' | 'host' | 'starts_with' | 'regex' | 'never';
+}
+
+interface LoginCredential {
+  username?: string;
+  password?: string;
+  uris?: CredentialUri[];
+  totp?: string;
+}
+
+interface CardCredential {
+  cardholderName?: string;
+  brand?: string;
+  number?: string;
+  expMonth?: string;
+  expYear?: string;
+  code?: string;
+}
+
+interface IdentityCredential {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  company?: string;
+  ssn?: string;
+}
+
+interface CustomField {
+  name: string;
+  value: string;
+  type: 'text' | 'hidden' | 'boolean';
+}
+
+interface VaultCredential {
+  id: string;
+  type: CredentialType;
+  name: string;
+  notes?: string;
+  login?: LoginCredential;
+  card?: CardCredential;
+  identity?: IdentityCredential;
+  fields?: CustomField[];
+  favorite: boolean;
+  folderId?: string;
+  organizationId?: string;
+  collectionIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SearchResponse {
+  items: VaultCredential[];
+}
+
+interface SearchOptions {
+  agent: string;
+  query: string;
+  type?: CredentialType;
+}
+
+export function searchCommand(): Command {
+  return new Command('search')
+    .description('Search credentials')
+    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--query <search>', 'Search query')
+    .option('--type <type>', 'Credential type filter')
+    .action(async function (this: Command) {
+      const opts = this.opts<SearchOptions>();
+      const globals = this.optsWithGlobals<GlobalOptions>();
+      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+
+      try {
+        const client = await requireAuth(globals);
+        const params: Record<string, string> = {
+          agentId: opts.agent,
+          search: opts.query,
+        };
+        if (opts.type) {
+          params.type = opts.type;
+        }
+
+        const result = await client.get<SearchResponse>('/api/v1/vault/search', params);
+
+        if (globals.json) {
+          output.json(result);
+          return;
+        }
+
+        output.table(
+          ['ID', 'Type', 'Name', 'Username', 'Favorite', 'Updated'],
+          result.items.map((item) => [
+            item.id,
+            item.type,
+            item.name,
+            item.login?.username ?? '',
+            item.favorite ? 'Yes' : 'No',
+            item.updatedAt,
+          ]),
+        );
+      } catch (error: unknown) {
+        if (error instanceof ApiError) {
+          output.error(`Failed to search credentials: ${error.message}`);
+        } else if (error instanceof Error) {
+          output.error(`Failed to search credentials: ${error.message}`);
+        }
+        process.exit(1);
+      }
+    });
+}

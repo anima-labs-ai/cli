@@ -1,0 +1,13 @@
+Usage: am email [options] [command]
+
+Send and manage emails
+
+Options:
+  -h, --help      display help for command
+
+Commands:
+  send [options]  Send an email
+  list [options]  List emails
+  get <id>        Get email by ID
+  domains         Manage email sending domains
+  help [command]  display help for command

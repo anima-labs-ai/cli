@@ -1,0 +1,16 @@
+Usage: am card [options] [command]
+
+Manage virtual payment cards
+
+Options:
+  -h, --help                 display help for command
+
+Commands:
+  create [options]           Create a virtual card
+  list [options]             List cards
+  get <cardId>               Get card details
+  update [options] <cardId>  Update card settings
+  delete <cardId>            Delete or cancel a card
+  transactions [options]     List card transactions
+  kill-switch [options]      Toggle card kill switch
+  help [command]             display help for command

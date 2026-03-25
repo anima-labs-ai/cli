@@ -1,0 +1,14 @@
+Usage: am phone [options] [command]
+
+Manage phone numbers and SMS
+
+Options:
+  -h, --help           display help for command
+
+Commands:
+  search [options]     Search available phone numbers
+  provision [options]  Provision a phone number for an agent
+  list [options]       List provisioned phone numbers for an agent
+  release [options]    Release a provisioned phone number
+  send-sms [options]   Send an SMS from an agent
+  help [command]       display help for command

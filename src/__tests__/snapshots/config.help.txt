@@ -1,0 +1,14 @@
+Usage: am config [options] [command]
+
+Manage CLI configuration and profiles
+
+Options:
+  -h, --help                   display help for command
+
+Commands:
+  set [options] <key> <value>  Set a configuration value
+  get [options] <key>          Get a configuration value (resolved with
+                               precedence)
+  list [options]               List all configuration values and profiles
+  profile                      Manage configuration profiles
+  help [command]               display help for command
