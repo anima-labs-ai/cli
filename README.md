@@ -151,6 +151,24 @@ am admin kyb status        # Check KYB verification status
 am admin usage             # View usage statistics
 ```
 
+### `webhook` — Manage webhooks
+
+```bash
+am webhook create      # Create a webhook
+am webhook list        # List all webhooks
+am webhook get <id>    # Get webhook details
+am webhook delete <id> # Delete a webhook
+am webhook test <id>   # Send a test event to a webhook
+am webhook deliveries <id>  # List webhook delivery history
+```
+
+### `security` — Security monitoring and scanning
+
+```bash
+am security events     # List security events
+am security scan <content>  # Scan content for security threats
+```
+
 ### `init` — Set up Anima CLI
 
 ```bash

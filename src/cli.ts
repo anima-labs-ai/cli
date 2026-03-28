@@ -10,6 +10,8 @@ import { configCommands } from './commands/config/index.js';
 import { setupMcpCommands } from './commands/setup-mcp/index.js';
 import { extensionCommands } from './commands/extension/index.js';
 import { adminCommands } from './commands/admin/index.js';
+import { webhookCommands } from './commands/webhook/index.js';
+import { securityCommands } from './commands/security/index.js';
 import { initCommand } from './commands/init/index.js';
 
 export function createProgram(): Command {
@@ -34,6 +36,8 @@ export function createProgram(): Command {
   program.addCommand(setupMcpCommands());
   program.addCommand(extensionCommands());
   program.addCommand(adminCommands());
+  program.addCommand(webhookCommands());
+  program.addCommand(securityCommands());
   program.addCommand(initCommand());
 
   program.exitOverride();
