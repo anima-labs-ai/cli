@@ -5,6 +5,9 @@ import { getIdentityCommand } from './get.js';
 import { updateIdentityCommand } from './update.js';
 import { deleteIdentityCommand } from './delete.js';
 import { rotateIdentityKeyCommand } from './rotate-key.js';
+import { getDidCommand } from './did.js';
+import { listCredentialsCommand } from './credentials.js';
+import { getAgentCardCommand } from './card.js';
 
 export function identityCommands(): Command {
   const cmd = new Command('identity')
@@ -17,6 +20,9 @@ export function identityCommands(): Command {
   cmd.addCommand(updateIdentityCommand());
   cmd.addCommand(deleteIdentityCommand());
   cmd.addCommand(rotateIdentityKeyCommand());
+  cmd.addCommand(getDidCommand());
+  cmd.addCommand(listCredentialsCommand());
+  cmd.addCommand(getAgentCardCommand());
 
   return cmd;
 }
