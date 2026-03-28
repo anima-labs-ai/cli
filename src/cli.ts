@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
+import { addressCommands } from './commands/address/index.js';
 import { authCommands } from './commands/auth/index.js';
 import { identityCommands } from './commands/identity/index.js';
 import { emailCommands } from './commands/email/index.js';
@@ -26,6 +27,7 @@ export function createProgram(): Command {
     .option('--token <token>', 'API token (overrides stored auth)')
     .option('--api-url <url>', 'API base URL (overrides stored config)');
 
+  program.addCommand(addressCommands());
   program.addCommand(authCommands());
   program.addCommand(identityCommands());
   program.addCommand(emailCommands());
