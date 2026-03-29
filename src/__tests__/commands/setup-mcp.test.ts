@@ -3,7 +3,7 @@ import { createProgram } from '../../cli.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const testConfigDir = join(import.meta.dir, '.test-setup-mcp-config');
 
@@ -17,8 +17,17 @@ mock.module('env-paths', () => ({
   }),
 }));
 
+const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
+
 function claudeDesktopPath(baseDir: string): string {
-  return join(baseDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  if (isWindows) return join(baseDir, 'AppData', 'Claude', 'claude_desktop_config.json');
+  if (isMac) return join(baseDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  return join(baseDir, '.config', 'Claude', 'claude_desktop_config.json');
+}
+
+function claudeDesktopDir(baseDir: string): string {
+  return dirname(claudeDesktopPath(baseDir));
 }
 
 function cursorPath(baseDir: string): string {
@@ -30,7 +39,13 @@ function windsurfPath(baseDir: string): string {
 }
 
 function vscodePath(baseDir: string): string {
-  return join(baseDir, 'Library', 'Application Support', 'Code', 'User', 'mcp.json');
+  if (isWindows) return join(baseDir, 'AppData', 'Code', 'User', 'mcp.json');
+  if (isMac) return join(baseDir, 'Library', 'Application Support', 'Code', 'User', 'mcp.json');
+  return join(baseDir, '.config', 'Code', 'User', 'mcp.json');
+}
+
+function vscodeDir(baseDir: string): string {
+  return dirname(vscodePath(baseDir));
 }
 
 function claudeCodePath(baseDir: string): string {
@@ -85,7 +100,7 @@ describe('setup-mcp commands', () => {
   });
 
   test('detects installed clients based on config directories', async () => {
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Claude'), { recursive: true });
+    mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     const logSpy = mock(() => {});
@@ -105,7 +120,7 @@ describe('setup-mcp commands', () => {
 
   test('install writes correct config for Claude Desktop', async () => {
     const target = claudeDesktopPath(testConfigDir);
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Claude'), { recursive: true });
+    mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     await program.parseAsync(['node', 'am', 'setup-mcp', 'install', '--client', 'claude-desktop']);
 
@@ -193,7 +208,7 @@ describe('setup-mcp commands', () => {
 
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
     mkdirSync(join(testConfigDir, '.codeium', 'windsurf'), { recursive: true });
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Code', 'User'), { recursive: true });
+    mkdirSync(vscodeDir(testConfigDir), { recursive: true });
     writeFileSync(cursor, JSON.stringify({ mcpServers: { anima: { command: 'bunx' } } }, null, 2));
     writeFileSync(windsurf, JSON.stringify({ mcpServers: {} }, null, 2));
     writeFileSync(vscode, JSON.stringify({ servers: {} }, null, 2));
@@ -252,7 +267,7 @@ describe('setup-mcp commands', () => {
 
   test('install --mode remote writes mcp-remote config for Claude Desktop', async () => {
     const target = claudeDesktopPath(testConfigDir);
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Claude'), { recursive: true });
+    mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     await program.parseAsync([
       'node', 'am', 'setup-mcp', 'install', '--client', 'claude-desktop', '--mode', 'remote',
@@ -300,7 +315,7 @@ describe('setup-mcp commands', () => {
 
   test('install --mode remote with --api-key uses override key in Bearer token', async () => {
     const target = claudeDesktopPath(testConfigDir);
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Claude'), { recursive: true });
+    mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     await program.parseAsync([
       'node', 'am', 'setup-mcp', 'install',
@@ -386,7 +401,7 @@ describe('setup-mcp commands', () => {
   });
 
   test('install --mode remote writes native HTTP config for VS Code with inputs', async () => {
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Code', 'User'), { recursive: true });
+    mkdirSync(vscodeDir(testConfigDir), { recursive: true });
     const target = vscodePath(testConfigDir);
 
     await program.parseAsync([
@@ -434,7 +449,7 @@ describe('setup-mcp commands', () => {
   });
 
   test('install --mode remote does not duplicate VS Code inputs on repeated install', async () => {
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Code', 'User'), { recursive: true });
+    mkdirSync(vscodeDir(testConfigDir), { recursive: true });
     const target = vscodePath(testConfigDir);
 
     await program.parseAsync([
@@ -689,7 +704,7 @@ describe('setup-mcp commands', () => {
     const cursor = cursorPath(testConfigDir);
     const claudeDesktop = claudeDesktopPath(testConfigDir);
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
-    mkdirSync(join(testConfigDir, 'Library', 'Application Support', 'Claude'), { recursive: true });
+    mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     writeFileSync(cursor, JSON.stringify({
       mcpServers: {
