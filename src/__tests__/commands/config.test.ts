@@ -62,9 +62,9 @@ describe('config commands', () => {
 
     test('sets value in a named profile', async () => {
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'set', '--profile', 'staging', 'apiUrl', 'https://staging.anima.com']);
+      await program.parseAsync(['node', 'am', 'config', 'set', '--profile', 'staging', 'apiUrl', 'https://staging.useanima.sh']);
       const config = readAppConfig();
-      expect((config.profiles as Record<string, Record<string, string>>).staging.apiUrl).toBe('https://staging.anima.com');
+      expect((config.profiles as Record<string, Record<string, string>>).staging.apiUrl).toBe('https://staging.useanima.sh');
     });
 
     test('rejects invalid config key', async () => {
@@ -99,7 +99,7 @@ describe('config commands', () => {
 
     test('gets value from specific profile', async () => {
       writeAppConfig({
-        profiles: { prod: { apiUrl: 'https://api.anima.com' } },
+        profiles: { prod: { apiUrl: 'https://api.useanima.sh' } },
       });
 
       const logSpy = mock(() => {});
@@ -110,7 +110,7 @@ describe('config commands', () => {
       await program.parseAsync(['node', 'am', 'config', 'get', '--profile', 'prod', 'apiUrl']);
 
       console.log = origLog;
-      expect(logSpy).toHaveBeenCalledWith('https://api.anima.com');
+      expect(logSpy).toHaveBeenCalledWith('https://api.useanima.sh');
     });
 
     test('reports error for unset key', async () => {
@@ -168,8 +168,8 @@ describe('config commands', () => {
       writeAppConfig({
         activeProfile: 'prod',
         profiles: {
-          prod: { apiUrl: 'https://api.anima.com', defaultOrg: 'prod-org' },
-          staging: { apiUrl: 'https://staging.anima.com' },
+          prod: { apiUrl: 'https://api.useanima.sh', defaultOrg: 'prod-org' },
+          staging: { apiUrl: 'https://staging.useanima.sh' },
         },
       });
 
@@ -209,7 +209,7 @@ describe('config commands', () => {
   describe('config profile', () => {
     test('switches to a profile', async () => {
       writeAppConfig({
-        profiles: { staging: { apiUrl: 'https://staging.anima.com' } },
+        profiles: { staging: { apiUrl: 'https://staging.useanima.sh' } },
       });
 
       program.exitOverride();
@@ -237,8 +237,8 @@ describe('config commands', () => {
       writeAppConfig({
         activeProfile: 'staging',
         profiles: {
-          staging: { apiUrl: 'https://staging.anima.com' },
-          prod: { apiUrl: 'https://api.anima.com' },
+          staging: { apiUrl: 'https://staging.useanima.sh' },
+          prod: { apiUrl: 'https://api.useanima.sh' },
         },
       });
 
@@ -254,7 +254,7 @@ describe('config commands', () => {
       writeAppConfig({
         activeProfile: 'prod',
         profiles: {
-          prod: { apiUrl: 'https://api.anima.com' },
+          prod: { apiUrl: 'https://api.useanima.sh' },
           dev: { apiUrl: 'http://localhost:4001' },
         },
       });
@@ -275,7 +275,7 @@ describe('config commands', () => {
     test('shows current profile', async () => {
       writeAppConfig({
         activeProfile: 'prod',
-        profiles: { prod: { apiUrl: 'https://api.anima.com', defaultOrg: 'prod-org' } },
+        profiles: { prod: { apiUrl: 'https://api.useanima.sh', defaultOrg: 'prod-org' } },
       });
 
       const logSpy = mock(() => {});

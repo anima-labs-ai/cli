@@ -12,7 +12,7 @@
     "node": ">=18",
     "bun": ">=1.0.0"
   },
-  "author": "Anima Labs <support@anima.email>",
+  "author": "Anima Labs <support@useanima.sh>",
   "license": "MIT",
   "repository": {
     "type": "git",

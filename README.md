@@ -1,6 +1,6 @@
 # @anima-labs/cli
 
-Official command-line interface for [Anima](https://anima.email) — identity infrastructure for AI agents. Manage agent identities, email, phone numbers, virtual cards, password vaults, and runtime configuration from your terminal.
+Official command-line interface for [Anima](https://useanima.sh) — identity infrastructure for AI agents. Manage agent identities, email, phone numbers, virtual cards, password vaults, and runtime configuration from your terminal.
 
 ## Installation
 
@@ -226,7 +226,7 @@ MIT - see [LICENSE](./LICENSE)
 
 ## Links
 
-- [Documentation](https://docs.anima.email)
+- [Documentation](https://docs.useanima.sh)
 - [GitHub](https://github.com/anima-labs-ai/cli)
 - [Issues](https://github.com/anima-labs-ai/cli/issues)
-- [Anima Platform](https://anima.email)
+- [Anima Platform](https://useanima.sh)

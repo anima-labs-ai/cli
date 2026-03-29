@@ -53,7 +53,7 @@ describe('init command', () => {
 
     const auth = readAuthConfig();
     expect(auth.apiKey).toBe('ak_test_key_12345');
-    expect(auth.apiUrl).toBe('https://api.anima.com');
+    expect(auth.apiUrl).toBe('https://api.useanima.sh');
   });
 
   test('non-interactive mode saves app config with defaults', async () => {
@@ -78,19 +78,19 @@ describe('init command', () => {
   });
 
   test('interactive mode saves correct auth config', async () => {
-    const responses = ['https://api.anima.com', 'ak_test_key_12345', '', '', 'table', 'n'];
+    const responses = ['https://api.useanima.sh', 'ak_test_key_12345', '', '', 'table', 'n'];
     let promptIndex = 0;
     globalThis.prompt = mock(() => responses[promptIndex++] ?? '');
 
     await program.parseAsync(['node', 'am', 'init']);
 
     const auth = readAuthConfig();
-    expect(auth.apiUrl).toBe('https://api.anima.com');
+    expect(auth.apiUrl).toBe('https://api.useanima.sh');
     expect(auth.apiKey).toBe('ak_test_key_12345');
   });
 
   test('interactive mode saves correct app config', async () => {
-    const responses = ['https://api.anima.com', 'ak_test_key_12345', 'my-org', 'agent-1', 'yaml', 'y'];
+    const responses = ['https://api.useanima.sh', 'ak_test_key_12345', 'my-org', 'agent-1', 'yaml', 'y'];
     let promptIndex = 0;
     globalThis.prompt = mock(() => responses[promptIndex++] ?? '');
 
@@ -138,7 +138,7 @@ describe('init command', () => {
     console.log = origLog;
 
     const jsonOutput = JSON.parse(String(logSpy.mock.calls[0]?.at(0) ?? '{}'));
-    expect(jsonOutput.apiUrl).toBe('https://api.anima.com');
+    expect(jsonOutput.apiUrl).toBe('https://api.useanima.sh');
     expect(jsonOutput.apiKeyConfigured).toBe(true);
     expect(jsonOutput.defaultOrg).toBe('my-org');
     expect(jsonOutput.defaultIdentity).toBe('agent-1');
@@ -163,7 +163,7 @@ describe('init command', () => {
       '--api-key',
       'ak_new_key_12345',
       '--api-url',
-      'https://api.anima.com',
+      'https://api.useanima.sh',
       '--org',
       'org-1',
       '--identity',
@@ -178,7 +178,7 @@ describe('init command', () => {
     expect(auth.token).toBe('existing-token');
     expect(auth.email).toBe('user@example.com');
     expect(auth.apiKey).toBe('ak_new_key_12345');
-    expect(auth.apiUrl).toBe('https://api.anima.com');
+    expect(auth.apiUrl).toBe('https://api.useanima.sh');
 
     expect(config.activeProfile).toBe('prod');
     expect(config.profiles).toEqual({ prod: { apiUrl: 'https://prod.example.com' } });

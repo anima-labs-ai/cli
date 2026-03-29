@@ -127,7 +127,7 @@ describe('setup-mcp commands', () => {
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
       mcpServers: { anima: { command: string; args: string[]; env: { ANIMA_API_KEY: string } } };
     };
-    expect(saved.mcpServers.anima.command).toBe('bunx');
+    expect(saved.mcpServers.useanima.shmand).toBe('bunx');
     expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
     expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
@@ -141,7 +141,7 @@ describe('setup-mcp commands', () => {
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
       mcpServers: { anima: { command: string; args: string[]; env: { ANIMA_API_KEY: string } } };
     };
-    expect(saved.mcpServers.anima.command).toBe('bunx');
+    expect(saved.mcpServers.useanima.shmand).toBe('bunx');
     expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
     expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
@@ -282,9 +282,9 @@ describe('setup-mcp commands', () => {
         };
       };
     };
-    expect(saved.mcpServers.anima.command).toBe('npx');
+    expect(saved.mcpServers.useanima.shmand).toBe('npx');
     expect(saved.mcpServers.anima.args).toContain('mcp-remote');
-    expect(saved.mcpServers.anima.args).toContain('https://mcp.anima.com/mcp');
+    expect(saved.mcpServers.anima.args).toContain('https://mcp.useanima.sh/mcp');
     expect(saved.mcpServers.anima.args).toContain('--header');
     expect(saved.mcpServers.anima.args).toContain('Authorization:${ANIMA_TOKEN}');
     expect(saved.mcpServers.anima.env.ANIMA_TOKEN).toBe('Bearer ak_stored_123');
@@ -353,7 +353,7 @@ describe('setup-mcp commands', () => {
         };
       };
     };
-    expect(saved.mcpServers.anima.command).toBe('bunx');
+    expect(saved.mcpServers.useanima.shmand).toBe('bunx');
     expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
     expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
@@ -374,7 +374,7 @@ describe('setup-mcp commands', () => {
         };
       };
     };
-    expect(saved.mcpServers.anima.url).toBe('https://mcp.anima.com/mcp');
+    expect(saved.mcpServers.anima.url).toBe('https://mcp.useanima.sh/mcp');
     expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ak_stored_123');
     expect((saved.mcpServers.anima as unknown as Record<string, unknown>).command).toBeUndefined();
   });
@@ -395,7 +395,7 @@ describe('setup-mcp commands', () => {
         };
       };
     };
-    expect(saved.mcpServers.anima.serverUrl).toBe('https://mcp.anima.com/mcp');
+    expect(saved.mcpServers.anima.serverUrl).toBe('https://mcp.useanima.sh/mcp');
     expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ${env:ANIMA_API_KEY}');
     expect((saved.mcpServers.anima as unknown as Record<string, unknown>).url).toBeUndefined();
   });
@@ -419,7 +419,7 @@ describe('setup-mcp commands', () => {
       inputs: Array<{ id: string; type: string; description: string; password: boolean }>;
     };
     expect(saved.servers.anima.type).toBe('http');
-    expect(saved.servers.anima.url).toBe('https://mcp.anima.com/mcp');
+    expect(saved.servers.anima.url).toBe('https://mcp.useanima.sh/mcp');
     expect(saved.servers.anima.headers.Authorization).toBe('Bearer ${input:anima-key}');
     expect(saved.inputs).toBeDefined();
     expect(saved.inputs.length).toBe(1);
@@ -444,7 +444,7 @@ describe('setup-mcp commands', () => {
       };
     };
     expect(saved.mcpServers.anima.type).toBe('http');
-    expect(saved.mcpServers.anima.url).toBe('https://mcp.anima.com/mcp');
+    expect(saved.mcpServers.anima.url).toBe('https://mcp.useanima.sh/mcp');
     expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ${ANIMA_API_KEY}');
   });
 
@@ -514,7 +514,7 @@ describe('setup-mcp commands', () => {
       url: string;
     };
     expect(payload.mode).toBe('remote');
-    expect(payload.url).toBe('https://mcp.anima.com/mcp');
+    expect(payload.url).toBe('https://mcp.useanima.sh/mcp');
     expect(payload.count).toBe(1);
   });
 
@@ -525,7 +525,7 @@ describe('setup-mcp commands', () => {
       mcpServers: {
         anima: {
           command: 'npx',
-          args: ['-y', 'mcp-remote', 'https://mcp.anima.com/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
+          args: ['-y', 'mcp-remote', 'https://mcp.useanima.sh/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
           env: { ANIMA_TOKEN: 'Bearer ak_test_123' },
         },
       },
@@ -545,7 +545,7 @@ describe('setup-mcp commands', () => {
     const cursorRow = payload.clients.find((c) => c.client === 'Cursor');
     expect(cursorRow).toBeDefined();
     expect(cursorRow?.mode).toBe('remote');
-    expect(cursorRow?.url).toBe('https://mcp.anima.com/mcp');
+    expect(cursorRow?.url).toBe('https://mcp.useanima.sh/mcp');
     expect(cursorRow?.configured).toBe(true);
   });
 
@@ -585,7 +585,7 @@ describe('setup-mcp commands', () => {
       mcpServers: {
         anima: {
           command: 'npx',
-          args: ['-y', 'mcp-remote', 'https://mcp.anima.com/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
+          args: ['-y', 'mcp-remote', 'https://mcp.useanima.sh/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
           env: { ANIMA_TOKEN: 'Bearer ak_test_123' },
         },
       },
@@ -677,7 +677,7 @@ describe('setup-mcp commands', () => {
       mcpServers: {
         anima: {
           command: 'npx',
-          args: ['-y', 'mcp-remote', 'https://mcp.anima.com/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
+          args: ['-y', 'mcp-remote', 'https://mcp.useanima.sh/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
           env: { ANIMA_TOKEN: 'ak_test_123' },
         },
       },
@@ -720,7 +720,7 @@ describe('setup-mcp commands', () => {
       mcpServers: {
         anima: {
           command: 'npx',
-          args: ['-y', 'mcp-remote', 'https://mcp.anima.com/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
+          args: ['-y', 'mcp-remote', 'https://mcp.useanima.sh/mcp', '--header', 'Authorization:${ANIMA_TOKEN}'],
           env: { ANIMA_TOKEN: 'Bearer ak_test_456' },
         },
       },
@@ -749,7 +749,7 @@ describe('setup-mcp commands', () => {
     writeFileSync(cursor, JSON.stringify({
       mcpServers: {
         anima: {
-          url: 'https://mcp.anima.com/mcp',
+          url: 'https://mcp.useanima.sh/mcp',
           headers: { Authorization: 'Bearer ak_test_123' },
         },
       },
@@ -779,7 +779,7 @@ describe('setup-mcp commands', () => {
     writeFileSync(windsurf, JSON.stringify({
       mcpServers: {
         anima: {
-          serverUrl: 'https://mcp.anima.com/mcp',
+          serverUrl: 'https://mcp.useanima.sh/mcp',
           headers: { Authorization: 'Bearer ${env:ANIMA_API_KEY}' },
         },
       },
@@ -808,7 +808,7 @@ describe('setup-mcp commands', () => {
     writeFileSync(cursor, JSON.stringify({
       mcpServers: {
         anima: {
-          url: 'https://mcp.anima.com/mcp',
+          url: 'https://mcp.useanima.sh/mcp',
           headers: { Authorization: 'Bearer ak_test_123' },
         },
       },
@@ -827,7 +827,7 @@ describe('setup-mcp commands', () => {
     };
     const cursorRow = payload.clients.find((c) => c.client === 'Cursor');
     expect(cursorRow?.mode).toBe('remote');
-    expect(cursorRow?.url).toBe('https://mcp.anima.com/mcp');
+    expect(cursorRow?.url).toBe('https://mcp.useanima.sh/mcp');
     expect(cursorRow?.configured).toBe(true);
   });
 

@@ -182,7 +182,7 @@ async function resolveApiKey(override?: string): Promise<string> {
   return input;
 }
 
-const DEFAULT_REMOTE_URL = 'https://mcp.anima.com/mcp';
+const DEFAULT_REMOTE_URL = 'https://mcp.useanima.sh/mcp';
 
 function buildMcpServerEntry(
   apiKey: string,

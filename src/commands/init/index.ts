@@ -3,7 +3,7 @@ import type { GlobalOptions } from '../../lib/auth.js';
 import { getAuthConfig, getConfig, saveAuthConfig, saveConfig } from '../../lib/config.js';
 import { Output } from '../../lib/output.js';
 
-const DEFAULT_API_URL = 'https://api.anima.com';
+const DEFAULT_API_URL = 'https://api.useanima.sh';
 const DEFAULT_OUTPUT_FORMAT = 'table';
 
 type OutputFormat = 'table' | 'json' | 'yaml';
