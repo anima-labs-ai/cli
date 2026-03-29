@@ -3,13 +3,16 @@ Usage: am identity|id [options] [command]
 Manage agent identities
 
 Options:
-  -h, --help            display help for command
+  -h, --help             display help for command
 
 Commands:
-  create [options]      Create an identity
-  list [options]        List identities
-  get [options]         Get an identity by ID
-  update [options]      Update an identity
-  delete [options]      Delete an identity
-  rotate-key [options]  Rotate API key for an identity
-  help [command]        display help for command
+  create [options]       Create an identity
+  list [options]         List identities
+  get [options]          Get an identity by ID
+  update [options]       Update an identity
+  delete [options]       Delete an identity
+  rotate-key [options]   Rotate API key for an identity
+  did [options]          Get the DID for an agent
+  credentials [options]  List verifiable credentials for an agent
+  card [options]         Get the public agent card
+  help [command]         display help for command

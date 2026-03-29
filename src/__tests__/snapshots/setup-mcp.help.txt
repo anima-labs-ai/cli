@@ -9,6 +9,5 @@ Commands:
   install [options]    Install Anima MCP server in supported clients
   uninstall [options]  Remove Anima MCP server from supported clients
   status               Show Anima MCP setup status across clients
-  verify [options]     Verify Anima MCP configuration for installed
-                       clients
+  verify [options]     Verify Anima MCP configuration for installed clients
   help [command]       display help for command
