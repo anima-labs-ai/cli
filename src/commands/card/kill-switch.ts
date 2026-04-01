@@ -53,7 +53,7 @@ export function killSwitchCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<KillSwitchResponse>('/api/v1/cards/kill-switch', body);
+        const result = await client.post<KillSwitchResponse>('/cards/kill-switch', body);
 
         if (globals.json) {
           output.json(result);

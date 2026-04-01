@@ -24,7 +24,7 @@ export function rotateIdentityKeyCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<RotateKeyResponse>(`/api/v1/agents/${opts.id}/rotate-key`);
+        const result = await client.post<RotateKeyResponse>(`/agents/${opts.id}/rotate-key`);
 
         if (globals.json) {
           output.json(result);

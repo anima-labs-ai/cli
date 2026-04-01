@@ -82,7 +82,7 @@ export function listCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<ListResponse>('/api/v1/vault/credentials', {
+        const result = await client.get<ListResponse>('/vault/credentials', {
           agentId: opts.agent,
         });
 

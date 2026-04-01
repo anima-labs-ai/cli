@@ -26,7 +26,7 @@ export function getDidCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<DidDocument>(`/api/v1/agents/${opts.agent}/did`);
+        const result = await client.get<DidDocument>(`/agents/${opts.agent}/did`);
 
         if (globals.json) {
           output.json(result);

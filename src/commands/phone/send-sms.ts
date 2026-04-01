@@ -67,7 +67,7 @@ export function sendSmsCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const response = await client.post<SendSmsResponse>('/api/v1/phone/send-sms', payload);
+        const response = await client.post<SendSmsResponse>('/phone/send-sms', payload);
 
         if (globals.json) {
           output.json(response);

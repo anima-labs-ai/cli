@@ -30,7 +30,7 @@ export function listPhoneNumbersCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const response = await client.get<ListResponse>('/api/v1/phone/numbers', { agentId: opts.agent });
+        const response = await client.get<ListResponse>('/phone/numbers', { agentId: opts.agent });
 
         if (globals.json) {
           output.json(response);

@@ -23,7 +23,7 @@ export function getDomainCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<DomainDetailsResponse>(`/api/v1/domains/${id}`);
+        const result = await client.get<DomainDetailsResponse>(`/domains/${id}`);
 
         if (globals.json) {
           output.json(result);

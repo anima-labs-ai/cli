@@ -21,7 +21,7 @@ export function addDomainCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<AddDomainResponse>('/api/v1/domains', {
+        const result = await client.post<AddDomainResponse>('/domains', {
           domain: domain.toLowerCase(),
         });
 

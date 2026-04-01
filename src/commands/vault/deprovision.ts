@@ -22,7 +22,7 @@ export function deprovisionCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<DeprovisionResponse>('/api/v1/vault/deprovision', {
+        const result = await client.post<DeprovisionResponse>('/vault/deprovision', {
           agentId: opts.agent,
         });
 

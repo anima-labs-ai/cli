@@ -24,7 +24,7 @@ export function statusCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<VaultStatusResponse>('/api/v1/vault/status', {
+        const result = await client.get<VaultStatusResponse>('/vault/status', {
           agentId: opts.agent,
         });
 

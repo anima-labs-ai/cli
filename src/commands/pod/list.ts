@@ -34,7 +34,7 @@ export function listPodsCommand(): Command {
         if (opts.agent) query.agentId = opts.agent;
 
         const client = await requireAuth(globals);
-        const response = await client.get<ListResponse>('/api/v1/pods', query);
+        const response = await client.get<ListResponse>('/pods', query);
 
         if (globals.json) {
           output.json(response);

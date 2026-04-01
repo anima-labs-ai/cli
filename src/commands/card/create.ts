@@ -97,7 +97,7 @@ export function createCardCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<Card>('/api/v1/cards', body);
+        const result = await client.post<Card>('/cards', body);
 
         if (globals.json) {
           output.json(result);

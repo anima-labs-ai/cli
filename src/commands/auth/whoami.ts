@@ -28,7 +28,7 @@ export function whoamiCommand(): Command {
 
       try {
         const client = await getApiClient(globals);
-        const result = await client.get<WhoamiResponse>('/api/v1/auth/me');
+        const result = await client.get<WhoamiResponse>('/auth/me');
 
         output.details([
           ['Email', result.email],

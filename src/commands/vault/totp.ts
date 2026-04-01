@@ -24,7 +24,7 @@ export function totpCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<TotpResponse>(`/api/v1/vault/totp/${credentialId}`, {
+        const result = await client.get<TotpResponse>(`/vault/totp/${credentialId}`, {
           agentId: opts.agent,
         });
 

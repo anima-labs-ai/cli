@@ -32,7 +32,7 @@ export function provisionCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<VaultProvisionResponse>('/api/v1/vault/provision', {
+        const result = await client.post<VaultProvisionResponse>('/vault/provision', {
           agentId: opts.agent,
         });
 

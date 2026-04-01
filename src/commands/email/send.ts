@@ -72,7 +72,7 @@ export function sendEmailCommand(): Command {
           payload.bodyHtml = opts.html;
         }
 
-        const result = await client.post<SendEmailResponse>('/api/v1/email/send', payload);
+        const result = await client.post<SendEmailResponse>('/email/send', payload);
 
         if (globals.json) {
           output.json(result);

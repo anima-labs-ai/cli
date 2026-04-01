@@ -48,7 +48,7 @@ export function sendTaskCommand(): Command {
         }
 
         const result = await client.post<A2ATaskResponse>(
-          `/api/v1/agents/${opts.agent}/a2a/tasks`,
+          `/agents/${opts.agent}/a2a/tasks`,
           body,
         );
 

@@ -49,7 +49,7 @@ export function createPodCommand(): Command {
         if (Object.keys(resources).length > 0) body.resources = resources;
 
         const client = await requireAuth(globals);
-        const result = await client.post<PodResponse>('/api/v1/pods', body);
+        const result = await client.post<PodResponse>('/pods', body);
 
         if (globals.json) {
           output.json(result);

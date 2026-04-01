@@ -24,7 +24,7 @@ export function listWebhooksCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<ListWebhooksResponse>('/api/v1/webhooks');
+        const result = await client.get<ListWebhooksResponse>('/webhooks');
 
         if (globals.json) {
           output.json(result);

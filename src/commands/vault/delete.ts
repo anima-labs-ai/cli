@@ -24,7 +24,7 @@ export function deleteCommand(): Command {
       try {
         const client = await requireAuth(globals);
         const result = await client.delete<DeleteResponse>(
-          `/api/v1/vault/credentials/${credentialId}?${new URLSearchParams({
+          `/vault/credentials/${credentialId}?${new URLSearchParams({
             agentId: opts.agent,
             id: credentialId,
           }).toString()}`,

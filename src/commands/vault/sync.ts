@@ -22,7 +22,7 @@ export function syncCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<SyncResponse>('/api/v1/vault/sync', {
+        const result = await client.post<SyncResponse>('/vault/sync', {
           agentId: opts.agent,
         });
 

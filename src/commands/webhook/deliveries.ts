@@ -51,7 +51,7 @@ export function webhookDeliveriesCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<DeliveriesResponse>(`/api/v1/webhooks/${id}/deliveries`, query);
+        const result = await client.get<DeliveriesResponse>(`/webhooks/${id}/deliveries`, query);
 
         if (globals.json) {
           output.json(result);

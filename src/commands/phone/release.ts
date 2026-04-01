@@ -20,7 +20,7 @@ export function releasePhoneNumberCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const response = await client.post<Record<string, unknown>>('/api/v1/phone/release', {
+        const response = await client.post<Record<string, unknown>>('/phone/release', {
           agentId: opts.agent,
           phoneNumber: opts.number,
         });

@@ -25,7 +25,7 @@ export function securityScanCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<ScanResult>('/api/v1/security/scan', { content });
+        const result = await client.post<ScanResult>('/security/scan', { content });
 
         if (globals.json) {
           output.json(result);

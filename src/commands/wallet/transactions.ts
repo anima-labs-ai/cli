@@ -41,7 +41,7 @@ export function walletTransactionsCommand(): Command {
 
         const client = await requireAuth(globals);
         const response = await client.get<TransactionsResponse>(
-          `/api/v1/agents/${opts.agent}/wallet/transactions`,
+          `/agents/${opts.agent}/wallet/transactions`,
           query,
         );
 

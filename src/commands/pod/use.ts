@@ -29,7 +29,7 @@ export function podUsageCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<PodUsage>(`/api/v1/pods/${opts.id}/usage`);
+        const result = await client.get<PodUsage>(`/pods/${opts.id}/usage`);
 
         if (globals.json) {
           output.json(result);

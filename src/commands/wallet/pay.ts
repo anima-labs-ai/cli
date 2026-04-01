@@ -43,7 +43,7 @@ export function walletPayCommand(): Command {
         if (opts.memo) body.memo = opts.memo;
 
         const client = await requireAuth(globals);
-        const result = await client.post<PayResponse>(`/api/v1/agents/${opts.agent}/wallet/pay`, body);
+        const result = await client.post<PayResponse>(`/agents/${opts.agent}/wallet/pay`, body);
 
         if (globals.json) {
           output.json(result);

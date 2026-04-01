@@ -35,7 +35,7 @@ export function searchRegistryCommand(): Command {
         if (opts.category) query.category = opts.category;
 
         const client = await requireAuth(globals);
-        const response = await client.get<SearchResponse>('/api/v1/registry/agents/search', query);
+        const response = await client.get<SearchResponse>('/registry/agents/search', query);
 
         if (globals.json) {
           output.json(response);

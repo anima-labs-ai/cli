@@ -87,13 +87,13 @@ describe('ApiClient', () => {
 
   describe('GET', () => {
     test('sends GET request and returns parsed JSON', async () => {
-      setRoute('GET /api/v1/test', {
+      setRoute('GET /api/test', {
         status: 200,
         body: { id: '1', name: 'Test' },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL });
-      const result = await client.get<{ id: string; name: string }>('/api/v1/test');
+      const result = await client.get<{ id: string; name: string }>('/test');
 
       expect(result.id).toBe('1');
       expect(result.name).toBe('Test');
@@ -102,13 +102,13 @@ describe('ApiClient', () => {
     });
 
     test('sends GET request with query params', async () => {
-      setRoute('GET /api/v1/items', {
+      setRoute('GET /api/items', {
         status: 200,
         body: { items: [], total: 0 },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL });
-      const result = await client.get<{ items: unknown[]; total: number }>('/api/v1/items', {
+      const result = await client.get<{ items: unknown[]; total: number }>('/items', {
         page: '1',
         limit: '10',
       });
@@ -121,7 +121,7 @@ describe('ApiClient', () => {
       const client = new ApiClient({ baseUrl: BASE_URL });
 
       try {
-        await client.get('/api/v1/nonexistent');
+        await client.get('/nonexistent');
         expect(true).toBe(false);
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);
@@ -131,7 +131,7 @@ describe('ApiClient', () => {
     });
 
     test('throws ApiError on 401', async () => {
-      setRoute('GET /api/v1/protected', {
+      setRoute('GET /api/protected', {
         status: 401,
         body: { message: 'Unauthorized', code: 'AUTH_ERROR' },
       });
@@ -139,7 +139,7 @@ describe('ApiClient', () => {
       const client = new ApiClient({ baseUrl: BASE_URL });
 
       try {
-        await client.get('/api/v1/protected');
+        await client.get('/protected');
         expect(true).toBe(false);
       } catch (error) {
         expect(error).toBeInstanceOf(ApiError);
@@ -153,13 +153,13 @@ describe('ApiClient', () => {
 
   describe('POST', () => {
     test('sends POST request with body', async () => {
-      setRoute('POST /api/v1/agents', {
+      setRoute('POST /api/agents', {
         status: 201,
         body: { id: 'agent-1', name: 'TestBot' },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, token: 'test-token' });
-      const result = await client.post<{ id: string; name: string }>('/api/v1/agents', {
+      const result = await client.post<{ id: string; name: string }>('/agents', {
         name: 'TestBot',
       });
 
@@ -169,13 +169,13 @@ describe('ApiClient', () => {
     });
 
     test('handles 204 No Content', async () => {
-      setRoute('POST /api/v1/action', {
+      setRoute('POST /api/action', {
         status: 204,
         body: null,
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, token: 'test-token' });
-      const result = await client.post('/api/v1/action');
+      const result = await client.post('/action');
 
       expect(result).toEqual({});
       clearRoutes();
@@ -184,13 +184,13 @@ describe('ApiClient', () => {
 
   describe('PATCH', () => {
     test('sends PATCH request', async () => {
-      setRoute('PATCH /api/v1/agents/1', {
+      setRoute('PATCH /api/agents/1', {
         status: 200,
         body: { id: '1', name: 'Updated' },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, token: 'test-token' });
-      const result = await client.patch<{ id: string; name: string }>('/api/v1/agents/1', {
+      const result = await client.patch<{ id: string; name: string }>('/agents/1', {
         name: 'Updated',
       });
 
@@ -201,13 +201,13 @@ describe('ApiClient', () => {
 
   describe('PUT', () => {
     test('sends PUT request', async () => {
-      setRoute('PUT /api/v1/agents/1', {
+      setRoute('PUT /api/agents/1', {
         status: 200,
         body: { id: '1', name: 'Replaced' },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, token: 'test-token' });
-      const result = await client.put<{ id: string; name: string }>('/api/v1/agents/1', {
+      const result = await client.put<{ id: string; name: string }>('/agents/1', {
         name: 'Replaced',
       });
 
@@ -218,13 +218,13 @@ describe('ApiClient', () => {
 
   describe('DELETE', () => {
     test('sends DELETE request', async () => {
-      setRoute('DELETE /api/v1/agents/1', {
+      setRoute('DELETE /api/agents/1', {
         status: 200,
         body: { success: true },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, token: 'test-token' });
-      const result = await client.delete<{ success: boolean }>('/api/v1/agents/1');
+      const result = await client.delete<{ success: boolean }>('/agents/1');
 
       expect(result.success).toBe(true);
       clearRoutes();
@@ -233,26 +233,26 @@ describe('ApiClient', () => {
 
   describe('auth headers', () => {
     test('sends Authorization header with token', async () => {
-      setRoute('GET /api/v1/auth-check', {
+      setRoute('GET /api/auth-check', {
         status: 200,
         body: { ok: true },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, token: 'my-secret-token' });
-      const result = await client.get<{ ok: boolean }>('/api/v1/auth-check');
+      const result = await client.get<{ ok: boolean }>('/auth-check');
       expect(result.ok).toBe(true);
 
       clearRoutes();
     });
 
     test('sends X-API-Key header with api key', async () => {
-      setRoute('GET /api/v1/auth-check', {
+      setRoute('GET /api/auth-check', {
         status: 200,
         body: { ok: true },
       });
 
       const client = new ApiClient({ baseUrl: BASE_URL, apiKey: 'sk_test_key' });
-      const result = await client.get<{ ok: boolean }>('/api/v1/auth-check');
+      const result = await client.get<{ ok: boolean }>('/auth-check');
       expect(result.ok).toBe(true);
 
       clearRoutes();
@@ -273,7 +273,7 @@ describe('ApiClient', () => {
       const client = new ApiClient({ baseUrl: BASE_URL, timeout: 100 });
 
       try {
-        await client.get('/api/v1/slow');
+        await client.get('/slow');
         expect(true).toBe(false);
       } catch (error) {
         expect(error).toBeInstanceOf(Error);

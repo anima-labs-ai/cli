@@ -89,7 +89,7 @@ export function listCardsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<ListCardsResponse>('/api/v1/cards', query);
+        const result = await client.get<ListCardsResponse>('/cards', query);
 
         if (globals.json) {
           output.json(result);

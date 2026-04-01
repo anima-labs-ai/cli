@@ -65,7 +65,7 @@ export function securityEventsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<EventsResponse>('/api/v1/security/events', query);
+        const result = await client.get<EventsResponse>('/security/events', query);
 
         if (globals.json) {
           output.json(result);

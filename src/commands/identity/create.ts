@@ -68,7 +68,7 @@ export function createIdentityCommand(): Command {
           body.metadata = parseMetadata(opts.metadata);
         }
 
-        const result = await client.post<Identity>('/api/v1/agents', body);
+        const result = await client.post<Identity>('/agents', body);
 
         if (globals.json) {
           output.json(result);

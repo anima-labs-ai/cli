@@ -21,7 +21,7 @@ export function verifyDomainCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<VerifyDomainResponse>(`/api/v1/domains/${id}/verify`, {
+        const result = await client.post<VerifyDomainResponse>(`/domains/${id}/verify`, {
           domainId: id,
         });
 

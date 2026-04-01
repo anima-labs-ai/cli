@@ -102,7 +102,7 @@ export function storeCommand(): Command {
       try {
         const requestBody = buildCreateCredentialInput(opts);
         const client = await requireAuth(globals);
-        const result = await client.post<VaultCredential>('/api/v1/vault/credentials', requestBody);
+        const result = await client.post<VaultCredential>('/vault/credentials', requestBody);
 
         if (globals.json) {
           output.json(result);

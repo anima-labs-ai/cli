@@ -38,7 +38,7 @@ export function createWebhookCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.post<Webhook>('/api/v1/webhooks', body);
+        const result = await client.post<Webhook>('/webhooks', body);
 
         if (globals.json) {
           output.json(result);

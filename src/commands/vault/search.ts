@@ -94,7 +94,7 @@ export function searchCommand(): Command {
           params.type = opts.type;
         }
 
-        const result = await client.get<SearchResponse>('/api/v1/vault/search', params);
+        const result = await client.get<SearchResponse>('/vault/search', params);
 
         if (globals.json) {
           output.json(result);

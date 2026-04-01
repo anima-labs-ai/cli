@@ -97,7 +97,7 @@ export function transactionsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<ListTransactionsResponse>('/api/v1/cards/transactions', query);
+        const result = await client.get<ListTransactionsResponse>('/cards/transactions', query);
 
         if (globals.json) {
           output.json(result);

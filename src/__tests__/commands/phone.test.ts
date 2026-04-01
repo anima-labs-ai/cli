@@ -76,7 +76,7 @@ describe('phone commands', () => {
           bodyText,
         };
 
-        if (url.pathname === '/api/v1/phone/search' && req.method === 'GET') {
+        if (url.pathname === '/api/phone/search' && req.method === 'GET') {
           if (forceSearchError) {
             return new Response(JSON.stringify({
               error: {
@@ -93,7 +93,7 @@ describe('phone commands', () => {
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        if (url.pathname === '/api/v1/phone/provision' && req.method === 'POST') {
+        if (url.pathname === '/api/phone/provision' && req.method === 'POST') {
           return new Response(JSON.stringify({
             number: '+14155550124',
             capabilities: ['sms'],
@@ -101,7 +101,7 @@ describe('phone commands', () => {
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        if (url.pathname === '/api/v1/phone/numbers' && req.method === 'GET') {
+        if (url.pathname === '/api/phone/numbers' && req.method === 'GET') {
           return new Response(JSON.stringify({
             numbers: [
               { number: '+14155550124', capabilities: ['sms'], provider: 'twilio' },
@@ -110,14 +110,14 @@ describe('phone commands', () => {
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        if (url.pathname === '/api/v1/phone/release' && req.method === 'POST') {
+        if (url.pathname === '/api/phone/release' && req.method === 'POST') {
           return new Response(JSON.stringify({ success: true }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
         }
 
-        if (url.pathname === '/api/v1/phone/send-sms' && req.method === 'POST') {
+        if (url.pathname === '/api/phone/send-sms' && req.method === 'POST') {
           return new Response(JSON.stringify({
             id: 'sms-123',
             status: 'queued',
@@ -125,7 +125,7 @@ describe('phone commands', () => {
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        if (url.pathname === '/api/v1/phone/error' && req.method === 'GET') {
+        if (url.pathname === '/api/phone/error' && req.method === 'GET') {
           return new Response(JSON.stringify({
             error: {
               code: 'PHONE_ERROR',
@@ -176,7 +176,7 @@ describe('phone commands', () => {
 
     expect(lastRequest).not.toBeNull();
     expect(lastRequest?.method).toBe('GET');
-    expect(lastRequest?.path).toBe('/api/v1/phone/search');
+    expect(lastRequest?.path).toBe('/api/phone/search');
     expect(lastRequest?.query.get('countryCode')).toBe('US');
     expect(lastRequest?.query.get('areaCode')).toBe('415');
     expect(lastRequest?.query.get('capabilities')).toBe('sms,voice');
@@ -224,7 +224,7 @@ describe('phone commands', () => {
 
     expect(lastRequest).not.toBeNull();
     expect(lastRequest?.method).toBe('POST');
-    expect(lastRequest?.path).toBe('/api/v1/phone/provision');
+    expect(lastRequest?.path).toBe('/api/phone/provision');
     const body = parseBodyAsJson(lastRequest as CapturedRequest) as {
       agentId: string;
       countryCode: string;
@@ -250,7 +250,7 @@ describe('phone commands', () => {
 
     expect(lastRequest).not.toBeNull();
     expect(lastRequest?.method).toBe('GET');
-    expect(lastRequest?.path).toBe('/api/v1/phone/numbers');
+    expect(lastRequest?.path).toBe('/api/phone/numbers');
     expect(lastRequest?.query.get('agentId')).toBe('agent-2');
   });
 
@@ -274,7 +274,7 @@ describe('phone commands', () => {
 
     expect(lastRequest).not.toBeNull();
     expect(lastRequest?.method).toBe('POST');
-    expect(lastRequest?.path).toBe('/api/v1/phone/release');
+    expect(lastRequest?.path).toBe('/api/phone/release');
     const body = parseBodyAsJson(lastRequest as CapturedRequest) as {
       agentId: string;
       phoneNumber: string;
@@ -306,7 +306,7 @@ describe('phone commands', () => {
 
     expect(lastRequest).not.toBeNull();
     expect(lastRequest?.method).toBe('POST');
-    expect(lastRequest?.path).toBe('/api/v1/phone/send-sms');
+    expect(lastRequest?.path).toBe('/api/phone/send-sms');
     const body = parseBodyAsJson(lastRequest as CapturedRequest) as {
       agentId: string;
       to: string;

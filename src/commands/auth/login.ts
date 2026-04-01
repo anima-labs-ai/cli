@@ -60,7 +60,7 @@ async function loginWithApiKey(
     debug: globals.debug,
   });
 
-  const result = await client.get<{ email: string }>('/api/v1/auth/me');
+  const result = await client.get<{ email: string }>('/auth/me');
 
   await saveAuthConfig({
     apiKey,
@@ -83,7 +83,7 @@ async function loginWithCredentials(
     debug: globals.debug,
   });
 
-  const result = await client.post<LoginResponse>('/api/v1/auth/login', { email, password });
+  const result = await client.post<LoginResponse>('/auth/login', { email, password });
 
   await saveAuthConfig({
     token: result.token,

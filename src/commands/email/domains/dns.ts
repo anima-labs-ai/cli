@@ -25,7 +25,7 @@ export function domainDnsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<DomainDnsResponse>(`/api/v1/domains/${id}/dns-records`);
+        const result = await client.get<DomainDnsResponse>(`/domains/${id}/dns-records`);
 
         if (globals.json) {
           output.json(result);

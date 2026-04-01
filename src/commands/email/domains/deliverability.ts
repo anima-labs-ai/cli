@@ -31,7 +31,7 @@ export function domainDeliverabilityCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<DeliverabilityResponse>(`/api/v1/domains/${id}/deliverability`);
+        const result = await client.get<DeliverabilityResponse>(`/domains/${id}/deliverability`);
 
         if (globals.json) {
           output.json(result);

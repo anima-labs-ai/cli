@@ -18,7 +18,7 @@ export function walletFreezeCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        await client.post(`/api/v1/agents/${opts.agent}/wallet/freeze`);
+        await client.post(`/agents/${opts.agent}/wallet/freeze`);
 
         if (globals.json) {
           output.json({ success: true });
@@ -48,7 +48,7 @@ export function walletUnfreezeCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        await client.post(`/api/v1/agents/${opts.agent}/wallet/unfreeze`);
+        await client.post(`/agents/${opts.agent}/wallet/unfreeze`);
 
         if (globals.json) {
           output.json({ success: true });

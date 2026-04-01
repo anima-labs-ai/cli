@@ -44,7 +44,7 @@ export function listAddressesCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const response = await client.get<ListResponse>('/api/v1/addresses', query);
+        const response = await client.get<ListResponse>('/addresses', query);
 
         if (globals.json) {
           output.json(response);

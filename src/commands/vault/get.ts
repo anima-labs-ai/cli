@@ -79,7 +79,7 @@ export function getCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<VaultCredential>(`/api/v1/vault/credentials/${credentialId}`, {
+        const result = await client.get<VaultCredential>(`/vault/credentials/${credentialId}`, {
           agentId: opts.agent,
         });
 

@@ -52,7 +52,7 @@ export function listEmailsCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const result = await client.get<ListEmailsResponse>('/api/v1/email', params);
+        const result = await client.get<ListEmailsResponse>('/email', params);
 
         if (globals.json) {
           output.json(result);

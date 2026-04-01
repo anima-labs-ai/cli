@@ -86,7 +86,7 @@ export function provisionPhoneNumberCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const response = await client.post<ProvisionResponse>('/api/v1/phone/provision', body);
+        const response = await client.post<ProvisionResponse>('/phone/provision', body);
 
         if (globals.json) {
           output.json(response);

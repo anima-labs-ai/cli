@@ -30,7 +30,7 @@ export function getIdentityCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<Identity>(`/api/v1/agents/${opts.id}`);
+        const result = await client.get<Identity>(`/agents/${opts.id}`);
 
         if (globals.json) {
           output.json(result);

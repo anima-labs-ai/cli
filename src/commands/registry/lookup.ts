@@ -30,7 +30,7 @@ export function lookupAgentCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<RegistryAgent>(`/api/v1/registry/agents/${encodeURIComponent(opts.did)}`);
+        const result = await client.get<RegistryAgent>(`/registry/agents/${encodeURIComponent(opts.did)}`);
 
         if (globals.json) {
           output.json(result);

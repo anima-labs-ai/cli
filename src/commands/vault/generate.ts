@@ -61,7 +61,7 @@ export function generateCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const result = await client.post<GeneratePasswordResponse>('/api/v1/vault/generate-password', body);
+        const result = await client.post<GeneratePasswordResponse>('/vault/generate-password', body);
 
         if (globals.json) {
           output.json(result);

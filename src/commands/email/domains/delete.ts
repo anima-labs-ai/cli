@@ -13,7 +13,7 @@ export function deleteDomainCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.delete<Record<string, unknown>>(`/api/v1/domains/${id}`);
+        const result = await client.delete<Record<string, unknown>>(`/domains/${id}`);
 
         if (globals.json) {
           output.json(result);

@@ -64,7 +64,7 @@ export function listIdentitiesCommand(): Command {
           params.query = opts.query;
         }
 
-        const result = await client.get<ListIdentitiesResponse>('/api/v1/agents', params);
+        const result = await client.get<ListIdentitiesResponse>('/agents', params);
 
         if (globals.json) {
           output.json(result);

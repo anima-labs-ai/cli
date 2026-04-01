@@ -57,7 +57,7 @@ export function listTasksCommand(): Command {
 
         const client = await requireAuth(globals);
         const result = await client.get<ListTasksResponse>(
-          `/api/v1/agents/${opts.agent}/a2a/tasks`,
+          `/agents/${opts.agent}/a2a/tasks`,
           params,
         );
 

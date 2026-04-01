@@ -31,7 +31,7 @@ export function walletBalanceCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<WalletResponse>(`/api/v1/agents/${opts.agent}/wallet`);
+        const result = await client.get<WalletResponse>(`/agents/${opts.agent}/wallet`);
 
         if (globals.json) {
           output.json(result);

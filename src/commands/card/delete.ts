@@ -13,7 +13,7 @@ export function deleteCardCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.delete<Record<string, unknown>>(`/api/v1/cards/${cardId}`);
+        const result = await client.delete<Record<string, unknown>>(`/cards/${cardId}`);
 
         if (globals.json) {
           output.json(result);

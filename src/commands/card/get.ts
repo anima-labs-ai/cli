@@ -45,7 +45,7 @@ export function getCardCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<Card>(`/api/v1/cards/${cardId}`);
+        const result = await client.get<Card>(`/cards/${cardId}`);
 
         if (globals.json) {
           output.json(result);

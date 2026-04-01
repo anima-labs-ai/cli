@@ -71,7 +71,7 @@ export function updateIdentityCommand(): Command {
           body.metadata = parseMetadata(opts.metadata);
         }
 
-        const result = await client.patch<Identity>(`/api/v1/agents/${opts.id}`, body);
+        const result = await client.patch<Identity>(`/agents/${opts.id}`, body);
 
         if (globals.json) {
           output.json(result);

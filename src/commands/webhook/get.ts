@@ -23,7 +23,7 @@ export function getWebhookCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<Webhook>(`/api/v1/webhooks/${id}`);
+        const result = await client.get<Webhook>(`/webhooks/${id}`);
 
         if (globals.json) {
           output.json(result);

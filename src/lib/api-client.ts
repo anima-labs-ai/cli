@@ -50,7 +50,7 @@ export class ApiClient {
   }
 
   async get<T>(path: string, params?: Record<string, string>): Promise<T> {
-    let url = `${this.baseUrl}${path}`;
+    let url = `${this.baseUrl}/api${path}`;
     if (params) {
       const qs = new URLSearchParams(params).toString();
       if (qs) url += `?${qs}`;
@@ -59,19 +59,19 @@ export class ApiClient {
   }
 
   async post<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('POST', `${this.baseUrl}${path}`, body);
+    return this.request<T>('POST', `${this.baseUrl}/api${path}`, body);
   }
 
   async put<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('PUT', `${this.baseUrl}${path}`, body);
+    return this.request<T>('PUT', `${this.baseUrl}/api${path}`, body);
   }
 
   async patch<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('PATCH', `${this.baseUrl}${path}`, body);
+    return this.request<T>('PATCH', `${this.baseUrl}/api${path}`, body);
   }
 
   async delete<T>(path: string): Promise<T> {
-    return this.request<T>('DELETE', `${this.baseUrl}${path}`);
+    return this.request<T>('DELETE', `${this.baseUrl}/api${path}`);
   }
 
   private async request<T>(method: string, url: string, body?: unknown): Promise<T> {

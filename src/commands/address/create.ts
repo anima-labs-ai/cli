@@ -76,7 +76,7 @@ export function createAddressCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const response = await client.post<AddressResponse>('/api/v1/addresses', body);
+        const response = await client.post<AddressResponse>('/addresses', body);
 
         if (globals.json) {
           output.json(response);

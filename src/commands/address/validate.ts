@@ -26,7 +26,7 @@ export function validateAddressCommand(): Command {
       try {
         const client = await requireAuth(globals);
         const response = await client.post<ValidateResponse>(
-          `/api/v1/addresses/${addressId}/validate`,
+          `/addresses/${addressId}/validate`,
           { agentId: opts.agent },
         );
 

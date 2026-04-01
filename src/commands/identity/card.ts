@@ -29,7 +29,7 @@ export function getAgentCardCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<AgentCard>(`/api/v1/agents/${opts.agent}/card`);
+        const result = await client.get<AgentCard>(`/agents/${opts.agent}/card`);
 
         if (globals.json) {
           output.json(result);

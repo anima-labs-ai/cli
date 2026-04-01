@@ -44,7 +44,7 @@ export function registerAgentCommand(): Command {
         if (opts.capabilities) body.capabilities = opts.capabilities.split(',').map(s => s.trim());
 
         const client = await requireAuth(globals);
-        const result = await client.post<RegistryAgent>('/api/v1/registry/agents', body);
+        const result = await client.post<RegistryAgent>('/registry/agents', body);
 
         if (globals.json) {
           output.json(result);

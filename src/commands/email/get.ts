@@ -28,7 +28,7 @@ export function getEmailCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<GetEmailResponse>(`/api/v1/email/${id}`);
+        const result = await client.get<GetEmailResponse>(`/email/${id}`);
 
         if (globals.json) {
           output.json(result);

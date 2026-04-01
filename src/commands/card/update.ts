@@ -119,7 +119,7 @@ export function updateCardCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.put<Card>(`/api/v1/cards/${cardId}`, body);
+        const result = await client.put<Card>(`/cards/${cardId}`, body);
 
         if (globals.json) {
           output.json(result);

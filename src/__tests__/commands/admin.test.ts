@@ -131,7 +131,7 @@ describe('admin commands', () => {
   test('org list displays organizations', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/admin/orgs', {
+    setRoute('GET', '/api/admin/orgs', {
       status: 200,
       body: {
         orgs: [
@@ -157,7 +157,7 @@ describe('admin commands', () => {
     startMockServer();
     setupAuthConfig();
     writeDefaultOrgConfig('org_default');
-    setRoute('POST', '/admin/orgs/org_default/members', {
+    setRoute('POST', '/api/admin/orgs/org_default/members', {
       status: 200,
       body: { email: 'dev@acme.test', role: 'admin', invited: true },
       assert: ({ body }) => {
@@ -179,7 +179,7 @@ describe('admin commands', () => {
   test('member role change sends correct request', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('PUT', '/admin/orgs/org_1/members/dev%40acme.test', {
+    setRoute('PUT', '/api/admin/orgs/org_1/members/dev%40acme.test', {
       status: 200,
       body: { email: 'dev@acme.test', role: 'viewer' },
       assert: ({ body }) => {
@@ -206,7 +206,7 @@ describe('admin commands', () => {
   test('key rotate shows new key', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('POST', '/admin/keys/rotate', {
+    setRoute('POST', '/api/admin/keys/rotate', {
       status: 200,
       body: { keyId: 'key_2', key: 'sk_live_rotated_123' },
       assert: ({ body }) => {
@@ -229,7 +229,7 @@ describe('admin commands', () => {
   test('key revoke sends correct request', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('POST', '/admin/keys/revoke', {
+    setRoute('POST', '/api/admin/keys/revoke', {
       status: 200,
       body: { revoked: true, keyId: 'key_1' },
       assert: ({ body }) => {
@@ -251,7 +251,7 @@ describe('admin commands', () => {
   test('kyb status displays verification info', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/admin/orgs/org_1/kyb', {
+    setRoute('GET', '/api/admin/orgs/org_1/kyb', {
       status: 200,
       body: { status: 'pending', documentsNeeded: ['articles_of_incorporation', 'tax_id'] },
     });
@@ -271,7 +271,7 @@ describe('admin commands', () => {
   test('usage displays summary', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/admin/orgs/org_1/usage', {
+    setRoute('GET', '/api/admin/orgs/org_1/usage', {
       status: 200,
       body: { identities: 8, emails: 121, cards: 3, storage: '2.1 GB' },
     });
@@ -307,7 +307,7 @@ describe('admin commands', () => {
   test('shows API failure message on forbidden response', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/admin/orgs', {
+    setRoute('GET', '/api/admin/orgs', {
       status: 403,
       body: { error: { code: 'FORBIDDEN', message: 'forbidden' } },
     });

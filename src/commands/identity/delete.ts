@@ -18,7 +18,7 @@ export function deleteIdentityCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.delete<Record<string, unknown>>(`/api/v1/agents/${opts.id}`);
+        const result = await client.delete<Record<string, unknown>>(`/agents/${opts.id}`);
 
         if (globals.json) {
           output.json(result);

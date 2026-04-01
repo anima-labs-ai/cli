@@ -31,7 +31,7 @@ export function listCredentialsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const response = await client.get<CredentialsResponse>(`/api/v1/agents/${opts.agent}/credentials`);
+        const response = await client.get<CredentialsResponse>(`/agents/${opts.agent}/credentials`);
 
         if (globals.json) {
           output.json(response);

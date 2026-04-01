@@ -100,7 +100,7 @@ export function searchPhoneNumbersCommand(): Command {
         }
 
         const client = await requireAuth(globals);
-        const response = await client.get<SearchResponse>('/api/v1/phone/search', query);
+        const response = await client.get<SearchResponse>('/phone/search', query);
 
         if (globals.json) {
           output.json(response);

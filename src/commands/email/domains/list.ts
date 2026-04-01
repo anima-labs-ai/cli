@@ -24,7 +24,7 @@ export function listDomainsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<ListDomainsResponse>('/api/v1/domains');
+        const result = await client.get<ListDomainsResponse>('/domains');
 
         if (globals.json) {
           output.json(result);
