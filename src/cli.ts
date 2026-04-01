@@ -18,6 +18,7 @@ import { webhookCommands } from './commands/webhook/index.js';
 import { securityCommands } from './commands/security/index.js';
 import { initCommand } from './commands/init/index.js';
 import { a2aCommands } from './commands/a2a/index.js';
+import { messageCommand } from './commands/message/index.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -49,6 +50,7 @@ export function createProgram(): Command {
   program.addCommand(securityCommands());
   program.addCommand(initCommand());
   program.addCommand(a2aCommands());
+  program.addCommand(messageCommand());
 
   program.exitOverride();
 
