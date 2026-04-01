@@ -19,8 +19,8 @@ interface EmailListItem {
 }
 
 interface ListEmailsResponse {
-  data: EmailListItem[];
-  nextCursor?: string | null;
+  items: EmailListItem[];
+  pagination?: { nextCursor?: string | null; hasMore?: boolean };
 }
 
 export function listEmailsCommand(): Command {
@@ -59,9 +59,15 @@ export function listEmailsCommand(): Command {
           return;
         }
 
+        const items = result.items ?? [];
+        if (items.length === 0) {
+          output.info('No emails found');
+          return;
+        }
+
         output.table(
           ['ID', 'Agent', 'Subject', 'Status', 'To', 'Created At'],
-          result.data.map((email) => [
+          items.map((email) => [
             email.id,
             email.agentId,
             email.subject ?? '-',
@@ -71,8 +77,8 @@ export function listEmailsCommand(): Command {
           ]),
         );
 
-        if (result.nextCursor) {
-          output.info(`Next cursor: ${result.nextCursor}`);
+        if (result.pagination?.nextCursor) {
+          output.info(`Next cursor: ${result.pagination.nextCursor}`);
         }
       } catch (error: unknown) {
         if (error instanceof ApiError) {

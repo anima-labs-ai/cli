@@ -12,7 +12,8 @@ interface DomainListItem {
 }
 
 interface ListDomainsResponse {
-  data: DomainListItem[];
+  items: DomainListItem[];
+  pagination?: { nextCursor?: string | null; hasMore?: boolean };
 }
 
 export function listDomainsCommand(): Command {
@@ -31,9 +32,15 @@ export function listDomainsCommand(): Command {
           return;
         }
 
+        const items = result.items ?? [];
+        if (items.length === 0) {
+          output.info('No domains found');
+          return;
+        }
+
         output.table(
           ['ID', 'Domain', 'Status', 'Verified', 'Created At'],
-          result.data.map((domain) => [
+          items.map((domain) => [
             domain.id,
             domain.domain,
             domain.status ?? '-',

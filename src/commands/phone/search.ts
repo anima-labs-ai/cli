@@ -13,13 +13,14 @@ interface SearchOptions {
 }
 
 interface SearchPhoneNumber {
-  number: string;
-  capabilities?: PhoneCapability[];
-  provider?: string;
+  phoneNumber: string;
+  region?: string;
+  capabilities?: { sms: boolean; mms: boolean; voice: boolean };
+  monthlyCost?: number;
 }
 
 interface SearchResponse {
-  numbers: SearchPhoneNumber[];
+  items: SearchPhoneNumber[];
 }
 
 function parseCapabilities(input?: string): PhoneCapability[] | undefined {
@@ -87,38 +88,43 @@ export function searchPhoneNumbersCommand(): Command {
         const capabilities = parseCapabilities(opts.capabilities);
         const limit = parseLimit(opts.limit);
 
-        const query: Record<string, string> = {
-          countryCode,
-          limit,
-        };
-
+        const params = new URLSearchParams();
+        params.set('countryCode', countryCode);
+        params.set('limit', limit);
         if (opts.areaCode) {
-          query.areaCode = opts.areaCode;
+          params.set('areaCode', opts.areaCode);
         }
         if (capabilities && capabilities.length > 0) {
-          query.capabilities = capabilities.join(',');
+          for (const cap of capabilities) {
+            params.append('capabilities[]', cap);
+          }
         }
 
         const client = await requireAuth(globals);
-        const response = await client.get<SearchResponse>('/phone/search', query);
+        const response = await client.get<SearchResponse>(`/phone/search?${params}`);
 
         if (globals.json) {
           output.json(response);
           return;
         }
 
-        if (response.numbers.length === 0) {
+        if (!response.items || response.items.length === 0) {
           output.info('No available numbers found');
           return;
         }
 
         output.table(
-          ['Number', 'Capabilities', 'Provider'],
-          response.numbers.map((item) => [
-            item.number,
-            item.capabilities?.join(',') ?? '-',
-            item.provider ?? '-',
-          ]),
+          ['Number', 'Capabilities', 'Region'],
+          response.items.map((item) => {
+            const caps = item.capabilities
+              ? [item.capabilities.sms && 'sms', item.capabilities.mms && 'mms', item.capabilities.voice && 'voice'].filter(Boolean).join(',')
+              : '-';
+            return [
+              item.phoneNumber,
+              caps,
+              item.region ?? '-',
+            ];
+          }),
         );
       } catch (error: unknown) {
         if (error instanceof ApiError) {

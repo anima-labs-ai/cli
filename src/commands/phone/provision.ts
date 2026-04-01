@@ -13,9 +13,12 @@ interface ProvisionOptions {
 }
 
 interface ProvisionResponse {
-  number: string;
-  capabilities?: PhoneCapability[];
-  provider?: string;
+  id: string;
+  phoneNumber: string;
+  provider: string;
+  capabilities: { sms: boolean; mms: boolean; voice: boolean };
+  isPrimary: boolean;
+  tenDlcStatus: string;
 }
 
 function parseCapabilities(input?: string): PhoneCapability[] | undefined {
@@ -93,10 +96,14 @@ export function provisionPhoneNumberCommand(): Command {
           return;
         }
 
+        const caps = [response.capabilities.sms && 'sms', response.capabilities.mms && 'mms', response.capabilities.voice && 'voice'].filter(Boolean).join(',');
         output.details([
-          ['Number', response.number],
-          ['Capabilities', response.capabilities?.join(',') ?? '-'],
-          ['Provider', response.provider ?? '-'],
+          ['ID', response.id],
+          ['Number', response.phoneNumber],
+          ['Provider', response.provider],
+          ['Capabilities', caps],
+          ['Primary', response.isPrimary ? 'Yes' : 'No'],
+          ['10DLC Status', response.tenDlcStatus],
         ]);
         output.success('Phone number provisioned');
       } catch (error: unknown) {
