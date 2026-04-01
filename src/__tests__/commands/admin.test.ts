@@ -116,7 +116,7 @@ describe('admin commands', () => {
     process.exit = mockExit;
 
     try {
-      await program.parseAsync(['node', 'am', ...args]);
+      await program.parseAsync(['node', 'anima', ...args]);
       return null;
     } catch (err: unknown) {
       if (err instanceof ExitError) {
@@ -301,7 +301,7 @@ describe('admin commands', () => {
     console.error = originalError;
     const printed = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
     expect(exitCode).toBe(1);
-    expect(printed.includes("No org specified. Use --org <org> or set default with 'am config set defaultOrg <org>'")).toBe(true);
+    expect(printed.includes("No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'")).toBe(true);
   });
 
   test('shows API failure message on forbidden response', async () => {
@@ -334,7 +334,7 @@ describe('admin commands', () => {
     console.error = originalError;
     const printed = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
     expect(exitCode).toBe(1);
-    expect(printed.includes('Not authenticated. Run `am auth login` to authenticate.')).toBe(true);
+    expect(printed.includes('Not authenticated. Run `anima auth login` to authenticate.')).toBe(true);
   });
 
   test('key revoke requires confirmation', async () => {

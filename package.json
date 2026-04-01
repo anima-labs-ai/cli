@@ -4,7 +4,6 @@
   "description": "Official Anima CLI — Identity infrastructure for AI agents. Manage identities, email, phone numbers, cards, vault secrets, and runtime configuration.",
   "type": "module",
   "bin": {
-    "am": "./src/cli.ts",
     "anima": "./src/cli.ts"
   },
   "files": ["src/", "package.json", "README.md", "LICENSE", "CHANGELOG.md"],
@@ -30,7 +29,7 @@
     "dev": "bun src/cli.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build": "bun build --compile --outfile dist/am src/cli.ts"
+    "build": "bun build --compile --outfile dist/anima src/cli.ts"
   },
   "dependencies": {
     "commander": "^14.0.0",

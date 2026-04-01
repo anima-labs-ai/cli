@@ -1,4 +1,4 @@
-Usage: am identity|id [options] [command]
+Usage: anima identity|id [options] [command]
 
 Manage agent identities
 

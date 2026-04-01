@@ -11,14 +11,14 @@ export interface GlobalOptions {
 const DEFAULT_API_URL = 'http://localhost:4001';
 
 export function resolveApiUrl(opts: GlobalOptions, authApiUrl?: string): string {
-  return opts.apiUrl ?? process.env.AM_API_URL ?? authApiUrl ?? DEFAULT_API_URL;
+  return opts.apiUrl ?? process.env.ANIMA_API_URL ?? authApiUrl ?? DEFAULT_API_URL;
 }
 
 export async function getApiClient(opts: GlobalOptions): Promise<ApiClient> {
   const auth = await getAuthConfig();
 
-  const token = opts.token ?? process.env.AM_TOKEN ?? auth.token;
-  const apiKey = process.env.AM_API_KEY ?? auth.apiKey;
+  const token = opts.token ?? process.env.ANIMA_TOKEN ?? auth.token;
+  const apiKey = process.env.ANIMA_API_KEY ?? auth.apiKey;
 
   const baseUrl = resolveApiUrl(opts, auth.apiUrl);
 
@@ -33,18 +33,18 @@ export async function getApiClient(opts: GlobalOptions): Promise<ApiClient> {
 export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
   const auth = await getAuthConfig();
 
-  const token = opts.token ?? process.env.AM_TOKEN ?? auth.token;
-  const apiKey = process.env.AM_API_KEY ?? auth.apiKey;
+  const token = opts.token ?? process.env.ANIMA_TOKEN ?? auth.token;
+  const apiKey = process.env.ANIMA_API_KEY ?? auth.apiKey;
 
   if (!token && !apiKey) {
     throw new ApiError(
       401,
       'NOT_AUTHENTICATED',
-      'Not authenticated. Run `am auth login` to authenticate.'
+      'Not authenticated. Run `anima auth login` to authenticate.'
     );
   }
 
-  if (token && auth.expiresAt && !opts.token && !process.env.AM_TOKEN) {
+  if (token && auth.expiresAt && !opts.token && !process.env.ANIMA_TOKEN) {
     const expiresAt = new Date(auth.expiresAt);
     if (expiresAt < new Date()) {
       if (auth.refreshToken) {
@@ -71,14 +71,14 @@ export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
           throw new ApiError(
             401,
             'TOKEN_EXPIRED',
-            'Session expired and refresh failed. Run `am auth login` to re-authenticate.'
+            'Session expired and refresh failed. Run `anima auth login` to re-authenticate.'
           );
         }
       }
       throw new ApiError(
         401,
         'TOKEN_EXPIRED',
-        'Session expired. Run `am auth login` to re-authenticate.'
+        'Session expired. Run `anima auth login` to re-authenticate.'
       );
     }
   }

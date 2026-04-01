@@ -1,4 +1,4 @@
-Usage: am config [options] [command]
+Usage: anima config [options] [command]
 
 Manage CLI configuration and profiles
 

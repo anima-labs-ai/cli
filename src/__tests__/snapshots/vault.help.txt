@@ -1,4 +1,4 @@
-Usage: am vault [options] [command]
+Usage: anima vault [options] [command]
 
 Manage password vault credentials
 

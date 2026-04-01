@@ -1,4 +1,4 @@
-Usage: am auth [options] [command]
+Usage: anima auth [options] [command]
 
 Authentication and session management
 

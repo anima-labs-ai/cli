@@ -50,7 +50,7 @@ function startServer(fetch: (request: Request) => Response | Promise<Response>):
 
 async function runCli(args: string[]): Promise<void> {
   try {
-    await program.parseAsync(['node', 'am', ...args]);
+    await program.parseAsync(['node', 'anima', ...args]);
   } catch {
   }
 }

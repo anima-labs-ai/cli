@@ -48,21 +48,21 @@ describe('config commands', () => {
   describe('config set', () => {
     test('sets a top-level config value', async () => {
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'set', 'defaultOrg', 'my-org']);
+      await program.parseAsync(['node', 'anima', 'config', 'set', 'defaultOrg', 'my-org']);
       const config = readAppConfig();
       expect(config.defaultOrg).toBe('my-org');
     });
 
     test('sets outputFormat value', async () => {
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'set', 'outputFormat', 'json']);
+      await program.parseAsync(['node', 'anima', 'config', 'set', 'outputFormat', 'json']);
       const config = readAppConfig();
       expect(config.outputFormat).toBe('json');
     });
 
     test('sets value in a named profile', async () => {
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'set', '--profile', 'staging', 'apiUrl', 'https://staging.useanima.sh']);
+      await program.parseAsync(['node', 'anima', 'config', 'set', '--profile', 'staging', 'apiUrl', 'https://staging.useanima.sh']);
       const config = readAppConfig();
       expect((config.profiles as Record<string, Record<string, string>>).staging.apiUrl).toBe('https://staging.useanima.sh');
     });
@@ -73,7 +73,7 @@ describe('config commands', () => {
       console.error = errorSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'set', 'invalidKey', 'value']);
+      await program.parseAsync(['node', 'anima', 'config', 'set', 'invalidKey', 'value']);
 
       console.error = origError;
       expect(errorSpy).toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'get', 'defaultOrg']);
+      await program.parseAsync(['node', 'anima', 'config', 'get', 'defaultOrg']);
 
       console.log = origLog;
       expect(logSpy).toHaveBeenCalledWith('test-org');
@@ -107,7 +107,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'get', '--profile', 'prod', 'apiUrl']);
+      await program.parseAsync(['node', 'anima', 'config', 'get', '--profile', 'prod', 'apiUrl']);
 
       console.log = origLog;
       expect(logSpy).toHaveBeenCalledWith('https://api.useanima.sh');
@@ -121,7 +121,7 @@ describe('config commands', () => {
       console.error = errorSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'get', 'defaultOrg']);
+      await program.parseAsync(['node', 'anima', 'config', 'get', 'defaultOrg']);
 
       console.error = origError;
       expect(errorSpy).toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'get', 'defaultOrg']);
+      await program.parseAsync(['node', 'anima', 'config', 'get', 'defaultOrg']);
 
       console.log = origLog;
       Reflect.deleteProperty(process.env, 'ANIMA_DEFAULT_ORG');
@@ -157,7 +157,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'list']);
+      await program.parseAsync(['node', 'anima', 'config', 'list']);
 
       console.log = origLog;
       const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
@@ -178,7 +178,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'list', '--profiles']);
+      await program.parseAsync(['node', 'anima', 'config', 'list', '--profiles']);
 
       console.log = origLog;
       const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
@@ -198,7 +198,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'list', '--resolved']);
+      await program.parseAsync(['node', 'anima', 'config', 'list', '--resolved']);
 
       console.log = origLog;
       const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
@@ -213,7 +213,7 @@ describe('config commands', () => {
       });
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'profile', 'use', 'staging']);
+      await program.parseAsync(['node', 'anima', 'config', 'profile', 'use', 'staging']);
 
       const config = readAppConfig();
       expect(config.activeProfile).toBe('staging');
@@ -227,7 +227,7 @@ describe('config commands', () => {
       console.error = errorSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'profile', 'use', 'nonexistent']);
+      await program.parseAsync(['node', 'anima', 'config', 'profile', 'use', 'nonexistent']);
 
       console.error = origError;
       expect(errorSpy).toHaveBeenCalled();
@@ -243,7 +243,7 @@ describe('config commands', () => {
       });
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'profile', 'delete', 'staging']);
+      await program.parseAsync(['node', 'anima', 'config', 'profile', 'delete', 'staging']);
 
       const config = readAppConfig();
       expect((config.profiles as Record<string, unknown>).staging).toBeUndefined();
@@ -264,7 +264,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'profile', 'list']);
+      await program.parseAsync(['node', 'anima', 'config', 'profile', 'list']);
 
       console.log = origLog;
       const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
@@ -283,7 +283,7 @@ describe('config commands', () => {
       console.log = logSpy;
 
       program.exitOverride();
-      await program.parseAsync(['node', 'am', 'config', 'profile', 'current']);
+      await program.parseAsync(['node', 'anima', 'config', 'profile', 'current']);
 
       console.log = origLog;
       const output = logSpy.mock.calls.map((c) => c[0]).join('\n');

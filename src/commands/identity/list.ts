@@ -114,7 +114,7 @@ function validateLimit(value: string): string {
 function handleApiError(error: unknown, output: Output, context: string): never {
   if (error instanceof ApiError) {
     if (error.status === 401) {
-      output.error('Not authenticated. Run `am auth login` to authenticate.');
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 403) {
       output.error('Forbidden: you do not have access to this organization.');
     } else {

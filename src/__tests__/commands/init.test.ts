@@ -49,7 +49,7 @@ describe('init command', () => {
   });
 
   test('non-interactive mode saves auth config with API key', async () => {
-    await program.parseAsync(['node', 'am', 'init', '--non-interactive', '--api-key', 'ak_test_key_12345']);
+    await program.parseAsync(['node', 'anima', 'init', '--non-interactive', '--api-key', 'ak_test_key_12345']);
 
     const auth = readAuthConfig();
     expect(auth.apiKey).toBe('ak_test_key_12345');
@@ -57,7 +57,7 @@ describe('init command', () => {
   });
 
   test('non-interactive mode saves app config with defaults', async () => {
-    await program.parseAsync(['node', 'am', 'init', '--non-interactive', '--api-key', 'ak_test_key_12345']);
+    await program.parseAsync(['node', 'anima', 'init', '--non-interactive', '--api-key', 'ak_test_key_12345']);
 
     const config = readAppConfig();
     expect(config.defaultOrg).toBeUndefined();
@@ -70,7 +70,7 @@ describe('init command', () => {
     const origError = console.error;
     console.error = errorSpy;
 
-    await program.parseAsync(['node', 'am', 'init', '--non-interactive']);
+    await program.parseAsync(['node', 'anima', 'init', '--non-interactive']);
 
     console.error = origError;
     const output = errorSpy.mock.calls.map((call) => String(call.at(0) ?? '')).join('\n');
@@ -82,7 +82,7 @@ describe('init command', () => {
     let promptIndex = 0;
     globalThis.prompt = mock(() => responses[promptIndex++] ?? '');
 
-    await program.parseAsync(['node', 'am', 'init']);
+    await program.parseAsync(['node', 'anima', 'init']);
 
     const auth = readAuthConfig();
     expect(auth.apiUrl).toBe('https://api.useanima.sh');
@@ -94,7 +94,7 @@ describe('init command', () => {
     let promptIndex = 0;
     globalThis.prompt = mock(() => responses[promptIndex++] ?? '');
 
-    await program.parseAsync(['node', 'am', 'init']);
+    await program.parseAsync(['node', 'anima', 'init']);
 
     const config = readAppConfig();
     expect(config.defaultOrg).toBe('my-org');
@@ -107,7 +107,7 @@ describe('init command', () => {
     const origError = console.error;
     console.error = errorSpy;
 
-    await program.parseAsync(['node', 'am', 'init', '--non-interactive', '--api-key', 'sk_invalid']);
+    await program.parseAsync(['node', 'anima', 'init', '--non-interactive', '--api-key', 'sk_invalid']);
 
     console.error = origError;
     const output = errorSpy.mock.calls.map((call) => String(call.at(0) ?? '')).join('\n');

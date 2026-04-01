@@ -35,7 +35,7 @@ function getBaseUrl(): string {
 
 async function runCli(args: string[]): Promise<void> {
   try {
-    await program.parseAsync(['node', 'am', '--token', 'test-token', '--api-url', getBaseUrl(), ...args]);
+    await program.parseAsync(['node', 'anima', '--token', 'test-token', '--api-url', getBaseUrl(), ...args]);
   } catch {
   }
 }

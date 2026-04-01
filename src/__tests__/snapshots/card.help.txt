@@ -1,4 +1,4 @@
-Usage: am card [options] [command]
+Usage: anima card [options] [command]
 
 Manage virtual payment cards
 

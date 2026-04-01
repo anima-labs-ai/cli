@@ -22,7 +22,7 @@ export function whoamiCommand(): Command {
       const auth = await getAuthConfig();
 
       if (!auth.token && !auth.apiKey) {
-        output.error('Not authenticated. Run `am auth login` first.');
+        output.error('Not authenticated. Run `anima auth login` first.');
         process.exit(1);
       }
 
@@ -41,7 +41,7 @@ export function whoamiCommand(): Command {
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           if (error.status === 401) {
-            output.error('Session expired. Run `am auth login` again.');
+            output.error('Session expired. Run `anima auth login` again.');
           } else {
             output.error(`Failed to fetch account info: ${error.message}`);
           }

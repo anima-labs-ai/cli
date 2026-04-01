@@ -1,4 +1,4 @@
-Usage: am email [options] [command]
+Usage: anima email [options] [command]
 
 Send and manage emails
 

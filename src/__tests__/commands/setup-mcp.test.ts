@@ -107,7 +107,7 @@ describe('setup-mcp commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'setup-mcp', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'setup-mcp', 'status']);
 
     console.log = originalLog;
 
@@ -122,12 +122,12 @@ describe('setup-mcp commands', () => {
     const target = claudeDesktopPath(testConfigDir);
     mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
-    await program.parseAsync(['node', 'am', 'setup-mcp', 'install', '--client', 'claude-desktop']);
+    await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'claude-desktop']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
       mcpServers: { anima: { command: string; args: string[]; env: { ANIMA_API_KEY: string } } };
     };
-    expect(saved.mcpServers.useanima.shmand).toBe('bunx');
+    expect(saved.mcpServers.anima.command).toBe('bunx');
     expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
     expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
@@ -136,12 +136,12 @@ describe('setup-mcp commands', () => {
     const target = cursorPath(testConfigDir);
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
-    await program.parseAsync(['node', 'am', 'setup-mcp', 'install', '--client', 'cursor']);
+    await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'cursor']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
       mcpServers: { anima: { command: string; args: string[]; env: { ANIMA_API_KEY: string } } };
     };
-    expect(saved.mcpServers.useanima.shmand).toBe('bunx');
+    expect(saved.mcpServers.anima.command).toBe('bunx');
     expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
     expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
@@ -156,7 +156,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    await program.parseAsync(['node', 'am', 'setup-mcp', 'install', '--client', 'cursor']);
+    await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'cursor']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
       foo: string;
@@ -172,7 +172,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
     writeFileSync(target, JSON.stringify({ mcpServers: { existing: { command: 'node' } } }, null, 2));
 
-    await program.parseAsync(['node', 'am', 'setup-mcp', 'install', '--client', 'cursor']);
+    await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'cursor']);
 
     expect(existsSync(`${target}.bak`)).toBe(true);
     const backup = JSON.parse(readFileSync(`${target}.bak`, 'utf-8')) as {
@@ -191,7 +191,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    await program.parseAsync(['node', 'am', 'setup-mcp', 'uninstall', '--client', 'cursor']);
+    await program.parseAsync(['node', 'anima', 'setup-mcp', 'uninstall', '--client', 'cursor']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
       mcpServers: Record<string, unknown>;
@@ -218,7 +218,7 @@ describe('setup-mcp commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'setup-mcp', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'setup-mcp', 'status']);
 
     console.log = originalLog;
 
@@ -236,7 +236,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'cursor', '--api-key', 'ak_override_999',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'cursor', '--api-key', 'ak_override_999',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -255,7 +255,7 @@ describe('setup-mcp commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'setup-mcp', 'install', '--client', 'invalid-client']);
+      await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'invalid-client']);
     } catch {
     }
 
@@ -270,7 +270,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'claude-desktop', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'claude-desktop', '--mode', 'remote',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -282,7 +282,7 @@ describe('setup-mcp commands', () => {
         };
       };
     };
-    expect(saved.mcpServers.useanima.shmand).toBe('npx');
+    expect(saved.mcpServers.anima.command).toBe('npx');
     expect(saved.mcpServers.anima.args).toContain('mcp-remote');
     expect(saved.mcpServers.anima.args).toContain('https://mcp.useanima.sh/mcp');
     expect(saved.mcpServers.anima.args).toContain('--header');
@@ -295,7 +295,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install',
+      'node', 'anima', 'setup-mcp', 'install',
       '--client', 'cursor',
       '--mode', 'remote',
       '--url', 'https://custom.example.com/mcp',
@@ -318,7 +318,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install',
+      'node', 'anima', 'setup-mcp', 'install',
       '--client', 'claude-desktop',
       '--mode', 'remote',
       '--api-key', 'ak_custom_456',
@@ -341,7 +341,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'cursor', '--mode', 'stdio',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'cursor', '--mode', 'stdio',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -353,7 +353,7 @@ describe('setup-mcp commands', () => {
         };
       };
     };
-    expect(saved.mcpServers.useanima.shmand).toBe('bunx');
+    expect(saved.mcpServers.anima.command).toBe('bunx');
     expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
     expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
@@ -363,7 +363,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'cursor', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'cursor', '--mode', 'remote',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -384,7 +384,7 @@ describe('setup-mcp commands', () => {
     const target = windsurfPath(testConfigDir);
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'windsurf', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'windsurf', '--mode', 'remote',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -405,7 +405,7 @@ describe('setup-mcp commands', () => {
     const target = vscodePath(testConfigDir);
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'vscode', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'vscode', '--mode', 'remote',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -431,7 +431,7 @@ describe('setup-mcp commands', () => {
     const target = claudeCodePath(testConfigDir);
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'claude-code', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'claude-code', '--mode', 'remote',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -453,10 +453,10 @@ describe('setup-mcp commands', () => {
     const target = vscodePath(testConfigDir);
 
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'vscode', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'vscode', '--mode', 'remote',
     ]);
     await program.parseAsync([
-      'node', 'am', 'setup-mcp', 'install', '--client', 'vscode', '--mode', 'remote',
+      'node', 'anima', 'setup-mcp', 'install', '--client', 'vscode', '--mode', 'remote',
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
@@ -479,7 +479,7 @@ describe('setup-mcp commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am', 'setup-mcp', 'install',
+        'node', 'anima', 'setup-mcp', 'install',
         '--client', 'cursor',
         '--url', 'https://custom.example.com/mcp',
       ]);
@@ -500,7 +500,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'install',
+      'node', 'anima', '--json', 'setup-mcp', 'install',
       '--client', 'cursor',
       '--mode', 'remote',
     ]);
@@ -535,7 +535,7 @@ describe('setup-mcp commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'setup-mcp', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'setup-mcp', 'status']);
 
     console.log = originalLog;
 
@@ -566,7 +566,7 @@ describe('setup-mcp commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'setup-mcp', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'setup-mcp', 'status']);
 
     console.log = originalLog;
 
@@ -596,7 +596,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
     console.log = originalLog;
@@ -628,7 +628,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
     console.log = originalLog;
@@ -658,7 +658,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
     console.log = originalLog;
@@ -688,7 +688,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
     console.log = originalLog;
@@ -731,7 +731,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--all',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--all',
     ]);
 
     console.log = originalLog;
@@ -760,7 +760,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
     console.log = originalLog;
@@ -790,7 +790,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'windsurf',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'windsurf',
     ]);
 
     console.log = originalLog;
@@ -818,7 +818,7 @@ describe('setup-mcp commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'setup-mcp', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'setup-mcp', 'status']);
 
     console.log = originalLog;
 
@@ -839,7 +839,7 @@ describe('setup-mcp commands', () => {
     console.log = logSpy;
 
     await program.parseAsync([
-      'node', 'am', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
     console.log = originalLog;

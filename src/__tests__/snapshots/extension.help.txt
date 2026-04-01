@@ -1,4 +1,4 @@
-Usage: am extension [options] [command]
+Usage: anima extension [options] [command]
 
 Manage Anima Chrome extension
 

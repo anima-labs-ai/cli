@@ -91,7 +91,7 @@ export async function getActiveProfile(): Promise<{ name: string; config: Profil
 export async function setActiveProfile(name: string): Promise<void> {
   const config = await getConfig();
   if (!config.profiles?.[name]) {
-    throw new Error(`Profile "${name}" does not exist. Use 'am config set --profile ${name} <key> <value>' to create it.`);
+    throw new Error(`Profile "${name}" does not exist. Use 'anima config set --profile ${name} <key> <value>' to create it.`);
   }
   config.activeProfile = name;
   await saveConfig(config);

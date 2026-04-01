@@ -1,4 +1,4 @@
-Usage: am admin [options] [command]
+Usage: anima admin [options] [command]
 
 Organization and team administration
 

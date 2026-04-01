@@ -74,5 +74,5 @@ async function resolveOrg(flagOrg?: string): Promise<string> {
     return config.defaultOrg;
   }
 
-  throw new Error("No org specified. Use --org <org> or set default with 'am config set defaultOrg <org>'");
+  throw new Error("No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'");
 }

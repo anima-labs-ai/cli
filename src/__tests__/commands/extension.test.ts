@@ -90,13 +90,13 @@ describe('extension commands', () => {
   });
 
   test('install creates extension directory', async () => {
-    await program.parseAsync(['node', 'am', 'extension', 'install']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install']);
 
     expect(existsSync(join(testConfigDir, 'chrome-extension'))).toBe(true);
   });
 
   test('install writes manifest.json', async () => {
-    await program.parseAsync(['node', 'am', 'extension', 'install']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install']);
 
     const manifest = JSON.parse(readFileSync(join(testConfigDir, 'chrome-extension', 'manifest.json'), 'utf-8')) as {
       manifest_version: number;
@@ -120,21 +120,21 @@ describe('extension commands', () => {
   });
 
   test('install writes background.js placeholder', async () => {
-    await program.parseAsync(['node', 'am', 'extension', 'install']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install']);
 
     const backgroundJs = readFileSync(join(testConfigDir, 'chrome-extension', 'background.js'), 'utf-8');
     expect(backgroundJs).toContain("chrome.runtime.onInstalled.addListener(() => { console.log('Anima Pay extension installed'); });");
   });
 
   test('install writes popup.html placeholder', async () => {
-    await program.parseAsync(['node', 'am', 'extension', 'install']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install']);
 
     const popupHtml = readFileSync(join(testConfigDir, 'chrome-extension', 'popup.html'), 'utf-8');
     expect(popupHtml).toContain('Anima Pay - Extension installed');
   });
 
   test('install writes extension bridge config', async () => {
-    await program.parseAsync(['node', 'am', 'extension', 'install']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install']);
 
     const bridge = JSON.parse(readFileSync(join(testConfigDir, 'extension-config.json'), 'utf-8')) as {
       installed: boolean;
@@ -159,7 +159,7 @@ describe('extension commands', () => {
       installedAt: '2020-01-01T00:00:00.000Z',
     }, null, 2));
 
-    await program.parseAsync(['node', 'am', 'extension', 'install', '--force']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install', '--force']);
 
     const manifest = JSON.parse(readFileSync(join(testConfigDir, 'chrome-extension', 'manifest.json'), 'utf-8')) as { name: string; version: string };
     expect(manifest.name).toBe('Anima Pay');
@@ -167,13 +167,13 @@ describe('extension commands', () => {
   });
 
   test('status shows installed extension info', async () => {
-    await program.parseAsync(['node', 'am', 'extension', 'install']);
+    await program.parseAsync(['node', 'anima', 'extension', 'install']);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'extension', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'extension', 'status']);
 
     console.log = originalLog;
 
@@ -195,7 +195,7 @@ describe('extension commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await program.parseAsync(['node', 'am', '--json', 'extension', 'status']);
+    await program.parseAsync(['node', 'anima', '--json', 'extension', 'status']);
 
     console.log = originalLog;
 

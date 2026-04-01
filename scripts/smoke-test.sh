@@ -50,17 +50,17 @@ cat >"${WORK_DIR}/sandbox/package.json" <<'JSON'
 JSON
 (cd "${WORK_DIR}/sandbox" && bun add "${PACKAGE_TARBALL}") >/dev/null
 
-echo "[smoke] validating am --version"
-VERSION_OUTPUT="$(cd "${WORK_DIR}/sandbox" && bun x --bun am --version)"
+echo "[smoke] validating anima --version"
+VERSION_OUTPUT="$(cd "${WORK_DIR}/sandbox" && bun x --bun anima --version)"
 assert_contains "${VERSION_OUTPUT}" "0.1.0"
 
-echo "[smoke] validating am --help"
-HELP_OUTPUT="$(cd "${WORK_DIR}/sandbox" && bun x --bun am --help)"
+echo "[smoke] validating anima --help"
+HELP_OUTPUT="$(cd "${WORK_DIR}/sandbox" && bun x --bun anima --help)"
 assert_contains "${HELP_OUTPUT}" "Anima CLI"
 assert_contains "${HELP_OUTPUT}" "auth"
 
-echo "[smoke] validating am auth --help"
-AUTH_HELP_OUTPUT="$(cd "${WORK_DIR}/sandbox" && bun x --bun am auth --help)"
+echo "[smoke] validating anima auth --help"
+AUTH_HELP_OUTPUT="$(cd "${WORK_DIR}/sandbox" && bun x --bun anima auth --help)"
 assert_contains "${AUTH_HELP_OUTPUT}" "Authentication and session management"
 
 echo "[smoke] OK"

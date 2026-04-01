@@ -24,7 +24,7 @@ export function createProgram(): Command {
   const program = new Command();
 
   program
-    .name('am')
+    .name('anima')
     .description('Anima CLI — Identity infrastructure for AI agents')
     .version('0.1.0')
     .option('--json', 'Output results as JSON', false)

@@ -46,7 +46,7 @@ function writeAuthConfig(port: number): void {
 
 async function runProgram(args: string[]): Promise<void> {
   try {
-    await program.parseAsync(['node', 'am', ...args]);
+    await program.parseAsync(['node', 'anima', ...args]);
   } catch {
   }
 }

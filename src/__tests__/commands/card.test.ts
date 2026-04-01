@@ -102,7 +102,7 @@ describe('card commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'card', 'create',
         '--agent', 'agent_1',
         '--label', 'Primary',
@@ -177,7 +177,7 @@ describe('card commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'card', 'list',
         '--agent', 'agent_1',
         '--status', 'ACTIVE',
@@ -228,7 +228,7 @@ describe('card commands', () => {
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'am', '--json', 'card', 'get', 'card_1']);
+      await program.parseAsync(['node', 'anima', '--json', 'card', 'get', 'card_1']);
     } catch {
     }
 
@@ -292,7 +292,7 @@ describe('card commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'card', 'update', 'card_1',
         '--label', 'Updated',
         '--status', 'FROZEN',
@@ -353,7 +353,7 @@ describe('card commands', () => {
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'delete', 'card_1']);
+      await program.parseAsync(['node', 'anima', 'card', 'delete', 'card_1']);
     } catch {
     }
 
@@ -414,7 +414,7 @@ describe('card commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'card', 'transactions',
         '--card', 'card_1',
         '--agent', 'agent_1',
@@ -473,7 +473,7 @@ describe('card commands', () => {
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'kill-switch', '--active', '--card', 'card_1']);
+      await program.parseAsync(['node', 'anima', 'card', 'kill-switch', '--active', '--card', 'card_1']);
     } catch {
     }
 
@@ -510,7 +510,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'list']);
+      await program.parseAsync(['node', 'anima', 'card', 'list']);
     } catch {
     }
 
@@ -543,7 +543,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'list']);
+      await program.parseAsync(['node', 'anima', 'card', 'list']);
     } catch {
     }
 
@@ -577,7 +577,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'get', 'card_1']);
+      await program.parseAsync(['node', 'anima', 'card', 'get', 'card_1']);
     } catch {
     }
 
@@ -611,7 +611,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'transactions']);
+      await program.parseAsync(['node', 'anima', 'card', 'transactions']);
     } catch {
     }
 
@@ -640,7 +640,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'create', '--agent', 'agent_1']);
+      await program.parseAsync(['node', 'anima', 'card', 'create', '--agent', 'agent_1']);
     } catch {
     }
 
@@ -670,7 +670,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'delete', 'card_1']);
+      await program.parseAsync(['node', 'anima', 'card', 'delete', 'card_1']);
     } catch {
     }
 
@@ -693,7 +693,7 @@ describe('card commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'card', 'list', '--status', 'BROKEN']);
+      await program.parseAsync(['node', 'anima', 'card', 'list', '--status', 'BROKEN']);
     } catch {
     }
 

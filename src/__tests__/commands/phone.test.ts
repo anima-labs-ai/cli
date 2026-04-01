@@ -163,7 +163,7 @@ describe('phone commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'phone', 'search',
         '--country', 'US',
         '--area-code', '415',
@@ -179,7 +179,7 @@ describe('phone commands', () => {
     expect(lastRequest?.path).toBe('/api/phone/search');
     expect(lastRequest?.query.get('countryCode')).toBe('US');
     expect(lastRequest?.query.get('areaCode')).toBe('415');
-    expect(lastRequest?.query.get('capabilities')).toBe('sms,voice');
+    expect(lastRequest?.query.getAll('capabilities[]')).toEqual(['sms', 'voice']);
     expect(lastRequest?.query.get('limit')).toBe('10');
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
@@ -192,7 +192,7 @@ describe('phone commands', () => {
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'am', '--json', 'phone', 'search']);
+      await program.parseAsync(['node', 'anima', '--json', 'phone', 'search']);
     } finally {
       console.log = originalLog;
     }
@@ -212,7 +212,7 @@ describe('phone commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'phone', 'provision',
         '--agent', 'agent-1',
         '--country', 'US',
@@ -243,7 +243,7 @@ describe('phone commands', () => {
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'list', '--agent', 'agent-2']);
+      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-2']);
     } finally {
       console.log = originalLog;
     }
@@ -263,7 +263,7 @@ describe('phone commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'phone', 'release',
         '--agent', 'agent-1',
         '--number', '+14155550124',
@@ -292,7 +292,7 @@ describe('phone commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'phone', 'send-sms',
         '--agent', 'agent-9',
         '--to', '+14155550199',
@@ -333,7 +333,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'search']);
+      await program.parseAsync(['node', 'anima', 'phone', 'search']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -359,7 +359,7 @@ describe('phone commands', () => {
 
     try {
       await program.parseAsync([
-        'node', 'am',
+        'node', 'anima',
         'phone', 'send-sms',
         '--agent', 'agent-1',
         '--to', '+14155550199',
@@ -387,7 +387,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'list', '--agent', 'agent-3']);
+      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-3']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -425,7 +425,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'search']);
+      await program.parseAsync(['node', 'anima', 'phone', 'search']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -463,7 +463,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'list', '--agent', 'agent-2']);
+      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-2']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -492,7 +492,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'provision', '--agent', 'agent-1']);
+      await program.parseAsync(['node', 'anima', 'phone', 'provision', '--agent', 'agent-1']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -524,7 +524,7 @@ describe('phone commands', () => {
     try {
       await program.parseAsync([
         'node',
-        'am',
+        'anima',
         'phone',
         'release',
         '--agent',
@@ -570,7 +570,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'am', 'phone', 'list', '--agent', 'agent-2']);
+      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-2']);
     } catch {
     } finally {
       process.exit = originalExit;

@@ -164,7 +164,7 @@ function resolveVerifyTargets(
   );
   if (configured.length === 0) {
     throw new Error(
-      'No configured MCP clients found. Run `am setup-mcp install` first.',
+      'No configured MCP clients found. Run `anima setup-mcp install` first.',
     );
   }
   return configured;
@@ -262,7 +262,7 @@ export function verifyMcpCommand(): Command {
             (r) => r.status !== 'ok',
           ).length;
           output.error(
-            `${failCount} client${failCount === 1 ? '' : 's'} with issues. Run \`am setup-mcp install\` to fix.`,
+            `${failCount} client${failCount === 1 ? '' : 's'} with issues. Run \`anima setup-mcp install\` to fix.`,
           );
         }
       } catch (error: unknown) {

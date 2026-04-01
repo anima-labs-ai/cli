@@ -66,7 +66,7 @@ describe('auth commands', () => {
 
       try {
         await program.parseAsync([
-          'node', 'am',
+          'node', 'anima',
           '--api-url', `http://localhost:${mockServer.port}`,
           'auth', 'login',
           '--api-key', 'sk_test_abc123',
@@ -111,7 +111,7 @@ describe('auth commands', () => {
 
       try {
         await program.parseAsync([
-          'node', 'am',
+          'node', 'anima',
           '--api-url', `http://localhost:${mockServer.port}`,
           'auth', 'login',
           '--email', 'user@example.com',
@@ -146,7 +146,7 @@ describe('auth commands', () => {
       console.log = logSpy;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'login']);
+        await program.parseAsync(['node', 'anima', 'auth', 'login']);
       } catch {
       }
 
@@ -178,7 +178,7 @@ describe('auth commands', () => {
 
       try {
         await program.parseAsync([
-          'node', 'am',
+          'node', 'anima',
           '--api-url', `http://localhost:${mockServer.port}`,
           'auth', 'login',
           '--email', 'user@example.com',
@@ -216,7 +216,7 @@ describe('auth commands', () => {
 
       try {
         await program.parseAsync([
-          'node', 'am',
+          'node', 'anima',
           '--api-url', `http://localhost:${mockServer.port}`,
           'auth', 'login',
           '--api-key', 'sk_test_abc123',
@@ -247,7 +247,7 @@ describe('auth commands', () => {
       process.exit = exitSpy as unknown as typeof process.exit;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'login', '--api-key', 'sk_test_abc123']);
+        await program.parseAsync(['node', 'anima', 'auth', 'login', '--api-key', 'sk_test_abc123']);
       } catch {
       }
 
@@ -275,7 +275,7 @@ describe('auth commands', () => {
       process.exit = exitSpy as unknown as typeof process.exit;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'login', '--api-key', 'sk_test_abc123']);
+        await program.parseAsync(['node', 'anima', 'auth', 'login', '--api-key', 'sk_test_abc123']);
       } catch {
       }
 
@@ -299,7 +299,7 @@ describe('auth commands', () => {
       console.log = logSpy;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'logout']);
+        await program.parseAsync(['node', 'anima', 'auth', 'logout']);
       } catch {
       }
 
@@ -340,7 +340,7 @@ describe('auth commands', () => {
       console.log = logSpy;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'whoami']);
+        await program.parseAsync(['node', 'anima', 'auth', 'whoami']);
       } catch {
       }
 
@@ -363,7 +363,7 @@ describe('auth commands', () => {
       console.log = logSpy;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'whoami']);
+        await program.parseAsync(['node', 'anima', 'auth', 'whoami']);
       } catch {
       }
 
@@ -397,7 +397,7 @@ describe('auth commands', () => {
       process.exit = exitSpy as unknown as typeof process.exit;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'whoami']);
+        await program.parseAsync(['node', 'anima', 'auth', 'whoami']);
       } catch {
       }
 
@@ -405,7 +405,7 @@ describe('auth commands', () => {
       process.exit = originalExit;
 
       const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-      expect(output.includes('Session expired. Run `am auth login` again.')).toBe(true);
+      expect(output.includes('Session expired. Run `anima auth login` again.')).toBe(true);
       expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
     });
 
@@ -432,7 +432,7 @@ describe('auth commands', () => {
       process.exit = exitSpy as unknown as typeof process.exit;
 
       try {
-        await program.parseAsync(['node', 'am', 'auth', 'whoami']);
+        await program.parseAsync(['node', 'anima', 'auth', 'whoami']);
       } catch {
       }
 
@@ -454,7 +454,7 @@ describe('CLI global options', () => {
     console.log = logSpy;
 
     try {
-      await prog.parseAsync(['node', 'am', '--version']);
+      await prog.parseAsync(['node', 'anima', '--version']);
     } catch {
     }
 
@@ -472,7 +472,7 @@ describe('CLI global options', () => {
     console.log = logSpy;
 
     try {
-      await prog.parseAsync(['node', 'am', '--help']);
+      await prog.parseAsync(['node', 'anima', '--help']);
     } catch {
     }
 

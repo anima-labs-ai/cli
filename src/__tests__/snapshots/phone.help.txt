@@ -1,4 +1,4 @@
-Usage: am phone [options] [command]
+Usage: anima phone [options] [command]
 
 Manage phone numbers and SMS
 

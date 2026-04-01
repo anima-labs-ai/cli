@@ -121,7 +121,7 @@ function validateStatus(value: string): IdentityStatus {
 function handleApiError(error: unknown, output: Output, context: string): never {
   if (error instanceof ApiError) {
     if (error.status === 401) {
-      output.error('Not authenticated. Run `am auth login` to authenticate.');
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 404) {
       output.error('Identity not found.');
     } else {

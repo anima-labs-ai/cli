@@ -1,4 +1,4 @@
-Usage: am setup-mcp [options] [command]
+Usage: anima setup-mcp [options] [command]
 
 Configure MCP server for AI clients
 

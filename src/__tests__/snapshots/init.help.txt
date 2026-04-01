@@ -1,4 +1,4 @@
-Usage: am init [options]
+Usage: anima init [options]
 
 Set up Anima CLI with guided wizard
 
