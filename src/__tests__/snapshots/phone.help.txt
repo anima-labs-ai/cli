@@ -1,6 +1,6 @@
 Usage: anima phone [options] [command]
 
-Manage phone numbers and SMS
+Manage phone numbers, SMS, and voice calls
 
 Options:
   -h, --help           display help for command
@@ -11,4 +11,5 @@ Commands:
   list [options]       List provisioned phone numbers for an agent
   release [options]    Release a provisioned phone number
   send-sms [options]   Send an SMS from an agent
+  voices [options]     List available voices for AI agent phone calls
   help [command]       display help for command
