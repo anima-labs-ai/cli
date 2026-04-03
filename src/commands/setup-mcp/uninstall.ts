@@ -16,7 +16,16 @@ interface UninstallOptions {
   all?: boolean;
 }
 
-const ANIMA_SERVER_NAME = 'anima';
+/** All possible Anima server entry names (legacy + split) */
+const ANIMA_SERVER_NAMES = [
+  'anima',          // legacy monolith
+  'anima-agent',
+  'anima-email',
+  'anima-phone',
+  'anima-cards',
+  'anima-vault',
+  'anima-platform',
+];
 
 function backupFile(path: string): void {
   if (!existsSync(path)) {
@@ -108,13 +117,19 @@ function uninstallFromClient(client: McpClientDefinition): boolean {
   const config = readJsonFile(client.configPath);
   const serverMap = getServerMap(config, client.serverKey);
 
-  if (!(ANIMA_SERVER_NAME in serverMap)) {
+  let removed = false;
+  for (const name of ANIMA_SERVER_NAMES) {
+    if (name in serverMap) {
+      delete serverMap[name];
+      removed = true;
+    }
+  }
+
+  if (!removed) {
     return false;
   }
 
-  delete serverMap[ANIMA_SERVER_NAME];
   config[client.serverKey] = serverMap;
-
   backupFile(client.configPath);
   writeJsonFile(client.configPath, config);
   return true;

@@ -13,7 +13,18 @@ interface StatusRow {
   mode: McpMode;
   url: string | null;
   path: string;
+  servers: string[];
 }
+
+const ANIMA_SERVER_NAMES = [
+  'anima',          // legacy monolith
+  'anima-agent',
+  'anima-email',
+  'anima-phone',
+  'anima-cards',
+  'anima-vault',
+  'anima-platform',
+];
 
 function readJsonFile(path: string): Record<string, unknown> {
   if (!existsSync(path)) {
@@ -36,20 +47,23 @@ interface McpServerEntry {
   headers?: Record<string, string>;
 }
 
-function getAnimaEntry(client: McpClientDefinition): McpServerEntry | null {
+function getAnimaEntries(client: McpClientDefinition): { entry: McpServerEntry; name: string }[] {
   if (!existsSync(client.configPath)) {
-    return null;
+    return [];
   }
   const config = readJsonFile(client.configPath);
   const serverMapValue = config[client.serverKey];
   if (!serverMapValue || typeof serverMapValue !== 'object' || Array.isArray(serverMapValue)) {
-    return null;
+    return [];
   }
   const serverMap = serverMapValue as Record<string, unknown>;
-  if (!('anima' in serverMap)) {
-    return null;
+  const entries: { entry: McpServerEntry; name: string }[] = [];
+  for (const name of ANIMA_SERVER_NAMES) {
+    if (name in serverMap) {
+      entries.push({ entry: serverMap[name] as McpServerEntry, name });
+    }
   }
-  return serverMap.anima as McpServerEntry;
+  return entries;
 }
 
 function detectMode(entry: McpServerEntry | null): { mode: McpMode; url: string | null } {
@@ -93,15 +107,17 @@ export function statusMcpCommand(): Command {
       const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
 
       const rows: StatusRow[] = getMcpClients().map((client) => {
-        const entry = getAnimaEntry(client);
-        const { mode, url } = detectMode(entry);
+        const entries = getAnimaEntries(client);
+        const firstEntry = entries.length > 0 ? entries[0].entry : null;
+        const { mode, url } = detectMode(firstEntry);
         return {
           client: client.label,
-          configured: entry !== null,
+          configured: entries.length > 0,
           detected: isDetected(client),
-          mode: entry !== null ? mode : 'unknown',
+          mode: entries.length > 0 ? mode : 'unknown',
           url,
           path: client.configPath,
+          servers: entries.map((e) => e.name),
         };
       });
 
@@ -111,12 +127,13 @@ export function statusMcpCommand(): Command {
       }
 
       output.table(
-        ['Client', 'Detected', 'Configured', 'Mode', 'Config Path'],
+        ['Client', 'Detected', 'Configured', 'Mode', 'Servers', 'Config Path'],
         rows.map((row) => [
           row.client,
           row.detected ? 'yes' : 'no',
           row.configured ? 'yes' : 'no',
           row.configured ? row.mode : '-',
+          row.servers.length > 0 ? row.servers.join(', ') : '-',
           row.path,
         ]),
       );

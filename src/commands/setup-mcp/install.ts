@@ -14,12 +14,32 @@ import {
 
 type McpInstallMode = 'stdio' | 'remote';
 
+/** Domain MCP servers available for installation */
+type McpServerDomain = 'agent' | 'email' | 'phone' | 'cards' | 'vault' | 'platform';
+
+const MCP_SERVER_DOMAINS: McpServerDomain[] = ['agent', 'email', 'phone', 'cards', 'vault', 'platform'];
+
+const REMOTE_URL_BASE = 'https://mcp-{server}-829045119779.us-central1.run.app/mcp';
+
+function getRemoteUrl(server: McpServerDomain): string {
+  return REMOTE_URL_BASE.replace('{server}', server);
+}
+
+function getPackageName(server: McpServerDomain): string {
+  return `@anima-labs/mcp-${server}`;
+}
+
+function getServerEntryName(server: McpServerDomain): string {
+  return `anima-${server}`;
+}
+
 interface InstallOptions {
   client?: string;
   all?: boolean;
   apiKey?: string;
   mode?: McpInstallMode;
   url?: string;
+  server?: string;
 }
 
 interface McpServerConfigStdio {
@@ -72,8 +92,6 @@ type McpServerConfig =
   | McpServerConfigWindsurfRemote
   | McpServerConfigVscodeRemote
   | McpServerConfigClaudeCodeRemote;
-
-const ANIMA_SERVER_NAME = 'anima';
 
 function readJsonFile(path: string): Record<string, unknown> {
   if (!existsSync(path)) {
@@ -164,6 +182,22 @@ function resolveInstallTargets(opts: InstallOptions): McpClientDefinition[] {
   return selectedClients;
 }
 
+function resolveServerDomains(serverOpt?: string): McpServerDomain[] {
+  if (!serverOpt || serverOpt === 'all') {
+    return [...MCP_SERVER_DOMAINS];
+  }
+
+  const domains = serverOpt.split(',').map((s) => s.trim()) as McpServerDomain[];
+  for (const domain of domains) {
+    if (!MCP_SERVER_DOMAINS.includes(domain)) {
+      throw new Error(
+        `Invalid server "${domain}". Valid values: ${MCP_SERVER_DOMAINS.join(', ')}, all`,
+      );
+    }
+  }
+  return domains;
+}
+
 async function resolveApiKey(override?: string): Promise<string> {
   if (override?.trim()) {
     return override.trim();
@@ -182,22 +216,21 @@ async function resolveApiKey(override?: string): Promise<string> {
   return input;
 }
 
-const DEFAULT_REMOTE_URL = 'https://mcp.useanima.sh/mcp';
-
 function buildMcpServerEntry(
   apiKey: string,
+  server: McpServerDomain,
   mode: McpInstallMode = 'stdio',
   url?: string,
   clientName?: McpClientName,
 ): McpServerConfig {
   if (mode === 'remote') {
-    const endpoint = url ?? DEFAULT_REMOTE_URL;
+    const endpoint = url ?? getRemoteUrl(server);
     return buildRemoteEntry(apiKey, endpoint, clientName);
   }
 
   return {
-    command: 'bunx',
-    args: ['@anima/mcp'],
+    command: 'npx',
+    args: ['-y', getPackageName(server)],
     env: {
       ANIMA_API_KEY: apiKey,
     },
@@ -257,12 +290,18 @@ function buildRemoteEntry(
 function installForClient(
   client: McpClientDefinition,
   apiKey: string,
+  servers: McpServerDomain[],
   mode: McpInstallMode = 'stdio',
   url?: string,
 ): void {
   const config = readJsonFile(client.configPath);
   const serverMap = getServerMap(config, client.serverKey);
-  serverMap[ANIMA_SERVER_NAME] = buildMcpServerEntry(apiKey, mode, url, client.name);
+
+  for (const server of servers) {
+    const entryName = getServerEntryName(server);
+    serverMap[entryName] = buildMcpServerEntry(apiKey, server, mode, url, client.name);
+  }
+
   config[client.serverKey] = serverMap;
 
   if (client.name === 'vscode' && mode === 'remote') {
@@ -289,12 +328,17 @@ function injectVscodeInputs(config: Record<string, unknown>): void {
 
 export function installMcpCommand(): Command {
   return new Command('install')
-    .description('Install Anima MCP server in supported clients')
+    .description('Install Anima MCP server(s) in supported clients')
     .option('--client <name>', 'Target client')
     .option('--all', 'Configure all detected clients')
     .option('--api-key <key>', 'API key override')
     .option('--mode <mode>', 'Connection mode: stdio (local) or remote (hosted)', 'stdio')
-    .option('--url <endpoint>', `Remote endpoint URL (default: ${DEFAULT_REMOTE_URL})`)
+    .option('--url <endpoint>', 'Remote endpoint URL override')
+    .option(
+      '--server <name>',
+      `Domain server(s) to install: ${MCP_SERVER_DOMAINS.join(', ')}, all (default: all)`,
+      'all',
+    )
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions & InstallOptions>();
       const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
@@ -307,10 +351,11 @@ export function installMcpCommand(): Command {
         }
 
         const targets = resolveInstallTargets(globals);
+        const servers = resolveServerDomains(globals.server);
         const apiKey = await resolveApiKey(globals.apiKey);
 
         for (const client of targets) {
-          installForClient(client, apiKey, mode, globals.url);
+          installForClient(client, apiKey, servers, mode, globals.url);
         }
 
         if (globals.json) {
@@ -318,19 +363,23 @@ export function installMcpCommand(): Command {
             configured: targets.map((client) => client.name as McpClientName),
             count: targets.length,
             mode,
-            ...(mode === 'remote' ? { url: globals.url ?? DEFAULT_REMOTE_URL } : {}),
+            servers,
+            ...(mode === 'remote' ? { urls: servers.map(getRemoteUrl) } : {}),
           });
           return;
         }
 
-        output.success(`Configured MCP for ${targets.length} client${targets.length === 1 ? '' : 's'} (${mode} mode).`);
+        output.success(
+          `Configured ${servers.length} MCP server${servers.length === 1 ? '' : 's'} for ${targets.length} client${targets.length === 1 ? '' : 's'} (${mode} mode).`,
+        );
         output.table(
           ['Client', 'Config Path'],
           targets.map((client) => [client.label, client.configPath]),
         );
+        output.info(`Servers: ${servers.map((s) => `anima-${s}`).join(', ')}`);
 
         if (mode === 'remote') {
-          output.info(`Remote endpoint: ${globals.url ?? DEFAULT_REMOTE_URL}`);
+          output.info(`Remote endpoints: ${servers.map(getRemoteUrl).join(', ')}`);
         }
       } catch (error: unknown) {
         if (error instanceof Error) {
