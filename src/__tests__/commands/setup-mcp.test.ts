@@ -125,11 +125,16 @@ describe('setup-mcp commands', () => {
     await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'claude-desktop']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: { anima: { command: string; args: string[]; env: { ANIMA_API_KEY: string } } };
+      mcpServers: Record<string, { command: string; args: string[]; env: { ANIMA_API_KEY: string } }>;
     };
-    expect(saved.mcpServers.anima.command).toBe('bunx');
-    expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
-    expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
+    expect(saved.mcpServers['anima-agent'].command).toBe('npx');
+    expect(saved.mcpServers['anima-agent'].args).toEqual(['-y', '@anima-labs/mcp-agent']);
+    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
+    expect(saved.mcpServers['anima-email']).toBeDefined();
+    expect(saved.mcpServers['anima-phone']).toBeDefined();
+    expect(saved.mcpServers['anima-cards']).toBeDefined();
+    expect(saved.mcpServers['anima-vault']).toBeDefined();
+    expect(saved.mcpServers['anima-platform']).toBeDefined();
   });
 
   test('install writes correct config for Cursor', async () => {
@@ -139,11 +144,11 @@ describe('setup-mcp commands', () => {
     await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'cursor']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: { anima: { command: string; args: string[]; env: { ANIMA_API_KEY: string } } };
+      mcpServers: Record<string, { command: string; args: string[]; env: { ANIMA_API_KEY: string } }>;
     };
-    expect(saved.mcpServers.anima.command).toBe('bunx');
-    expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
-    expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
+    expect(saved.mcpServers['anima-agent'].command).toBe('npx');
+    expect(saved.mcpServers['anima-agent'].args).toEqual(['-y', '@anima-labs/mcp-agent']);
+    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
 
   test('install merges into existing config without overwriting', async () => {
@@ -164,7 +169,7 @@ describe('setup-mcp commands', () => {
     };
     expect(saved.foo).toBe('bar');
     expect(saved.mcpServers.existing).toBeDefined();
-    expect(saved.mcpServers.anima).toBeDefined();
+    expect(saved.mcpServers['anima-agent']).toBeDefined();
   });
 
   test('install creates backup before modifying existing config', async () => {
@@ -240,9 +245,9 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: { anima: { env: { ANIMA_API_KEY: string } } };
+      mcpServers: Record<string, { env: { ANIMA_API_KEY: string } }>;
     };
-    expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_override_999');
+    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_override_999');
   });
 
   test('errors on invalid client name', async () => {
@@ -274,20 +279,19 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          command: string;
-          args: string[];
-          env: { ANIMA_TOKEN: string };
-        };
-      };
+      mcpServers: Record<string, {
+        command: string;
+        args: string[];
+        env: { ANIMA_TOKEN: string };
+      }>;
     };
-    expect(saved.mcpServers.anima.command).toBe('npx');
-    expect(saved.mcpServers.anima.args).toContain('mcp-remote');
-    expect(saved.mcpServers.anima.args).toContain('https://mcp.useanima.sh/mcp');
-    expect(saved.mcpServers.anima.args).toContain('--header');
-    expect(saved.mcpServers.anima.args).toContain('Authorization:${ANIMA_TOKEN}');
-    expect(saved.mcpServers.anima.env.ANIMA_TOKEN).toBe('Bearer ak_stored_123');
+    const entry = saved.mcpServers['anima-agent'];
+    expect(entry.command).toBe('npx');
+    expect(entry.args).toContain('mcp-remote');
+    expect(entry.args).toContain('https://mcp-agent-829045119779.us-central1.run.app/mcp');
+    expect(entry.args).toContain('--header');
+    expect(entry.args).toContain('Authorization:${ANIMA_TOKEN}');
+    expect(entry.env.ANIMA_TOKEN).toBe('Bearer ak_stored_123');
   });
 
   test('install --mode remote with --url uses custom endpoint for Cursor (native HTTP)', async () => {
@@ -302,15 +306,13 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          url: string;
-          headers: Record<string, string>;
-        };
-      };
+      mcpServers: Record<string, {
+        url: string;
+        headers: Record<string, string>;
+      }>;
     };
-    expect(saved.mcpServers.anima.url).toBe('https://custom.example.com/mcp');
-    expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ak_stored_123');
+    expect(saved.mcpServers['anima-agent'].url).toBe('https://custom.example.com/mcp');
+    expect(saved.mcpServers['anima-agent'].headers.Authorization).toBe('Bearer ak_stored_123');
   });
 
   test('install --mode remote with --api-key uses override key in Bearer token', async () => {
@@ -325,18 +327,16 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          command: string;
-          args: string[];
-          env: { ANIMA_TOKEN: string };
-        };
-      };
+      mcpServers: Record<string, {
+        command: string;
+        args: string[];
+        env: { ANIMA_TOKEN: string };
+      }>;
     };
-    expect(saved.mcpServers.anima.env.ANIMA_TOKEN).toBe('Bearer ak_custom_456');
+    expect(saved.mcpServers['anima-agent'].env.ANIMA_TOKEN).toBe('Bearer ak_custom_456');
   });
 
-  test('install --mode stdio (default) writes standard bunx config', async () => {
+  test('install --mode stdio (default) writes standard npx config', async () => {
     const target = cursorPath(testConfigDir);
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
@@ -345,17 +345,15 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          command: string;
-          args: string[];
-          env: { ANIMA_API_KEY: string };
-        };
-      };
+      mcpServers: Record<string, {
+        command: string;
+        args: string[];
+        env: { ANIMA_API_KEY: string };
+      }>;
     };
-    expect(saved.mcpServers.anima.command).toBe('bunx');
-    expect(saved.mcpServers.anima.args).toEqual(['@anima/mcp']);
-    expect(saved.mcpServers.anima.env.ANIMA_API_KEY).toBe('ak_stored_123');
+    expect(saved.mcpServers['anima-agent'].command).toBe('npx');
+    expect(saved.mcpServers['anima-agent'].args).toEqual(['-y', '@anima-labs/mcp-agent']);
+    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
   });
 
   test('install --mode remote writes native HTTP config for Cursor', async () => {
@@ -367,16 +365,15 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          url: string;
-          headers: Record<string, string>;
-        };
-      };
+      mcpServers: Record<string, {
+        url: string;
+        headers: Record<string, string>;
+      }>;
     };
-    expect(saved.mcpServers.anima.url).toBe('https://mcp.useanima.sh/mcp');
-    expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ak_stored_123');
-    expect((saved.mcpServers.anima as unknown as Record<string, unknown>).command).toBeUndefined();
+    const entry = saved.mcpServers['anima-agent'];
+    expect(entry.url).toBe('https://mcp-agent-829045119779.us-central1.run.app/mcp');
+    expect(entry.headers.Authorization).toBe('Bearer ak_stored_123');
+    expect((entry as unknown as Record<string, unknown>).command).toBeUndefined();
   });
 
   test('install --mode remote writes native HTTP config for Windsurf', async () => {
@@ -388,16 +385,15 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          serverUrl: string;
-          headers: Record<string, string>;
-        };
-      };
+      mcpServers: Record<string, {
+        serverUrl: string;
+        headers: Record<string, string>;
+      }>;
     };
-    expect(saved.mcpServers.anima.serverUrl).toBe('https://mcp.useanima.sh/mcp');
-    expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ${env:ANIMA_API_KEY}');
-    expect((saved.mcpServers.anima as unknown as Record<string, unknown>).url).toBeUndefined();
+    const entry = saved.mcpServers['anima-agent'];
+    expect(entry.serverUrl).toBe('https://mcp-agent-829045119779.us-central1.run.app/mcp');
+    expect(entry.headers.Authorization).toBe('Bearer ${env:ANIMA_API_KEY}');
+    expect((entry as unknown as Record<string, unknown>).url).toBeUndefined();
   });
 
   test('install --mode remote writes native HTTP config for VS Code with inputs', async () => {
@@ -409,18 +405,17 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      servers: {
-        anima: {
-          type: string;
-          url: string;
-          headers: Record<string, string>;
-        };
-      };
+      servers: Record<string, {
+        type: string;
+        url: string;
+        headers: Record<string, string>;
+      }>;
       inputs: Array<{ id: string; type: string; description: string; password: boolean }>;
     };
-    expect(saved.servers.anima.type).toBe('http');
-    expect(saved.servers.anima.url).toBe('https://mcp.useanima.sh/mcp');
-    expect(saved.servers.anima.headers.Authorization).toBe('Bearer ${input:anima-key}');
+    const entry = saved.servers['anima-agent'];
+    expect(entry.type).toBe('http');
+    expect(entry.url).toBe('https://mcp-agent-829045119779.us-central1.run.app/mcp');
+    expect(entry.headers.Authorization).toBe('Bearer ${input:anima-key}');
     expect(saved.inputs).toBeDefined();
     expect(saved.inputs.length).toBe(1);
     expect(saved.inputs[0].id).toBe('anima-key');
@@ -435,17 +430,16 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: {
-        anima: {
-          type: string;
-          url: string;
-          headers: Record<string, string>;
-        };
-      };
+      mcpServers: Record<string, {
+        type: string;
+        url: string;
+        headers: Record<string, string>;
+      }>;
     };
-    expect(saved.mcpServers.anima.type).toBe('http');
-    expect(saved.mcpServers.anima.url).toBe('https://mcp.useanima.sh/mcp');
-    expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ${ANIMA_API_KEY}');
+    const entry = saved.mcpServers['anima-agent'];
+    expect(entry.type).toBe('http');
+    expect(entry.url).toBe('https://mcp-agent-829045119779.us-central1.run.app/mcp');
+    expect(entry.headers.Authorization).toBe('Bearer ${ANIMA_API_KEY}');
   });
 
   test('install --mode remote does not duplicate VS Code inputs on repeated install', async () => {
@@ -492,7 +486,7 @@ describe('setup-mcp commands', () => {
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('install --mode remote --json includes mode and url in output', async () => {
+  test('install --mode remote --json includes mode and urls in output', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     const logSpy = mock(() => {});
@@ -511,10 +505,13 @@ describe('setup-mcp commands', () => {
       configured: string[];
       count: number;
       mode: string;
-      url: string;
+      servers: string[];
+      urls: string[];
     };
     expect(payload.mode).toBe('remote');
-    expect(payload.url).toBe('https://mcp.useanima.sh/mcp');
+    expect(payload.servers).toEqual(['agent', 'email', 'phone', 'cards', 'vault', 'platform']);
+    expect(payload.urls.length).toBe(6);
+    expect(payload.urls[0]).toBe('https://mcp-agent-829045119779.us-central1.run.app/mcp');
     expect(payload.count).toBe(1);
   });
 

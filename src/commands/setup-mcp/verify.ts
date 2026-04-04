@@ -45,6 +45,17 @@ function readJsonFile(path: string): Record<string, unknown> | null {
   }
 }
 
+/** All possible Anima server entry names (legacy + split) */
+const ANIMA_SERVER_NAMES = [
+  'anima',          // legacy monolith
+  'anima-agent',
+  'anima-email',
+  'anima-phone',
+  'anima-cards',
+  'anima-vault',
+  'anima-platform',
+];
+
 function getServerEntry(
   client: McpClientDefinition,
 ): McpServerEntry | null {
@@ -60,10 +71,12 @@ function getServerEntry(
     return null;
   }
   const serverMap = serverMapValue as Record<string, unknown>;
-  if (!('anima' in serverMap)) {
-    return null;
+  for (const name of ANIMA_SERVER_NAMES) {
+    if (name in serverMap) {
+      return serverMap[name] as McpServerEntry;
+    }
   }
-  return serverMap.anima as McpServerEntry;
+  return null;
 }
 
 function validateEntry(entry: McpServerEntry): {
@@ -112,6 +125,13 @@ function validateEntry(entry: McpServerEntry): {
   }
 
   if (entry.command === 'bunx' && entry.args?.includes('@anima/mcp')) {
+    if (!entry.env?.ANIMA_API_KEY) {
+      issues.push('missing ANIMA_API_KEY in env');
+    }
+    return { mode: 'stdio', issues };
+  }
+
+  if (entry.command === 'npx' && entry.args?.some((a) => a.startsWith('@anima-labs/mcp-'))) {
     if (!entry.env?.ANIMA_API_KEY) {
       issues.push('missing ANIMA_API_KEY in env');
     }
