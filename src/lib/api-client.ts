@@ -45,7 +45,7 @@ export class ApiClient {
     if (options.token) {
       this.headers.Authorization = `Bearer ${options.token}`;
     } else if (options.apiKey) {
-      this.headers['X-API-Key'] = options.apiKey;
+      this.headers.Authorization = `Bearer ${options.apiKey}`;
     }
   }
 

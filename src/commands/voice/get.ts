@@ -7,14 +7,14 @@ interface CallDetails {
   id: string;
   agentId: string;
   direction: string;
-  status: string;
+  state: string;
   from: string;
   to: string;
   tier: string;
   voiceId?: string;
-  durationSeconds?: number;
+  durationSeconds?: number | null;
   startedAt: string;
-  endedAt?: string;
+  endedAt?: string | null;
   recordingUrl?: string;
   metadata?: Record<string, unknown>;
 }
@@ -47,7 +47,7 @@ export function getCallCommand(): Command {
           ['ID', call.id],
           ['Agent ID', call.agentId],
           ['Direction', call.direction],
-          ['Status', call.status],
+          ['State', call.state],
           ['From', call.from],
           ['To', call.to],
           ['Tier', call.tier],

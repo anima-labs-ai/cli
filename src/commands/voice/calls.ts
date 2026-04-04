@@ -5,7 +5,7 @@ import { ApiError } from '../../lib/api-client.js';
 
 interface ListCallsOptions {
   agent?: string;
-  status?: string;
+  state?: string;
   limit?: string;
   offset?: string;
 }
@@ -14,17 +14,17 @@ interface CallListItem {
   id: string;
   agentId: string;
   direction: string;
-  status: string;
+  state: string;
   from: string;
   to: string;
   tier: string;
-  durationSeconds?: number;
+  durationSeconds?: number | null;
   startedAt: string;
-  endedAt?: string;
+  endedAt?: string | null;
 }
 
 interface ListCallsResponse {
-  items: CallListItem[];
+  calls: CallListItem[];
   total: number;
 }
 
@@ -43,7 +43,7 @@ export function listCallsCommand(): Command {
   return new Command('calls')
     .description('List voice calls')
     .option('--agent <id>', 'Filter by agent ID')
-    .option('--status <status>', 'Filter by status (active, completed, failed)')
+    .option('--state <state>', 'Filter by state (INITIATING, RINGING, ACTIVE, ENDED)')
     .option('--limit <n>', 'Max results (default: 20)')
     .option('--offset <n>', 'Offset for pagination')
     .action(async function (this: Command) {
@@ -56,7 +56,7 @@ export function listCallsCommand(): Command {
 
         const params: Record<string, string> = {};
         if (opts.agent) params.agentId = opts.agent;
-        if (opts.status) params.status = opts.status;
+        if (opts.state) params.state = opts.state;
         if (opts.limit) params.limit = opts.limit;
         if (opts.offset) params.offset = opts.offset;
 
@@ -67,26 +67,26 @@ export function listCallsCommand(): Command {
           return;
         }
 
-        if (!response.items || response.items.length === 0) {
+        if (!response.calls || response.calls.length === 0) {
           output.info('No calls found');
           return;
         }
 
         output.table(
-          ['ID', 'Direction', 'Status', 'From', 'To', 'Tier', 'Duration', 'Started'],
-          response.items.map((c) => [
+          ['ID', 'Direction', 'State', 'From', 'To', 'Tier', 'Duration', 'Started'],
+          response.calls.map((c) => [
             c.id.slice(0, 8),
             c.direction,
-            c.status,
+            c.state,
             c.from,
             c.to,
             c.tier,
-            formatDuration(c.durationSeconds),
+            formatDuration(c.durationSeconds ?? undefined),
             formatDate(c.startedAt),
           ]),
         );
 
-        output.info(`\n${response.items.length} of ${response.total} call(s)`);
+        output.info(`\n${response.calls.length} of ${response.total} call(s)`);
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           output.error(`Failed to list calls: ${error.message}`);
