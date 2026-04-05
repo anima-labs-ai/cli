@@ -10,6 +10,8 @@ import { searchCommand } from './search.js';
 import { deleteCommand } from './delete.js';
 import { generateCommand } from './generate.js';
 import { totpCommand } from './totp.js';
+import { shareCommand } from './share.js';
+import { tokenCommand } from './token.js';
 
 export function vaultCommands(): Command {
   const cmd = new Command('vault')
@@ -26,6 +28,8 @@ export function vaultCommands(): Command {
   cmd.addCommand(deleteCommand());
   cmd.addCommand(generateCommand());
   cmd.addCommand(totpCommand());
+  cmd.addCommand(shareCommand());
+  cmd.addCommand(tokenCommand());
 
   return cmd;
 }
