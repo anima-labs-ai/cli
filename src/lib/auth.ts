@@ -17,8 +17,14 @@ export function resolveApiUrl(opts: GlobalOptions, authApiUrl?: string): string 
 export async function getApiClient(opts: GlobalOptions): Promise<ApiClient> {
   const auth = await getAuthConfig();
 
-  const token = opts.token ?? process.env.ANIMA_TOKEN ?? auth.token;
-  const apiKey = process.env.ANIMA_API_KEY ?? auth.apiKey;
+  // Priority: CLI flags > explicit env vars > stored config
+  // If ANIMA_API_KEY is explicitly set, it should override stored auth tokens.
+  const explicitApiKey = process.env.ANIMA_API_KEY;
+  const explicitToken = opts.token ?? process.env.ANIMA_TOKEN;
+
+  // Use the explicit API key when set, even if a stored token exists
+  const token = explicitApiKey ? undefined : (explicitToken ?? auth.token);
+  const apiKey = explicitApiKey ?? auth.apiKey;
 
   const baseUrl = resolveApiUrl(opts, auth.apiUrl);
 
@@ -33,8 +39,11 @@ export async function getApiClient(opts: GlobalOptions): Promise<ApiClient> {
 export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
   const auth = await getAuthConfig();
 
-  const token = opts.token ?? process.env.ANIMA_TOKEN ?? auth.token;
-  const apiKey = process.env.ANIMA_API_KEY ?? auth.apiKey;
+  // Same priority logic as getApiClient: explicit env vars override stored config
+  const explicitApiKey = process.env.ANIMA_API_KEY;
+  const explicitToken = opts.token ?? process.env.ANIMA_TOKEN;
+  const token = explicitApiKey ? undefined : (explicitToken ?? auth.token);
+  const apiKey = explicitApiKey ?? auth.apiKey;
 
   if (!token && !apiKey) {
     throw new ApiError(
