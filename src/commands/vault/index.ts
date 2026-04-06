@@ -12,6 +12,8 @@ import { generateCommand } from './generate.js';
 import { totpCommand } from './totp.js';
 import { shareCommand } from './share.js';
 import { tokenCommand } from './token.js';
+import { injectCommand } from './inject.js';
+import { redactCommand } from './redact.js';
 
 export function vaultCommands(): Command {
   const cmd = new Command('vault')
@@ -30,6 +32,8 @@ export function vaultCommands(): Command {
   cmd.addCommand(totpCommand());
   cmd.addCommand(shareCommand());
   cmd.addCommand(tokenCommand());
+  cmd.addCommand(injectCommand());
+  cmd.addCommand(redactCommand());
 
   return cmd;
 }

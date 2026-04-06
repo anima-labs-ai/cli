@@ -87,7 +87,7 @@ describe('ApiClient', () => {
 
   describe('GET', () => {
     test('sends GET request and returns parsed JSON', async () => {
-      setRoute('GET /api/test', {
+      setRoute('GET /test', {
         status: 200,
         body: { id: '1', name: 'Test' },
       });
@@ -102,7 +102,7 @@ describe('ApiClient', () => {
     });
 
     test('sends GET request with query params', async () => {
-      setRoute('GET /api/items', {
+      setRoute('GET /items', {
         status: 200,
         body: { items: [], total: 0 },
       });
@@ -131,7 +131,7 @@ describe('ApiClient', () => {
     });
 
     test('throws ApiError on 401', async () => {
-      setRoute('GET /api/protected', {
+      setRoute('GET /protected', {
         status: 401,
         body: { message: 'Unauthorized', code: 'AUTH_ERROR' },
       });
@@ -153,7 +153,7 @@ describe('ApiClient', () => {
 
   describe('POST', () => {
     test('sends POST request with body', async () => {
-      setRoute('POST /api/agents', {
+      setRoute('POST /agents', {
         status: 201,
         body: { id: 'agent-1', name: 'TestBot' },
       });
@@ -169,7 +169,7 @@ describe('ApiClient', () => {
     });
 
     test('handles 204 No Content', async () => {
-      setRoute('POST /api/action', {
+      setRoute('POST /action', {
         status: 204,
         body: null,
       });
@@ -184,7 +184,7 @@ describe('ApiClient', () => {
 
   describe('PATCH', () => {
     test('sends PATCH request', async () => {
-      setRoute('PATCH /api/agents/1', {
+      setRoute('PATCH /agents/1', {
         status: 200,
         body: { id: '1', name: 'Updated' },
       });
@@ -201,7 +201,7 @@ describe('ApiClient', () => {
 
   describe('PUT', () => {
     test('sends PUT request', async () => {
-      setRoute('PUT /api/agents/1', {
+      setRoute('PUT /agents/1', {
         status: 200,
         body: { id: '1', name: 'Replaced' },
       });
@@ -218,7 +218,7 @@ describe('ApiClient', () => {
 
   describe('DELETE', () => {
     test('sends DELETE request', async () => {
-      setRoute('DELETE /api/agents/1', {
+      setRoute('DELETE /agents/1', {
         status: 200,
         body: { success: true },
       });
@@ -233,7 +233,7 @@ describe('ApiClient', () => {
 
   describe('auth headers', () => {
     test('sends Authorization header with token', async () => {
-      setRoute('GET /api/auth-check', {
+      setRoute('GET /auth-check', {
         status: 200,
         body: { ok: true },
       });
@@ -246,7 +246,7 @@ describe('ApiClient', () => {
     });
 
     test('sends X-API-Key header with api key', async () => {
-      setRoute('GET /api/auth-check', {
+      setRoute('GET /auth-check', {
         status: 200,
         body: { ok: true },
       });
