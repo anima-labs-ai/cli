@@ -80,13 +80,13 @@ function tokenCreateCommand(): Command {
 // ---------------------------------------------------------------------------
 
 interface TokenExchangeOptions {
-  token: string;
+  vtk: string;
 }
 
 function tokenExchangeCommand(): Command {
   return new Command('exchange')
     .description('Exchange an ephemeral token for credential data')
-    .requiredOption('--token <vtk_token>', 'The vtk_ token to exchange')
+    .requiredOption('--vtk <vtk_token>', 'The vtk_ token to exchange')
     .action(async function (this: Command) {
       const opts = this.opts<TokenExchangeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
@@ -95,7 +95,7 @@ function tokenExchangeCommand(): Command {
       try {
         const client = await requireAuth(globals);
         const result = await client.post<VaultCredential>('/vault/token/exchange', {
-          token: opts.token,
+          token: opts.vtk,
         });
 
         if (globals.json) {
