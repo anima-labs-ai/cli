@@ -24,7 +24,7 @@ interface ListSharesResult {
 // ---------------------------------------------------------------------------
 
 interface ShareCreateOptions {
-  agent: string;
+  agent?: string;
   credential: string;
   target: string;
   permission: SharePermission;
@@ -34,7 +34,7 @@ interface ShareCreateOptions {
 function shareCreateCommand(): Command {
   return new Command('create')
     .description('Share a credential with another agent')
-    .requiredOption('--agent <id>', 'Source agent ID')
+    .option('--agent <id>', 'Source agent ID')
     .requiredOption('--credential <id>', 'Credential ID to share')
     .requiredOption('--target <id>', 'Target agent ID')
     .option('--permission <perm>', 'Permission level (READ, USE, MANAGE)', 'READ')
@@ -85,14 +85,14 @@ function shareCreateCommand(): Command {
 // ---------------------------------------------------------------------------
 
 interface ShareListOptions {
-  agent: string;
+  agent?: string;
   direction: 'granted' | 'received';
 }
 
 function shareListCommand(): Command {
   return new Command('list')
     .description('List credential shares')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID')
     .option('--direction <dir>', 'Direction: granted or received', 'received')
     .action(async function (this: Command) {
       const opts = this.opts<ShareListOptions>();
@@ -139,14 +139,14 @@ function shareListCommand(): Command {
 
 interface ShareRevokeOptions {
   id: string;
-  agent: string;
+  agent?: string;
 }
 
 function shareRevokeCommand(): Command {
   return new Command('revoke')
     .description('Revoke a credential share')
     .requiredOption('--id <shareId>', 'Share ID to revoke')
-    .requiredOption('--agent <id>', 'Agent ID that owns the share')
+    .option('--agent <id>', 'Agent ID that owns the share')
     .action(async function (this: Command) {
       const opts = this.opts<ShareRevokeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

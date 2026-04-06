@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface TotpOptions {
-  agent: string;
+  agent?: string;
 }
 
 interface TotpResponse {
@@ -16,7 +16,7 @@ export function totpCommand(): Command {
   return new Command('totp')
     .description('Get TOTP code')
     .argument('<credentialId>', 'Credential ID')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<TotpOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

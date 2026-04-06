@@ -64,7 +64,7 @@ interface VaultCredential {
 }
 
 interface StoreOptions {
-  agent: string;
+  agent?: string;
   type: CredentialType;
   name: string;
   username?: string;
@@ -73,7 +73,7 @@ interface StoreOptions {
 }
 
 interface CreateCredentialInput {
-  agentId: string;
+  agentId?: string;
   type: CredentialType;
   name: string;
   notes?: string;
@@ -88,7 +88,7 @@ interface CreateCredentialInput {
 export function storeCommand(): Command {
   return new Command('store')
     .description('Store/create a vault credential')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .option('--type <type>', 'Credential type', 'login')
     .requiredOption('--name <name>', 'Credential name')
     .option('--username <user>', 'Login username')

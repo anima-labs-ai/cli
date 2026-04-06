@@ -68,13 +68,13 @@ interface ListResponse {
 }
 
 interface ListOptions {
-  agent: string;
+  agent?: string;
 }
 
 export function listCommand(): Command {
   return new Command('list')
     .description('List credentials')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command) {
       const opts = this.opts<ListOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

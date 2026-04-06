@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface SyncOptions {
-  agent: string;
+  agent?: string;
 }
 
 interface SyncResponse {
@@ -14,7 +14,7 @@ interface SyncResponse {
 export function syncCommand(): Command {
   return new Command('sync')
     .description('Force vault sync')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command) {
       const opts = this.opts<SyncOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

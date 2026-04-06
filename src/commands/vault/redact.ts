@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface RedactOptions {
-  agent: string;
+  agent?: string;
   patterns?: string[];
 }
 
@@ -55,7 +55,7 @@ export function redactCommand(): Command {
     .description(
       'Redact vault secrets from stdin. Fetches all credentials for the agent and replaces any matching secret values with [REDACTED].'
     )
-    .requiredOption('--agent <id>', 'Agent ID whose credentials to use for redaction')
+    .option('--agent <id>', 'Agent ID whose credentials to use for redaction')
     .option('--pattern <values...>', 'Additional literal strings to redact')
     .action(async function (this: Command) {
       const opts = this.opts<RedactOptions>();

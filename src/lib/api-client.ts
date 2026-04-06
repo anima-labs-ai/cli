@@ -49,10 +49,14 @@ export class ApiClient {
     }
   }
 
-  async get<T>(path: string, params?: Record<string, string>): Promise<T> {
+  async get<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
     let url = `${this.baseUrl}${path}`;
     if (params) {
-      const qs = new URLSearchParams(params).toString();
+      // Filter out undefined values so optional params aren't sent as "undefined"
+      const filtered = Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined),
+      ) as Record<string, string>;
+      const qs = new URLSearchParams(filtered).toString();
       if (qs) url += `?${qs}`;
     }
     return this.request<T>('GET', url);

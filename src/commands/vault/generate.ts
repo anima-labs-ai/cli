@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface GenerateOptions {
-  agent: string;
+  agent?: string;
   length?: number;
   uppercase?: boolean;
   lowercase?: boolean;
@@ -13,7 +13,7 @@ interface GenerateOptions {
 }
 
 interface GeneratePasswordInput {
-  agentId: string;
+  agentId?: string;
   length?: number;
   uppercase?: boolean;
   lowercase?: boolean;
@@ -28,7 +28,7 @@ interface GeneratePasswordResponse {
 export function generateCommand(): Command {
   return new Command('generate')
     .description('Generate password')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .option('--length <number>', 'Password length (4-128)', Number.parseInt)
     .option('--uppercase', 'Include uppercase letters')
     .option('--lowercase', 'Include lowercase letters')

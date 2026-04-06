@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface DeleteOptions {
-  agent: string;
+  agent?: string;
 }
 
 interface DeleteResponse {
@@ -15,7 +15,7 @@ export function deleteCommand(): Command {
   return new Command('delete')
     .description('Delete credential')
     .argument('<credentialId>', 'Credential ID')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<DeleteOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

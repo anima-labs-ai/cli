@@ -64,14 +64,14 @@ interface VaultCredential {
 }
 
 interface GetOptions {
-  agent: string;
+  agent?: string;
 }
 
 export function getCommand(): Command {
   return new Command('get')
     .description('Get credential by ID')
     .argument('<credentialId>', 'Credential ID')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<GetOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

@@ -68,7 +68,7 @@ interface SearchResponse {
 }
 
 interface SearchOptions {
-  agent: string;
+  agent?: string;
   query: string;
   type?: CredentialType;
 }
@@ -76,7 +76,7 @@ interface SearchOptions {
 export function searchCommand(): Command {
   return new Command('search')
     .description('Search credentials')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .requiredOption('--query <search>', 'Search query')
     .option('--type <type>', 'Credential type filter')
     .action(async function (this: Command) {
@@ -86,7 +86,7 @@ export function searchCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const params: Record<string, string> = {
+        const params: Record<string, string | undefined> = {
           agentId: opts.agent,
           search: opts.query,
         };

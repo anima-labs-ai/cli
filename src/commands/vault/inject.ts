@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface InjectOptions {
-  agent: string;
+  agent?: string;
 }
 
 interface VaultCredential {
@@ -85,7 +85,7 @@ export function injectCommand(): Command {
     .description(
       'Detect vault references (vtk_ tokens and {{vault:...}} templates) in stdin, exchange them for real credentials, and output the injected text'
     )
-    .requiredOption('--agent <id>', 'Agent ID (used for template credential lookups)')
+    .option('--agent <id>', 'Agent ID (used for template credential lookups)')
     .action(async function (this: Command) {
       const opts = this.opts<InjectOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

@@ -4,7 +4,7 @@ import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 
 interface StatusOptions {
-  agent: string;
+  agent?: string;
 }
 
 interface VaultStatusResponse {
@@ -16,7 +16,7 @@ interface VaultStatusResponse {
 export function statusCommand(): Command {
   return new Command('status')
     .description('Check vault status')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command) {
       const opts = this.opts<StatusOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
