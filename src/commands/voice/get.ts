@@ -52,7 +52,7 @@ export function getCallCommand(): Command {
           ['To', call.to],
           ['Tier', call.tier],
           ['Voice ID', call.voiceId ?? '-'],
-          ['Duration', formatDuration(call.durationSeconds)],
+          ['Duration', formatDuration(call.durationSeconds ?? undefined)],
           ['Started', new Date(call.startedAt).toLocaleString()],
           ['Ended', call.endedAt ? new Date(call.endedAt).toLocaleString() : '-'],
           ['Recording', call.recordingUrl ?? 'None'],

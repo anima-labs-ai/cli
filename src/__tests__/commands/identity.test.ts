@@ -113,7 +113,7 @@ describe('identity commands', () => {
   });
 
   test('create identity sends required body', async () => {
-    setRoute('POST', '/api/agents', {
+    setRoute('POST', '/agents', {
       status: 201,
       body: {
         id: 'agt_1',
@@ -162,7 +162,7 @@ describe('identity commands', () => {
   });
 
   test('list identities supports filters and pagination options', async () => {
-    setRoute('GET', '/api/agents', {
+    setRoute('GET', '/agents', {
       status: 200,
       body: {
         items: [
@@ -211,7 +211,7 @@ describe('identity commands', () => {
   });
 
   test('get identity fetches by id', async () => {
-    setRoute('GET', '/api/agents/agt_1', {
+    setRoute('GET', '/agents/agt_1', {
       status: 200,
       body: {
         id: 'agt_1',
@@ -236,7 +236,7 @@ describe('identity commands', () => {
   });
 
   test('update identity sends patch body', async () => {
-    setRoute('PATCH', '/api/agents/agt_1', {
+    setRoute('PATCH', '/agents/agt_1', {
       status: 200,
       body: {
         id: 'agt_1',
@@ -280,7 +280,7 @@ describe('identity commands', () => {
   });
 
   test('delete identity calls delete endpoint', async () => {
-    setRoute('DELETE', '/api/agents/agt_1', {
+    setRoute('DELETE', '/agents/agt_1', {
       status: 200,
       body: { deleted: true },
     });
@@ -298,7 +298,7 @@ describe('identity commands', () => {
   });
 
   test('rotate-key rotates API key', async () => {
-    setRoute('POST', '/api/agents/agt_1/rotate-key', {
+    setRoute('POST', '/agents/agt_1/rotate-key', {
       status: 200,
       body: {
         id: 'agt_1',
@@ -321,7 +321,7 @@ describe('identity commands', () => {
   });
 
   test('handles ApiError with user-friendly message', async () => {
-    setRoute('GET', '/api/agents/missing', {
+    setRoute('GET', '/agents/missing', {
       status: 404,
       body: {
         error: {
@@ -350,7 +350,7 @@ describe('identity commands', () => {
   });
 
   test('create identity handles forbidden access (403)', async () => {
-    setRoute('POST', '/api/agents', {
+    setRoute('POST', '/agents', {
       status: 403,
       body: {
         error: {
@@ -385,7 +385,7 @@ describe('identity commands', () => {
   });
 
   test('list identities handles rate limiting (429)', async () => {
-    setRoute('GET', '/api/agents', {
+    setRoute('GET', '/agents', {
       status: 429,
       body: {
         error: {

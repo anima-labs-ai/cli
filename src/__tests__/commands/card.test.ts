@@ -65,7 +65,7 @@ describe('card commands', () => {
       port: 0,
       async fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'POST' && url.pathname === '/api/cards') {
+        if (request.method === 'POST' && url.pathname === '/cards') {
           const body = await request.json();
           capturedRequests.push({
             method: request.method,
@@ -117,7 +117,7 @@ describe('card commands', () => {
 
     const captured = capturedRequests[0];
     expect(captured?.method).toBe('POST');
-    expect(captured?.pathname).toBe('/api/cards');
+    expect(captured?.pathname).toBe('/cards');
     expect(captured?.body).toEqual({
       agentId: 'agent_1',
       label: 'Primary',
@@ -136,7 +136,7 @@ describe('card commands', () => {
       port: 0,
       fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'GET' && url.pathname === '/api/cards') {
+        if (request.method === 'GET' && url.pathname === '/cards') {
           capturedRequests.push({
             method: request.method,
             pathname: url.pathname,
@@ -189,7 +189,7 @@ describe('card commands', () => {
     console.log = originalLog;
 
     const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/api/cards');
+    expect(captured?.pathname).toBe('/cards');
     expect(captured?.searchParams.get('agentId')).toBe('agent_1');
     expect(captured?.searchParams.get('status')).toBe('ACTIVE');
     expect(captured?.searchParams.get('limit')).toBe('25');
@@ -201,7 +201,7 @@ describe('card commands', () => {
       port: 0,
       fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'GET' && url.pathname === '/api/cards/card_1') {
+        if (request.method === 'GET' && url.pathname === '/cards/card_1') {
           return new Response(JSON.stringify({
             id: 'card_1',
             agentId: 'agent_1',
@@ -255,7 +255,7 @@ describe('card commands', () => {
       port: 0,
       async fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'PUT' && url.pathname === '/api/cards/card_1') {
+        if (request.method === 'PUT' && url.pathname === '/cards/card_1') {
           const body = await request.json();
           capturedRequests.push({
             method: request.method,
@@ -306,7 +306,7 @@ describe('card commands', () => {
     console.log = originalLog;
 
     const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/api/cards/card_1');
+    expect(captured?.pathname).toBe('/cards/card_1');
     expect(captured?.body).toEqual({
       label: 'Updated',
       status: 'FROZEN',
@@ -326,7 +326,7 @@ describe('card commands', () => {
       port: 0,
       fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'DELETE' && url.pathname === '/api/cards/card_1') {
+        if (request.method === 'DELETE' && url.pathname === '/cards/card_1') {
           capturedRequests.push({
             method: request.method,
             pathname: url.pathname,
@@ -361,7 +361,7 @@ describe('card commands', () => {
 
     const captured = capturedRequests[0];
     expect(captured?.method).toBe('DELETE');
-    expect(captured?.pathname).toBe('/api/cards/card_1');
+    expect(captured?.pathname).toBe('/cards/card_1');
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
@@ -372,7 +372,7 @@ describe('card commands', () => {
       port: 0,
       fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'GET' && url.pathname === '/api/cards/transactions') {
+        if (request.method === 'GET' && url.pathname === '/cards/transactions') {
           capturedRequests.push({
             method: request.method,
             pathname: url.pathname,
@@ -427,7 +427,7 @@ describe('card commands', () => {
     console.log = originalLog;
 
     const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/api/cards/transactions');
+    expect(captured?.pathname).toBe('/cards/transactions');
     expect(captured?.searchParams.get('cardId')).toBe('card_1');
     expect(captured?.searchParams.get('agentId')).toBe('agent_1');
     expect(captured?.searchParams.get('status')).toBe('PENDING');
@@ -442,7 +442,7 @@ describe('card commands', () => {
       port: 0,
       async fetch(request) {
         const url = new URL(request.url);
-        if (request.method === 'POST' && url.pathname === '/api/cards/kill-switch') {
+        if (request.method === 'POST' && url.pathname === '/cards/kill-switch') {
           const body = await request.json();
           capturedRequests.push({
             method: request.method,
@@ -480,7 +480,7 @@ describe('card commands', () => {
     console.log = originalLog;
 
     const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/api/cards/kill-switch');
+    expect(captured?.pathname).toBe('/cards/kill-switch');
     expect(captured?.body).toEqual({
       active: true,
       cardId: 'card_1',

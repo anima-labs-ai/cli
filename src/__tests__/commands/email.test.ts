@@ -128,7 +128,7 @@ describe('email commands', () => {
     console.log = originalLog;
 
     expect(capturedMethod).toBe('POST');
-    expect(capturedPath).toBe('/api/email/send');
+    expect(capturedPath).toBe('/email/send');
     expect(capturedQuery).toBe('');
     expect(capturedBody).toEqual({
       agentId: 'agent_1',
@@ -186,7 +186,7 @@ describe('email commands', () => {
     console.log = originalLog;
 
     expect(capturedMethod).toBe('GET');
-    expect(capturedPath).toBe('/api/email');
+    expect(capturedPath).toBe('/email');
     expect(capturedQuery).toContain('cursor=cur_1');
     expect(capturedQuery).toContain('limit=10');
     expect(capturedQuery).toContain('agentId=agent_1');
@@ -226,7 +226,7 @@ describe('email commands', () => {
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/api/email/em_777');
+    expect(capturedPath).toBe('/email/em_777');
     const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as { id: string };
     expect(output.id).toBe('em_777');
   });
@@ -282,7 +282,7 @@ describe('email commands', () => {
     console.log = originalLog;
 
     expect(capturedMethod).toBe('POST');
-    expect(capturedPath).toBe('/api/domains/dom_42/verify');
+    expect(capturedPath).toBe('/domains/dom_42/verify');
     expect(capturedBody).toEqual({ domainId: 'dom_42' });
   });
 
@@ -306,7 +306,7 @@ describe('email commands', () => {
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/api/domains');
+    expect(capturedPath).toBe('/domains');
     const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as {
       data: Array<{ id: string }>;
     };
@@ -333,7 +333,7 @@ describe('email commands', () => {
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/api/domains/dom_2');
+    expect(capturedPath).toBe('/domains/dom_2');
   });
 
   test.serial('email domains delete calls delete endpoint', async () => {
@@ -360,7 +360,7 @@ describe('email commands', () => {
     console.log = originalLog;
 
     expect(capturedMethod).toBe('DELETE');
-    expect(capturedPath).toBe('/api/domains/dom_3');
+    expect(capturedPath).toBe('/domains/dom_3');
   });
 
   test.serial('email domains dns fetches dns records', async () => {
@@ -388,7 +388,7 @@ describe('email commands', () => {
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/api/domains/dom_4/dns-records');
+    expect(capturedPath).toBe('/domains/dom_4/dns-records');
     const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as {
       records: Array<{ type: string }>;
     };
@@ -426,7 +426,7 @@ describe('email commands', () => {
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/api/domains/dom_5/deliverability');
+    expect(capturedPath).toBe('/domains/dom_5/deliverability');
     const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as { sent: number };
     expect(output.sent).toBe(100);
   });

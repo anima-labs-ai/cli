@@ -17,4 +17,13 @@ Commands:
   delete [options] <credentialId>  Delete credential
   generate [options]               Generate password
   totp [options] <credentialId>    Get TOTP code
+  share                            Manage credential sharing between agents
+  token                            Manage ephemeral vault tokens
+  inject [options]                 Detect vault references (vtk_ tokens and
+                                   {{vault:...}} templates) in stdin, exchange
+                                   them for real credentials, and output the
+                                   injected text
+  redact [options]                 Redact vault secrets from stdin. Fetches all
+                                   credentials for the agent and replaces any
+                                   matching secret values with [REDACTED].
   help [command]                   display help for command

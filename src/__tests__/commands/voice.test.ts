@@ -60,7 +60,7 @@ function createMockServer(routes: Record<string, (req: CapturedRequest) => Respo
         return handler(lastRequest);
       }
 
-      // Try wildcard path matching for routes like GET /api/voice/calls/:id
+      // Try wildcard path matching for routes like GET /voice/calls/:id
       for (const [pattern, h] of Object.entries(routes)) {
         const [method, pathPattern] = pattern.split(' ');
         if (req.method === method && pathPattern && matchPath(url.pathname, pathPattern)) {
@@ -121,7 +121,7 @@ describe('voice commands', () => {
   describe('voice catalog', () => {
     test('lists voices with filters', async () => {
       createMockServer({
-        'GET /api/voice/catalog': () => jsonResponse({
+        'GET /voice/catalog': () => jsonResponse({
           voices: [
             { id: 'v1', name: 'Aria', provider: 'elevenlabs', tier: 'premium', gender: 'female', language: 'en-US', style: 'warm' },
             { id: 'v2', name: 'Marcus', provider: 'telnyx', tier: 'basic', gender: 'male', language: 'en-US', style: 'neutral' },
@@ -141,14 +141,14 @@ describe('voice commands', () => {
       }
 
       expect(lastRequest?.method).toBe('GET');
-      expect(lastRequest?.path).toBe('/api/voice/catalog');
+      expect(lastRequest?.path).toBe('/voice/catalog');
       expect(lastRequest?.query.get('tier')).toBe('premium');
       expect(logSpy.mock.calls.length).toBeGreaterThan(0);
     });
 
     test('shows empty message when no voices', async () => {
       createMockServer({
-        'GET /api/voice/catalog': () => jsonResponse({ voices: [] }),
+        'GET /voice/catalog': () => jsonResponse({ voices: [] }),
       });
       setAuthenticatedConfig(serverPort);
 
@@ -168,7 +168,7 @@ describe('voice commands', () => {
 
     test('supports json mode', async () => {
       createMockServer({
-        'GET /api/voice/catalog': () => jsonResponse({
+        'GET /voice/catalog': () => jsonResponse({
           voices: [{ id: 'v1', name: 'Test', provider: 'telnyx', tier: 'basic', language: 'en' }],
         }),
       });
@@ -194,7 +194,7 @@ describe('voice commands', () => {
   describe('voice calls', () => {
     test('lists calls with agent filter', async () => {
       createMockServer({
-        'GET /api/voice/calls': () => jsonResponse({
+        'GET /voice/calls': () => jsonResponse({
           items: [
             {
               id: 'call-abc123def456',
@@ -223,14 +223,14 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
-      expect(lastRequest?.path).toBe('/api/voice/calls');
+      expect(lastRequest?.path).toBe('/voice/calls');
       expect(lastRequest?.query.get('agentId')).toBe('agent-1');
       expect(logSpy.mock.calls.length).toBeGreaterThan(0);
     });
 
     test('handles empty call list', async () => {
       createMockServer({
-        'GET /api/voice/calls': () => jsonResponse({ items: [], total: 0 }),
+        'GET /voice/calls': () => jsonResponse({ items: [], total: 0 }),
       });
       setAuthenticatedConfig(serverPort);
 
@@ -254,7 +254,7 @@ describe('voice commands', () => {
   describe('voice get', () => {
     test('displays call details', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id': () => jsonResponse({
+        'GET /voice/calls/:id': () => jsonResponse({
           id: 'call-abc123',
           agentId: 'agent-1',
           direction: 'outbound',
@@ -280,14 +280,14 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
-      expect(lastRequest?.path).toBe('/api/voice/calls/call-abc123');
+      expect(lastRequest?.path).toBe('/voice/calls/call-abc123');
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('outbound');
     });
 
     test('supports json mode', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id': () => jsonResponse({
+        'GET /voice/calls/:id': () => jsonResponse({
           id: 'call-abc123',
           agentId: 'agent-1',
           direction: 'inbound',
@@ -321,7 +321,7 @@ describe('voice commands', () => {
   describe('voice transcript', () => {
     test('displays transcript segments', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id/transcript': () => jsonResponse({
+        'GET /voice/calls/:id/transcript': () => jsonResponse({
           callId: 'call-abc123',
           segments: [
             { speaker: 'agent', text: 'Hello, how can I help?', startTime: 0, endTime: 3 },
@@ -342,7 +342,7 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
-      expect(lastRequest?.path).toBe('/api/voice/calls/call-abc123/transcript');
+      expect(lastRequest?.path).toBe('/voice/calls/call-abc123/transcript');
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('Hello, how can I help?');
       expect(output).toContain('I need help with my order');
@@ -350,7 +350,7 @@ describe('voice commands', () => {
 
     test('filters by speaker', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id/transcript': () => jsonResponse({
+        'GET /voice/calls/:id/transcript': () => jsonResponse({
           callId: 'call-abc123',
           segments: [
             { speaker: 'agent', text: 'Agent line', startTime: 0, endTime: 2 },
@@ -383,7 +383,7 @@ describe('voice commands', () => {
   describe('voice summary', () => {
     test('displays call summary', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id/summary': () => jsonResponse({
+        'GET /voice/calls/:id/summary': () => jsonResponse({
           callId: 'call-abc123',
           oneLiner: 'Customer inquired about order status',
           topics: ['order status', 'delivery'],
@@ -408,7 +408,7 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
-      expect(lastRequest?.path).toBe('/api/voice/calls/call-abc123/summary');
+      expect(lastRequest?.path).toBe('/voice/calls/call-abc123/summary');
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('Customer inquired about order status');
       expect(output).toContain('Order inquiry');
@@ -416,7 +416,7 @@ describe('voice commands', () => {
 
     test('handles API error', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id/summary': () => jsonResponse(
+        'GET /voice/calls/:id/summary': () => jsonResponse(
           { error: { code: 'NOT_FOUND', message: 'Summary not ready' } },
           404,
         ),
@@ -449,7 +449,7 @@ describe('voice commands', () => {
   describe('voice score', () => {
     test('displays call score with subscores and metrics', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id/score': () => jsonResponse({
+        'GET /voice/calls/:id/score': () => jsonResponse({
           callId: 'call-abc123',
           overallScore: 82,
           subscores: {
@@ -485,7 +485,7 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
-      expect(lastRequest?.path).toBe('/api/voice/calls/call-abc123/score');
+      expect(lastRequest?.path).toBe('/voice/calls/call-abc123/score');
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('82');
       expect(output).toContain('Resolution');
@@ -493,7 +493,7 @@ describe('voice commands', () => {
 
     test('supports json mode', async () => {
       createMockServer({
-        'GET /api/voice/calls/:id/score': () => jsonResponse({
+        'GET /voice/calls/:id/score': () => jsonResponse({
           callId: 'c1',
           overallScore: 90,
           subscores: { resolution: 90, sentiment: 90, efficiency: 90, engagement: 90, latency: 90, compliance: 90 },
@@ -527,7 +527,7 @@ describe('voice commands', () => {
   describe('voice search', () => {
     test('sends search query to API', async () => {
       createMockServer({
-        'POST /api/voice/search': () => jsonResponse({
+        'POST /voice/search': () => jsonResponse({
           results: [
             { callId: 'c1', speaker: 'agent', text: 'Your order is ready', similarity: 0.92, startTime: 5, agentId: 'a1' },
           ],
@@ -550,7 +550,7 @@ describe('voice commands', () => {
       }
 
       expect(lastRequest?.method).toBe('POST');
-      expect(lastRequest?.path).toBe('/api/voice/search');
+      expect(lastRequest?.path).toBe('/voice/search');
       const body = JSON.parse(lastRequest?.bodyText ?? '{}') as { query: string; agentId: string; limit: number };
       expect(body.query).toBe('order status');
       expect(body.agentId).toBe('agent-1');
@@ -559,7 +559,7 @@ describe('voice commands', () => {
 
     test('displays search results', async () => {
       createMockServer({
-        'POST /api/voice/search': () => jsonResponse({
+        'POST /voice/search': () => jsonResponse({
           results: [
             { callId: 'call-abc12345', speaker: 'agent', text: 'I can help with that order', similarity: 0.88, startTime: 10, agentId: 'a1' },
             { callId: 'call-def67890', speaker: 'caller', text: 'Where is my order?', similarity: 0.82, startTime: 3, agentId: 'a1' },
@@ -585,7 +585,7 @@ describe('voice commands', () => {
 
     test('handles empty results', async () => {
       createMockServer({
-        'POST /api/voice/search': () => jsonResponse({ results: [] }),
+        'POST /voice/search': () => jsonResponse({ results: [] }),
       });
       setAuthenticatedConfig(serverPort);
 
@@ -605,7 +605,7 @@ describe('voice commands', () => {
 
     test('cross-channel search sends correct channels', async () => {
       createMockServer({
-        'POST /api/voice/search/cross-channel': () => jsonResponse({
+        'POST /voice/search/cross-channel': () => jsonResponse({
           results: [
             { id: 'r1', channel: 'voice', content: 'Call about billing', similarity: 0.9, createdAt: '2026-04-02T10:00:00Z', agentId: 'a1' },
             { id: 'r2', channel: 'email', content: 'Email about billing', similarity: 0.85, createdAt: '2026-04-02T09:00:00Z', agentId: 'a1' },
@@ -624,7 +624,7 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
-      expect(lastRequest?.path).toBe('/api/voice/search/cross-channel');
+      expect(lastRequest?.path).toBe('/voice/search/cross-channel');
       const body = JSON.parse(lastRequest?.bodyText ?? '{}') as { channels: string[] };
       expect(body.channels).toEqual(['email', 'sms', 'voice']);
 
