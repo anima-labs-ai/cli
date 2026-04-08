@@ -14,6 +14,7 @@ import { shareCommand } from './share.js';
 import { tokenCommand } from './token.js';
 import { injectCommand } from './inject.js';
 import { redactCommand } from './redact.js';
+import { autofillCommand } from './autofill.js';
 
 export function vaultCommands(): Command {
   const cmd = new Command('vault')
@@ -34,6 +35,7 @@ export function vaultCommands(): Command {
   cmd.addCommand(tokenCommand());
   cmd.addCommand(injectCommand());
   cmd.addCommand(redactCommand());
+  cmd.addCommand(autofillCommand());
 
   return cmd;
 }

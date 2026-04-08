@@ -26,4 +26,7 @@ Commands:
   redact [options]                 Redact vault secrets from stdin. Fetches all
                                    credentials for the agent and replaces any
                                    matching secret values with [REDACTED].
+  autofill [options]               Look up vault credentials and output them as
+                                   environment variables, dotenv, JSON, or
+                                   inject into a subprocess
   help [command]                   display help for command

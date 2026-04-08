@@ -581,4 +581,393 @@ describe('vault commands', () => {
     expect(output).toContain('Failed to delete credential: Request timed out');
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
+
+  // --- vault autofill tests ---
+
+  test('vault autofill by --id outputs env format', async () => {
+    setRoute('GET', '/vault/credentials/cred_1', {
+      status: 200,
+      body: {
+        id: 'cred_1',
+        type: 'login',
+        name: 'GitHub',
+        login: {
+          username: 'octocat',
+          password: 's3cret',
+          uris: [{ uri: 'https://github.com' }],
+        },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('agentId')).toBe('agent_1');
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--id', 'cred_1', '--agent', 'agent_1', '--format', 'env']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain("export USERNAME='octocat'");
+    expect(output).toContain("export PASSWORD='s3cret'");
+    expect(output).toContain("export URI='https://github.com'");
+  });
+
+  test('vault autofill by --id outputs dotenv format', async () => {
+    setRoute('GET', '/vault/credentials/cred_1', {
+      status: 200,
+      body: {
+        id: 'cred_1',
+        type: 'login',
+        name: 'GitHub',
+        login: {
+          username: 'octocat',
+          password: 's3cret',
+        },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--id', 'cred_1', '--format', 'dotenv']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain('USERNAME="octocat"');
+    expect(output).toContain('PASSWORD="s3cret"');
+  });
+
+  test('vault autofill by --id outputs json format', async () => {
+    setRoute('GET', '/vault/credentials/cred_1', {
+      status: 200,
+      body: {
+        id: 'cred_1',
+        type: 'login',
+        name: 'GitHub',
+        login: {
+          username: 'octocat',
+          password: 's3cret',
+        },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runCli(['vault', 'autofill', '--id', 'cred_1', '--format', 'json']);
+
+    console.log = originalLog;
+
+    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as {
+      credentialId: string;
+      credentialName: string;
+      variables: Record<string, string>;
+    };
+    expect(parsed.credentialId).toBe('cred_1');
+    expect(parsed.credentialName).toBe('GitHub');
+    expect(parsed.variables.USERNAME).toBe('octocat');
+    expect(parsed.variables.PASSWORD).toBe('s3cret');
+  });
+
+  test('vault autofill by --query searches and picks best match', async () => {
+    setRoute('GET', '/vault/search', {
+      status: 200,
+      body: {
+        items: [
+          {
+            id: 'cred_old',
+            type: 'login',
+            name: 'GitHub Old',
+            login: { username: 'old_user', password: 'old_pass' },
+            favorite: false,
+            createdAt: '2025-01-01T00:00:00.000Z',
+            updatedAt: '2025-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'cred_fav',
+            type: 'login',
+            name: 'GitHub Fav',
+            login: { username: 'fav_user', password: 'fav_pass' },
+            favorite: true,
+            createdAt: '2025-06-01T00:00:00.000Z',
+            updatedAt: '2025-06-01T00:00:00.000Z',
+          },
+        ],
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('search')).toBe('github');
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--query', 'github', '--format', 'env']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    // Should pick the favorite
+    expect(output).toContain("export USERNAME='fav_user'");
+    expect(output).toContain("export PASSWORD='fav_pass'");
+  });
+
+  test('vault autofill by --uri ranks by URI match score', async () => {
+    setRoute('GET', '/vault/search', {
+      status: 200,
+      body: {
+        items: [
+          {
+            id: 'cred_wrong',
+            type: 'login',
+            name: 'GitLab',
+            login: {
+              username: 'wrong_user',
+              password: 'wrong_pass',
+              uris: [{ uri: 'https://gitlab.com' }],
+            },
+            favorite: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'cred_right',
+            type: 'login',
+            name: 'GitHub',
+            login: {
+              username: 'right_user',
+              password: 'right_pass',
+              uris: [{ uri: 'https://github.com' }],
+            },
+            favorite: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--uri', 'github.com', '--format', 'env']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain("export USERNAME='right_user'");
+    expect(output).toContain("export PASSWORD='right_pass'");
+  });
+
+  test('vault autofill with --prefix prepends to variable names', async () => {
+    setRoute('GET', '/vault/credentials/cred_1', {
+      status: 200,
+      body: {
+        id: 'cred_1',
+        type: 'login',
+        name: 'GitHub',
+        login: { username: 'octocat', password: 's3cret' },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--id', 'cred_1', '--prefix', 'GH_', '--format', 'env']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain("export GH_USERNAME='octocat'");
+    expect(output).toContain("export GH_PASSWORD='s3cret'");
+  });
+
+  test('vault autofill with --field uses custom mappings', async () => {
+    setRoute('GET', '/vault/credentials/cred_1', {
+      status: 200,
+      body: {
+        id: 'cred_1',
+        type: 'login',
+        name: 'GitHub',
+        login: { username: 'octocat', password: 's3cret' },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli([
+      'vault', 'autofill', '--id', 'cred_1', '--format', 'env',
+      '--field', 'login.username:GH_USER', '--field', 'login.password:GH_TOKEN',
+    ]);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain("export GH_USER='octocat'");
+    expect(output).toContain("export GH_TOKEN='s3cret'");
+    // Should NOT contain default USERNAME/PASSWORD
+    expect(output).not.toContain('USERNAME');
+    expect(output).not.toContain('PASSWORD');
+  });
+
+  test('vault autofill with --totp includes TOTP code', async () => {
+    setRoute('GET', '/vault/credentials/cred_1', {
+      status: 200,
+      body: {
+        id: 'cred_1',
+        type: 'login',
+        name: 'GitHub',
+        login: { username: 'octocat', password: 's3cret' },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    setRoute('GET', '/vault/totp/cred_1', {
+      status: 200,
+      body: { code: '123456', period: 30 },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--id', 'cred_1', '--format', 'env', '--totp']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain("export TOTP_CODE='123456'");
+  });
+
+  test('vault autofill for card credential outputs card fields', async () => {
+    setRoute('GET', '/vault/credentials/card_1', {
+      status: 200,
+      body: {
+        id: 'card_1',
+        type: 'card',
+        name: 'Visa',
+        card: {
+          cardholderName: 'John Doe',
+          number: '4111111111111111',
+          expMonth: '12',
+          expYear: '2028',
+          code: '123',
+          brand: 'Visa',
+        },
+        favorite: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    const stdoutSpy = mock((chunk: unknown) => true);
+    const originalStdoutWrite = process.stdout.write;
+    process.stdout.write = stdoutSpy as unknown as typeof process.stdout.write;
+
+    await runCli(['vault', 'autofill', '--id', 'card_1', '--format', 'dotenv']);
+
+    process.stdout.write = originalStdoutWrite;
+
+    const output = stdoutSpy.mock.calls.map((call) => String(call.at(0))).join('');
+    expect(output).toContain('CARD_HOLDER="John Doe"');
+    expect(output).toContain('CARD_NUMBER="4111111111111111"');
+    expect(output).toContain('CARD_CVV="123"');
+    expect(output).toContain('CARD_EXP_MONTH="12"');
+  });
+
+  test('vault autofill errors when no selector provided', async () => {
+    const exitSpy = mock(() => {});
+    const originalExit = process.exit;
+    process.exit = exitSpy as unknown as typeof process.exit;
+
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy;
+
+    await runCli(['vault', 'autofill']);
+
+    console.error = originalError;
+    process.exit = originalExit;
+
+    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
+    expect(output).toContain('Provide at least one of --id, --uri, or --query');
+    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  test('vault autofill errors when no credentials found', async () => {
+    setRoute('GET', '/vault/search', {
+      status: 200,
+      body: { items: [] },
+    });
+
+    const exitSpy = mock(() => {});
+    const originalExit = process.exit;
+    process.exit = exitSpy as unknown as typeof process.exit;
+
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy;
+
+    await runCli(['vault', 'autofill', '--query', 'nonexistent']);
+
+    console.error = originalError;
+    process.exit = originalExit;
+
+    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
+    expect(output).toContain('No credentials found matching "nonexistent"');
+    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  test('vault autofill handles API errors gracefully', async () => {
+    setRoute('GET', '/vault/credentials/bad_id', {
+      status: 404,
+      body: { error: { code: 'NOT_FOUND', message: 'Credential not found' } },
+    });
+
+    const exitSpy = mock(() => {});
+    const originalExit = process.exit;
+    process.exit = exitSpy as unknown as typeof process.exit;
+
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy;
+
+    await runCli(['vault', 'autofill', '--id', 'bad_id']);
+
+    console.error = originalError;
+    process.exit = originalExit;
+
+    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
+    expect(output).toContain('Autofill failed: Credential not found');
+    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+  });
 });
