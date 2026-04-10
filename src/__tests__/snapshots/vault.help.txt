@@ -1,6 +1,6 @@
 Usage: anima vault [options] [command]
 
-Manage password vault credentials
+Manage password vault and OAuth authentication
 
 Options:
   -h, --help                       display help for command
@@ -26,4 +26,6 @@ Commands:
   redact [options]                 Redact vault secrets from stdin. Fetches all
                                    credentials for the agent and replaces any
                                    matching secret values with [REDACTED].
+  oauth                            Manage OAuth connections for agent
+                                   authentication
   help [command]                   display help for command
