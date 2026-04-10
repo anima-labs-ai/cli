@@ -65,6 +65,17 @@ interface VaultCredential {
 
 interface GetOptions {
   agent?: string;
+  unmask?: boolean;
+}
+
+function redactValue(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return '****';
+}
+
+function redactCardNumber(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return '****' + value.slice(-4);
 }
 
 export function getCommand(): Command {
@@ -72,10 +83,16 @@ export function getCommand(): Command {
     .description('Get credential by ID')
     .argument('<credentialId>', 'Credential ID')
     .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--unmask', 'Show raw credential values (passwords, tokens). Use with caution.')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<GetOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const mask = !opts.unmask;
+
+      if (opts.unmask) {
+        output.warn('⚠ Displaying unmasked credentials. Do not share this output.');
+      }
 
       try {
         const client = await requireAuth(globals);
@@ -84,20 +101,52 @@ export function getCommand(): Command {
         });
 
         if (globals.json) {
-          output.json(result);
+          if (mask) {
+            // Redact sensitive fields in JSON output
+            const masked = { ...result };
+            if (masked.login) {
+              masked.login = { ...masked.login };
+              if (masked.login.password) masked.login.password = '****';
+              if (masked.login.totp) masked.login.totp = '****';
+            }
+            if (masked.card) {
+              masked.card = { ...masked.card };
+              if (masked.card.code) masked.card.code = '****';
+              if (masked.card.number) masked.card.number = '****' + masked.card.number.slice(-4);
+            }
+            if (masked.identity) {
+              masked.identity = { ...masked.identity };
+              if (masked.identity.ssn) masked.identity.ssn = '****';
+            }
+            output.json(masked);
+          } else {
+            output.json(result);
+          }
           return;
         }
+
+        const password = mask ? redactValue(result.login?.password) : result.login?.password;
+        const cardNumber = mask ? redactCardNumber(result.card?.number) : result.card?.number;
+        const cardCode = mask ? redactValue(result.card?.code) : result.card?.code;
+        const ssn = mask ? redactValue(result.identity?.ssn) : result.identity?.ssn;
 
         output.details([
           ['Credential ID', result.id],
           ['Type', result.type],
           ['Name', result.name],
           ['Username', result.login?.username],
-          ['Password', result.login?.password],
+          ['Password', password],
           ['URI', result.login?.uris?.[0]?.uri],
+          ['Card Number', cardNumber],
+          ['Card Code', cardCode],
+          ['SSN', ssn],
           ['Favorite', result.favorite ? 'Yes' : 'No'],
           ['Updated At', result.updatedAt],
         ]);
+
+        if (mask) {
+          output.info('Sensitive fields masked. Use --unmask to reveal.');
+        }
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           output.error(`Failed to get credential: ${error.message}`);

@@ -14,10 +14,11 @@ import { shareCommand } from './share.js';
 import { tokenCommand } from './token.js';
 import { injectCommand } from './inject.js';
 import { redactCommand } from './redact.js';
+import { oauthCommand } from './oauth.js';
 
 export function vaultCommands(): Command {
   const cmd = new Command('vault')
-    .description('Manage password vault credentials');
+    .description('Manage password vault and OAuth authentication');
 
   cmd.addCommand(provisionCommand());
   cmd.addCommand(deprovisionCommand());
@@ -34,6 +35,7 @@ export function vaultCommands(): Command {
   cmd.addCommand(tokenCommand());
   cmd.addCommand(injectCommand());
   cmd.addCommand(redactCommand());
+  cmd.addCommand(oauthCommand());
 
   return cmd;
 }
