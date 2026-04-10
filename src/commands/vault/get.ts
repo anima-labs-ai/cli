@@ -96,8 +96,14 @@ export function getCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
+        // The server masks by default. Pass reveal=true to get plaintext,
+        // which requires a master key (mk_) — agent keys will get a 403.
+        // This enforces defense-in-depth: the CLI is no longer the only
+        // layer of protection. If someone hacks the CLI, they still can't
+        // exfiltrate passwords without master-key auth.
         const result = await client.get<VaultCredential>(`/vault/credentials/${credentialId}`, {
           agentId: opts.agent,
+          ...(opts.unmask ? { reveal: 'true' } : {}),
         });
 
         if (globals.json) {

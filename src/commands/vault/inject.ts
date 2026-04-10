@@ -140,7 +140,10 @@ export function injectCommand(): Command {
           }
         }
 
-        // Step 4: Resolve template references
+        // Step 4: Resolve template references.
+        // inject explicitly needs plaintext to substitute into the template,
+        // so we pass reveal=true. This requires a master key (mk_) — agent
+        // keys cannot reveal plaintext and must use the vtk_ token flow.
         const credentialCache = new Map<string, VaultCredential>();
         for (const tmpl of templates) {
           try {
@@ -148,7 +151,7 @@ export function injectCommand(): Command {
             if (!credential) {
               credential = await client.get<VaultCredential>(
                 `/vault/credentials/${tmpl.credentialId}`,
-                { agentId: opts.agent },
+                { agentId: opts.agent, reveal: 'true' },
               );
               credentialCache.set(tmpl.credentialId, credential);
             }
