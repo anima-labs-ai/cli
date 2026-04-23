@@ -1,22 +1,48 @@
 name: Release
 
+# Phase 3G: dual-track distribution — npm publish + signed binary artifacts.
+# Both tracks run on a tag push (v*). See IMPLEMENTATION_PLAN.md §6G for the
+# full phase breakdown. This workflow covers W63 (G1.1–G1.4). Signing (W64)
+# and distribution channels (W65) attach downstream.
+#
+# Security: no workflow step consumes untrusted external input (issue titles,
+# PR bodies, commit messages, branch names, etc.) in run: blocks. Only matrix
+# values — defined in this file — and github.event_name (a built-in, not a
+# user-controlled string) appear in expressions. Pinned action SHAs should be
+# adopted when we move from pre-release iteration to G3.4 workflow lock-down.
+
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    # Manual trigger for dry-runs — does NOT publish to npm or create releases.
+    inputs:
+      dry_run:
+        description: "Skip npm publish and GitHub Release creation"
+        required: false
+        default: "true"
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Track 1 — npm (existing developer path)
+  # ---------------------------------------------------------------------------
   publish:
+    name: Publish to npm
     runs-on: ubuntu-latest
+    # Don't run on workflow_dispatch dry-runs.
+    if: github.event_name == 'push'
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
 
+      # Pin Bun via .bun-version for reproducibility. `latest` would drift
+      # between CI runs and break the "same commit → same artifact" guarantee.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - uses: actions/setup-node@v4
         with:
@@ -26,10 +52,128 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build
+      - name: Build (tsc → dist/)
         run: bun run build
 
-      - name: Publish to npm
+      - name: Publish
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Track 2 — Signed binary artifacts (G1.1–G1.4)
+  # ---------------------------------------------------------------------------
+  # Matrix strategy: one job per target so builds run in parallel and a single
+  # target's failure doesn't block the others. `fail-fast: false` keeps the
+  # matrix going so we see all failing targets in one run, not one-at-a-time.
+  binaries:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-darwin-arm64
+            outfile: anima-darwin-arm64
+          - target: bun-darwin-x64
+            outfile: anima-darwin-x64
+          - target: bun-linux-arm64
+            outfile: anima-linux-arm64
+          - target: bun-linux-x64
+            outfile: anima-linux-x64
+          - target: bun-windows-x64
+            outfile: anima-windows-x64.exe
+    env:
+      # Matrix values pulled into env so `run:` blocks never interpolate
+      # workflow expressions directly — keeps the workflow immune to a
+      # theoretical future where matrix values come from event payload.
+      BUN_TARGET: ${{ matrix.target }}
+      OUTFILE: ${{ matrix.outfile }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # G1.2 — cross-compile via `bun build --compile`. Bun supports all five
+      # targets from a single Linux runner, which keeps CI cost low.
+      - name: Build binary
+        run: |
+          mkdir -p binaries
+          bun build src/cli.ts \
+            --compile \
+            --target="$BUN_TARGET" \
+            --outfile="binaries/$OUTFILE"
+
+      # G1.3 — per-binary SHA-256 emitted at build time. We publish the sum
+      # alongside the binary so verifiers don't need to trust the same channel
+      # that delivered the binary itself.
+      - name: Emit SHA-256
+        run: |
+          cd binaries
+          sha256sum "$OUTFILE" | tee "$OUTFILE.sha256"
+
+      # G1.4 — smoke-test. For Linux x64 we can run the binary directly on the
+      # runner. For other targets we rely on the `publish` tag-gate + downstream
+      # platform-specific QA (macOS/Windows runners added when signing lands in
+      # G2). Skip the step for non-native targets so the matrix stays green.
+      - name: Smoke test (native targets only)
+        if: matrix.target == 'bun-linux-x64'
+        run: |
+          "./binaries/$OUTFILE" --version
+          "./binaries/$OUTFILE" vault --help >/dev/null
+          "./binaries/$OUTFILE" --help >/dev/null
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.outfile }}
+          path: |
+            binaries/${{ matrix.outfile }}
+            binaries/${{ matrix.outfile }}.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Aggregate matrix outputs → single GitHub Release
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+    needs: binaries
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries-staging
+
+      - name: Collect artifacts into release dir
+        run: |
+          mkdir -p release
+          # actions/download-artifact@v4 places each artifact in its own
+          # subdirectory. Flatten them into a single release/ dir.
+          find binaries-staging -type f \( -name 'anima-*' -o -name '*.sha256' \) \
+            -exec cp {} release/ \;
+          # G1.3 — combined manifest so `curl | sh` installers can verify all
+          # artifacts against one file instead of fetching per-target sums.
+          cd release
+          cat *.sha256 > SHA256SUMS
+          ls -la
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/anima-*
+            release/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true
