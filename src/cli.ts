@@ -62,7 +62,22 @@ export function createProgram(): Command {
   return program;
 }
 
-const isDirectExecution = process.argv[1]?.endsWith('cli.ts') || process.argv[1]?.endsWith('cli.js');
+const arg1 = process.argv[1] ?? '';
+// `import.meta.main` is Bun-specific: true only when THIS file is the entry
+// point. We gate the Bun branch on it so `bun test` (which imports cli.ts
+// for snapshot harnesses) does NOT auto-run the CLI and spam stderr with
+// Commander help output. `tsconfig` has `types: ["node"]` so we need a type
+// cast — the property is guarded-present at runtime under Bun.
+const isBunDirectRun =
+  'Bun' in globalThis && (import.meta as unknown as { main?: boolean }).main === true;
+const isDirectExecution =
+  arg1.endsWith('cli.ts') ||
+  arg1.endsWith('cli.js') ||
+  arg1.endsWith('/anima') ||
+  // Bun-compiled platform binaries: `anima-darwin-arm64`, `anima-linux-x64`, etc.
+  // Match as a path-suffix so unrelated paths like `/home/anima-dev/...` don't trigger.
+  /anima-[^/]+$/.test(arg1) ||
+  isBunDirectRun;
 
 if (isDirectExecution) {
   const program = createProgram();

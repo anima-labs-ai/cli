@@ -1,4 +1,5 @@
 import envPaths from 'env-paths';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -145,9 +146,9 @@ function appConfigPath(): string {
 
 export async function getAuthConfig(): Promise<AuthConfig> {
   try {
-    const file = Bun.file(authConfigPath());
-    if (!(await file.exists())) return {};
-    return await file.json();
+    const p = authConfigPath();
+    if (!existsSync(p)) return {};
+    return JSON.parse(readFileSync(p, 'utf8'));
   } catch {
     return {};
   }
@@ -155,13 +156,13 @@ export async function getAuthConfig(): Promise<AuthConfig> {
 
 export async function saveAuthConfig(config: AuthConfig): Promise<void> {
   await ensureConfigDir();
-  await Bun.write(authConfigPath(), JSON.stringify(config, null, 2));
+  writeFileSync(authConfigPath(), JSON.stringify(config, null, 2));
 }
 
 export async function clearAuthConfig(): Promise<void> {
   try {
     await ensureConfigDir();
-    await Bun.write(authConfigPath(), JSON.stringify({}, null, 2));
+    writeFileSync(authConfigPath(), JSON.stringify({}, null, 2));
   } catch {
 
   }
@@ -169,9 +170,9 @@ export async function clearAuthConfig(): Promise<void> {
 
 export async function getConfig(): Promise<AppConfig> {
   try {
-    const file = Bun.file(appConfigPath());
-    if (!(await file.exists())) return {};
-    return await file.json();
+    const p = appConfigPath();
+    if (!existsSync(p)) return {};
+    return JSON.parse(readFileSync(p, 'utf8'));
   } catch {
     return {};
   }
@@ -179,7 +180,7 @@ export async function getConfig(): Promise<AppConfig> {
 
 export async function saveConfig(config: AppConfig): Promise<void> {
   await ensureConfigDir();
-  await Bun.write(appConfigPath(), JSON.stringify(config, null, 2));
+  writeFileSync(appConfigPath(), JSON.stringify(config, null, 2));
 }
 
 export function getConfigDir(): string {
