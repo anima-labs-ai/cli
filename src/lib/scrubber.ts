@@ -1,15 +1,43 @@
 /**
- * Scrubber: given a set of secret values, replace any occurrence in a stream
- * chunk with "[REDACTED]" before the chunk reaches the parent's stdout/stderr.
+ * Scrubber: replace any occurrence of known-secret values in a stream chunk
+ * with "[REDACTED]" before the chunk reaches the parent's stdout/stderr.
  *
  * This is the last line of defense when a child process (e.g. a script invoked
  * via `am vault exec`) accidentally logs a secret. Without scrubbing, any
  * `console.log(process.env.STRIPE_KEY)` in the child would leak the secret to
- * the terminal — and from there, often to CI logs, screen-recordings, the LLM
- * reading the terminal, etc.
+ * the terminal — and from there, often to CI logs, screen-recordings, and the
+ * LLM reading the terminal.
  *
- * There's a real trade-off in how aggressive the scrub should be. Read the TODO
- * in `buildScrubPolicy` before wiring this into `vault exec`.
+ * ## Policy: strip-by-default (Option D)
+ *
+ * Scrubbing is **on** by default. Users can opt out on a per-invocation basis
+ * with `--no-scrub`. Rationale:
+ *
+ *   - The common failure mode is "child leaks a secret" (frequent, high blast
+ *     radius). The rare failure mode is "scrubber redacts legitimate output
+ *     that coincidentally contains a secret substring" (uncommon, low impact —
+ *     user can re-run with `--no-scrub`).
+ *   - Defaults should protect the security-critical case. `--no-scrub` is the
+ *     escape hatch for the diagnostic case.
+ *   - This matches the posture of 1Password's `op run` (scrub on) and is
+ *     strictly safer than Doppler's `doppler run` default (scrub off).
+ *
+ * ## Performance notes
+ *
+ * `applyScrub` is on the hot path for child stdout/stderr. Worst-case cost is
+ * O(chunk_bytes × num_secrets). We keep this fast by:
+ *
+ *   1. Deduping identical values once at policy-build time (not per chunk).
+ *   2. Filtering by `minLength` before the string scan (short values are
+ *      skipped: too many false positives, not enough entropy).
+ *   3. Sorting longest-first so "sk_live_abc123def" is replaced before
+ *      "sk_live_abc" — otherwise a short prefix would redact the suffix.
+ *   4. Using `String.prototype.split(literal).join(replacement)` which is a
+ *      single linear pass per literal and avoids regex overhead.
+ *
+ * A typical `am vault exec` loads ~5 secrets; cost is negligible for normal
+ * CLI output volumes. If you ever pipe >100MB/s through a child, `--no-scrub`
+ * is the escape hatch.
  */
 
 export interface ScrubPolicy {
@@ -21,12 +49,18 @@ export interface ScrubPolicy {
   minLength: number;
 }
 
+const EMPTY_POLICY: ScrubPolicy = Object.freeze({
+  literals: [],
+  replacement: '[REDACTED]',
+  minLength: 8,
+}) as ScrubPolicy;
+
 export function applyScrub(chunk: Buffer, policy: ScrubPolicy): Buffer {
   if (policy.literals.length === 0) return chunk;
   let text = chunk.toString('utf-8');
-  // Sort longest-first so e.g. "sk_live_abc123def" is replaced before "sk_live_abc".
-  const sorted = [...policy.literals].filter((s) => s.length >= policy.minLength).sort((a, b) => b.length - a.length);
-  for (const literal of sorted) {
+  for (const literal of policy.literals) {
+    // `includes` before split avoids allocating a fresh array for the common
+    // no-match case — a meaningful speedup when the chunk contains zero hits.
     if (text.includes(literal)) {
       text = text.split(literal).join(policy.replacement);
     }
@@ -35,54 +69,40 @@ export function applyScrub(chunk: Buffer, policy: ScrubPolicy): Buffer {
 }
 
 /**
- * TODO — DECISION POINT 1 for Diyan.
+ * Build the scrub policy used by `am vault exec`.
  *
- * Build the scrub policy used by `am vault exec`. This function receives the
- * resolved secret values and returns the ScrubPolicy the parent process will
- * apply to the child's stdout/stderr.
+ * Strip-by-default: unless the caller passes `--no-scrub`, every resolved
+ * secret value (of length >= minLength, deduped) becomes a literal that
+ * `applyScrub` will redact from the child's stdout/stderr.
  *
- * The decision is a security ↔ usability ↔ correctness trade-off:
- *
- *   Option A — SCRUB OFF BY DEFAULT:
- *     Return { literals: [], ... }. Fast, zero overhead, zero false positives.
- *     Matches `doppler run` / `op run` behavior. Philosophy: "if your child
- *     process logs secrets, that's a bug in the child — fix it there."
- *
- *   Option B — SCRUB ON BY DEFAULT, minLength 8:
- *     Return { literals: values, replacement: "[REDACTED]", minLength: 8 }.
- *     Safest. Catches accidental logs. BUT: breaks programs whose output
- *     happens to contain the same string (e.g. a secret that's coincidentally
- *     also a public URL path), and adds per-chunk CPU cost on stdout.
- *
- *   Option C — SCRUB ON, OPT-IN PER SECRET:
- *     Let the anima.json SecretRef declare `"scrub": true|false` per secret.
- *     Most flexible; puts the decision on the person who knows the secret's
- *     shape. But requires users to think about it per-secret.
- *
- *   Option D — SCRUB ON + `--no-scrub` FLAG:
- *     Secure by default, easy escape hatch. Probably the pragmatic middle.
- *
- * My recommendation is D, but you run this business — Composio, 1Password, and
- * Doppler have all made different choices here and none is obviously wrong.
- *
- * Write the function body (5–10 lines):
- *   - accept `resolvedValues: Record<string, string>` and `optsNoScrub: boolean`
- *   - return the ScrubPolicy your chosen option dictates
- *   - if Option C, you'll also need to thread a per-secret flag through
- *     `loadAnimaConfig` → this function; I've left that unwired for you to add
+ * The caller is responsible for plumbing the resolved values in and wiring
+ * the returned policy into the child's stdio pipes.
  */
 export function buildScrubPolicy(
   resolvedValues: Record<string, string>,
   optsNoScrub: boolean,
 ): ScrubPolicy {
-  // TODO: Diyan — implement your chosen scrub policy here.
-  // Placeholder defaults to Option D (scrub on unless --no-scrub).
-  if (optsNoScrub) {
-    return { literals: [], replacement: '[REDACTED]', minLength: 8 };
+  if (optsNoScrub) return EMPTY_POLICY;
+
+  const minLength = 8;
+  // Dedupe — two env vars may map to the same value; scrubbing each independently
+  // would do duplicate work on every chunk.
+  const deduped = new Set<string>();
+  for (const value of Object.values(resolvedValues)) {
+    if (typeof value === 'string' && value.length >= minLength) {
+      deduped.add(value);
+    }
   }
+
+  // Longest-first so prefix overlaps don't leak the suffix.
+  // (e.g. secrets ["sk_live_abc", "sk_live_abc123def"] — replace the longer
+  // string first, otherwise after replacing "sk_live_abc" the suffix "123def"
+  // would slip through.)
+  const literals = [...deduped].sort((a, b) => b.length - a.length);
+
   return {
-    literals: Object.values(resolvedValues),
+    literals,
     replacement: '[REDACTED]',
-    minLength: 8,
+    minLength,
   };
 }

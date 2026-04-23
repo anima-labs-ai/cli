@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import net from 'node:net';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -17,34 +18,44 @@ const DEFAULT_SOCKET = path.join(os.homedir(), '.anima', 'vault.sock');
 const PID_FILE = path.join(os.homedir(), '.anima', 'vault.pid');
 
 // -----------------------------------------------------------------------------
-// DECISION POINT 2 — Diyan, this is the trust-boundary stub for the daemon.
+// Daemon trust boundary — HYBRID authz (finalized policy)
 // -----------------------------------------------------------------------------
 //
-// The daemon holds decrypted secrets in memory. Every incoming request on the
-// Unix socket must be authorized before the daemon will act. The question is
-// HOW STRONG that check should be.
+// The daemon holds decrypted secrets in memory. Every incoming request is
+// classified into one of two tiers:
 //
-//   Option 1 — UID-MATCH ONLY:
-//     Trust any connection whose peer UID matches the daemon's UID.
-//     Rationale: on a single-user laptop, anything running as you is already
-//     you. Matches 1Password CLI's default.
-//     Risk: a compromised npm package running as you can harvest secrets.
+//   TIER 1 — READ-ONLY (UID match only)
+//     Ops that return metadata only (existence checks, lists, searches).
+//     Trust model: the Unix socket is chmod 0o600 so the peer UID already
+//     equals the daemon UID. Anything running as the user is, by definition,
+//     the user. Matches 1Password CLI and OpenSSH agent defaults.
+//     Ops: list, search, get (returns only { hasValue: true }), shutdown
 //
-//   Option 2 — HOTKEY-GATED PER-TYPE:
-//     Each `vault type` request pops a system-level confirmation dialog
-//     (macOS TCC, Linux libnotify + hotkey, Windows toast). User must press
-//     Enter/F9 before keystrokes fire.
-//     Matches the openclaw-vault physical-confirmation posture.
-//     Risk: friction; breaks headless/CI.
+//   TIER 2 — MUTATING / REVEALING (UID match + fresh confirmation)
+//     Ops that move the secret across a trust boundary (into the kernel's
+//     keyboard buffer, into the clipboard, or into an outbound response
+//     with plaintext). Require an explicit system dialog per request, with
+//     a short sudo-style grace window to avoid prompt storms when the user
+//     is actively driving a workflow.
+//     Ops: type (future: reveal, copy)
 //
-//   Option 3 — HYBRID (recommended):
-//     Read-only ops (list, search, get-metadata) → UID match is enough.
-//     Mutating/revealing ops (type, reveal, copy-to-clipboard) → hotkey gate.
-//     Matches how sudo uses timestamps: auth once, cache briefly, re-auth for
-//     sensitive ops.
+// The grace window deliberately does NOT cache across cold starts — a
+// daemon restart rebuilds the trust bootstrap from scratch.
 //
-// Fill in `authorizeRequest` below with your chosen policy.
+// Compromise model: this design accepts that a malicious process running as
+// the same UID can enumerate credential IDs and see which values exist. It
+// does NOT accept that such a process can exfiltrate plaintext silently —
+// the hotkey gate forces a visible dialog, which turns an invisible breach
+// into a visible prompt the user can deny.
 // -----------------------------------------------------------------------------
+
+const CONFIRMATION_GRACE_MS = 60_000; // sudo-style re-auth window for sensitive ops
+const SENSITIVE_OPS = new Set<IpcRequest['op']>(['type']);
+
+// In-memory confirmation cache. Keyed by op + credentialId so that confirming
+// one credential does NOT grant access to another. Expiries are absolute
+// timestamps; pruning happens lazily on read.
+const authCache = new Map<string, number>();
 
 interface IpcRequest {
   op: 'list' | 'search' | 'get' | 'type' | 'shutdown';
@@ -60,32 +71,109 @@ interface IpcResult {
 }
 
 /**
- * TODO — DECISION POINT 2 for Diyan.
+ * Decide whether to allow the requested op. Returns true to proceed.
  *
- * Inspect the incoming connection and decide whether to allow the requested
- * op. Return true to proceed, false to reject. If you pick Option 2 or 3,
- * you'll also need to implement `requestHotkeyConfirmation` (left as a stub
- * below) — but that can ship in a follow-up.
- *
- * Write ~5–10 lines that encode your policy.
+ * UID check is implicit — the socket is chmod 0o600 so if the peer could
+ * connect at all, their UID matches ours. For sensitive ops we layer on a
+ * fresh confirmation with a short grace window.
  */
-function authorizeRequest(
+async function authorizeRequest(
   op: IpcRequest['op'],
-  socket: net.Socket,
-): boolean {
-  // TODO: Diyan — implement your chosen trust policy. Placeholder = Option 1.
-  // UID check is implicit in Unix socket permissions (we set 0o600 below), so
-  // if the socket exists and the peer could connect, their UID matches.
-  // For Option 3, gate ["type", "get"] on an extra confirmation.
-  void op;
-  void socket;
-  return true;
+  credentialId: string | undefined,
+): Promise<boolean> {
+  if (!SENSITIVE_OPS.has(op)) {
+    return true; // Tier 1: UID is enough
+  }
+
+  // Tier 2: check grace window first so repeat ops in the same workflow
+  // don't spam the user with dialogs.
+  const cacheKey = `${op}:${credentialId ?? '*'}`;
+  const expiry = authCache.get(cacheKey);
+  const now = Date.now();
+  if (expiry !== undefined && now < expiry) {
+    return true;
+  }
+  if (expiry !== undefined) authCache.delete(cacheKey); // lazy prune
+
+  const prompt = credentialId
+    ? `Allow "${op}" on credential "${credentialId}"?`
+    : `Allow "${op}"?`;
+  const confirmed = await requestHotkeyConfirmation(prompt);
+  if (confirmed) {
+    authCache.set(cacheKey, now + CONFIRMATION_GRACE_MS);
+  }
+  return confirmed;
 }
 
-async function requestHotkeyConfirmation(_prompt: string): Promise<boolean> {
-  // TODO: platform-specific system dialog (macOS: osascript, Linux: zenity/notify-send, Windows: msg).
-  // Wiring this up is where Option 2/3 becomes real.
-  return true;
+/**
+ * Platform-specific confirmation dialog. Fail-closed: if no dialog backend
+ * is available (e.g. headless Linux with no zenity), the sensitive op is
+ * denied rather than silently allowed.
+ */
+async function requestHotkeyConfirmation(prompt: string): Promise<boolean> {
+  switch (process.platform) {
+    case 'darwin':
+      return macOsConfirm(prompt);
+    case 'linux':
+      return linuxConfirm(prompt);
+    case 'win32':
+      return windowsConfirm(prompt);
+    default:
+      return false; // unknown platform — fail closed
+  }
+}
+
+async function macOsConfirm(prompt: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    // JSON.stringify gives us a safely-escaped AppleScript string literal.
+    const escaped = JSON.stringify(prompt);
+    const script =
+      `display dialog ${escaped} with title "Anima Vault" ` +
+      `buttons {"Deny", "Allow"} default button "Allow" ` +
+      `cancel button "Deny" with icon caution giving up after 30`;
+    const child = spawn('osascript', ['-e', script], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const chunks: Buffer[] = [];
+    child.stdout.on('data', (c: Buffer) => chunks.push(c));
+    child.on('close', (code) => {
+      // osascript exits 0 when a button is pressed (including Allow and Deny),
+      // exits 1 on cancel/Esc. We verify the button text to be explicit.
+      const stdout = Buffer.concat(chunks).toString('utf-8');
+      resolve(code === 0 && stdout.includes('button returned:Allow'));
+    });
+    child.on('error', () => resolve(false));
+  });
+}
+
+async function linuxConfirm(prompt: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(
+      'zenity',
+      ['--question', '--title=Anima Vault', `--text=${prompt}`, '--ok-label=Allow', '--cancel-label=Deny'],
+      { stdio: 'ignore' },
+    );
+    child.on('close', (code) => resolve(code === 0));
+    child.on('error', () => resolve(false)); // zenity missing → fail closed
+  });
+}
+
+async function windowsConfirm(prompt: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    // PresentationFramework ships with all supported Windows versions.
+    // Yes = Allow, No = Deny. MessageBox returns "Yes" or "No" on stdout.
+    const escaped = prompt.replace(/'/g, "''");
+    const psScript =
+      `Add-Type -AssemblyName PresentationFramework; ` +
+      `[System.Windows.MessageBox]::Show('${escaped}', 'Anima Vault', 'YesNo', 'Warning')`;
+    const child = spawn('powershell.exe', ['-NoProfile', '-Command', psScript], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const chunks: Buffer[] = [];
+    child.stdout.on('data', (c: Buffer) => chunks.push(c));
+    child.on('close', () => {
+      resolve(Buffer.concat(chunks).toString('utf-8').trim() === 'Yes');
+    });
+    child.on('error', () => resolve(false));
+  });
 }
 
 async function isDaemonRunning(): Promise<number | null> {
@@ -144,7 +232,7 @@ function agentStartCommand(): Command {
               return;
             }
 
-            if (!authorizeRequest(req.op, socket)) {
+            if (!(await authorizeRequest(req.op, req.credentialId))) {
               socket.end(JSON.stringify({ ok: false, error: 'unauthorized' } as IpcResult));
               return;
             }
@@ -176,20 +264,17 @@ function agentStartCommand(): Command {
             }
 
             if (req.op === 'type' && req.credentialId) {
+              // Authorization (incl. hotkey confirmation) was already handled
+              // above in authorizeRequest. If we reach this branch the user
+              // has consented — proceed to the keystroke-injection call.
               const value = snapshot.get(req.credentialId);
               if (!value) {
                 socket.end(JSON.stringify({ ok: false, error: 'not found' } as IpcResult));
                 return;
               }
-              const confirmed = await requestHotkeyConfirmation(
-                `Type credential "${req.credentialId}" into focused field?`,
-              );
-              if (!confirmed) {
-                socket.end(JSON.stringify({ ok: false, error: 'user declined' } as IpcResult));
-                return;
-              }
               // Platform-specific keystroke injection goes here. Left as a
               // per-OS follow-up (macOS CGEvent, Linux ydotool, Windows SendInput).
+              void value; // silence unused; real impl will reference this.
               socket.end(JSON.stringify({ ok: true, data: { typed: true } } as IpcResult));
               return;
             }
