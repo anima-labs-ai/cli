@@ -1,0 +1,8 @@
+dist/anima-*
+dist/checksums.txt
+src/
+src/__tests__/
+*.ts
+!dist/**/*.d.ts
+tsconfig.json
+bun.lock

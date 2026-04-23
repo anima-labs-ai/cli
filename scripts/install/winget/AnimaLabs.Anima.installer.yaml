@@ -1,0 +1,42 @@
+# Anima CLI — Winget installer manifest (Phase 3G G3.3)
+#
+# Canonical source for the installer-type fields. This file is patched by the
+# G3.4 release workflow with per-release URLs + hashes, then submitted to
+# microsoft/winget-pkgs via `wingetcreate submit` (or a fork-and-PR workflow).
+#
+# Winget's portable installer type is the right fit here: we ship a single
+# .exe with no MSI/MSIX, and winget's `portable` handler registers the binary
+# in a wrapper App Path plus PATH symlink — no custom installer code.
+#
+# Placeholders rewritten by G3.4:
+#   @@VERSION@@            semver without leading 'v' (e.g. "1.2.3")
+#   @@RELEASE_DATE@@       YYYY-MM-DD of the GitHub release
+#   @@INSTALLER_SHA256@@   SHA-256 of anima-windows-x64.exe (from signed manifest)
+
+PackageIdentifier: AnimaLabs.Anima
+PackageVersion: "@@VERSION@@"
+ReleaseDate: "@@RELEASE_DATE@@"
+InstallerType: portable
+# `portable` doesn't run an installer — winget just drops the .exe in the
+# links dir and adds an App Paths registry entry. That's exactly what we want
+# for a single-binary CLI; nothing to uninstall except removing the symlink.
+
+Commands:
+  - anima
+# The above is what the user types to invoke. Winget creates a PATH-visible
+# symlink named anima.exe → the underlying versioned .exe.
+
+Installers:
+  - Architecture: x64
+    InstallerUrl: "https://github.com/anima-labs-ai/cli/releases/download/v@@VERSION@@/anima-windows-x64.exe"
+    InstallerSha256: "@@INSTALLER_SHA256@@"
+    # Scope can be either user or machine; user is correct for a CLI — no
+    # admin elevation required, no system-wide PATH pollution.
+    Scope: user
+
+# Release notes URL lets `winget show` display our changelog without
+# fetching the full GitHub API.
+ReleaseNotesUrl: "https://github.com/anima-labs-ai/cli/releases/tag/v@@VERSION@@"
+
+ManifestType: installer
+ManifestVersion: 1.6.0

@@ -6,3 +6,7 @@ dist/
 coverage/
 *.tgz
 .turbo/
+
+# Phase 3G: bun build --compile outputs. Produced locally for smoke-tests
+# and in CI for releases; never checked in (large + per-host).
+binaries/

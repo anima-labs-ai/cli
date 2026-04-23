@@ -28,4 +28,19 @@ Commands:
                                    matching secret values with [REDACTED].
   oauth                            Manage OAuth connections for agent
                                    authentication
+  exec [options]                   Run a command with resolved vault secrets
+                                   injected into its environment
+  audit [options] [paths...]       Scan files for plaintext secrets and
+                                   unresolved vault references
+  reload [options]                 Reload vault snapshots on the server (use
+                                   after rotating a secret at the provider)
+  unlock [options]                 Start a master-key reveal session with
+                                   explicit ceremony
+  proxy [options]                  Run a local proxy that injects a vault
+                                   credential into outbound requests
+  agent                            Local vault-agent daemon for in-memory secret
+                                   handling
+  type [options]                   Ask the local daemon to type a credential
+                                   into the focused window (never exposes
+                                   plaintext)
   help [command]                   display help for command

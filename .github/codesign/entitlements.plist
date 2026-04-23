@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+Hardened Runtime entitlements for the notarized anima CLI (Phase 3G G2.2).
+
+By default, Hardened Runtime denies:
+  - attaching a debugger
+  - loading unsigned dylibs
+  - JIT allocation
+  - dyld interposition
+
+That baseline is exactly what we want. We do NOT opt in to any relaxations —
+the anima CLI spawns child processes (osascript, zenity, PowerShell for the
+vault-agent confirmation prompt in Phase 3F), which does NOT require any
+entitlement beyond the default sandbox-free + hardened-runtime set.
+
+Do NOT add:
+  - com.apple.security.cs.allow-unsigned-executable-memory (enables JIT; huge
+    attack surface, no use case for a static Bun binary)
+  - com.apple.security.cs.disable-library-validation (would allow loading
+    unsigned dylibs; breaks the trust chain that makes notarization worth
+    anything)
+  - com.apple.security.cs.allow-dyld-environment-variables (weakens the
+    runtime against DYLD_* injection attacks)
+
+If a future feature breaks under Hardened Runtime, prefer fixing the feature
+over adding an entitlement. A regressed trust model is worse than a missing
+feature.
+-->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>
