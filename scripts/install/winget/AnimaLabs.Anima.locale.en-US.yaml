@@ -1,0 +1,42 @@
+# Anima CLI — Winget default locale manifest (en-US).
+# One file per locale; en-US is required by winget and serves as the fallback
+# for any locale we don't explicitly ship.
+
+PackageIdentifier: AnimaLabs.Anima
+PackageVersion: "@@VERSION@@"
+PackageLocale: en-US
+Publisher: Anima Labs, Inc.
+PublisherUrl: https://useanima.sh
+PublisherSupportUrl: https://github.com/anima-labs-ai/cli/issues
+PrivacyUrl: https://useanima.sh/privacy
+
+Author: Anima Labs, Inc.
+
+PackageName: Anima CLI
+PackageUrl: https://github.com/anima-labs-ai/cli
+License: Apache-2.0
+LicenseUrl: https://github.com/anima-labs-ai/cli/blob/main/LICENSE
+Copyright: "Copyright (c) Anima Labs, Inc."
+
+ShortDescription: Identity & credentials infrastructure for AI agents.
+Description: |-
+  The anima CLI manages OAuth credentials, API keys, and agent identity for AI
+  agents. It includes a zero-knowledge vault that never writes secrets to disk,
+  a daemon-backed keystroke injector for local agent workflows, and a
+  credential broker for production deployments.
+
+Tags:
+  - ai
+  - agents
+  - oauth
+  - credentials
+  - vault
+  - cli
+
+ReleaseNotes: |-
+  See https://github.com/anima-labs-ai/cli/releases/tag/v@@VERSION@@
+
+ReleaseNotesUrl: "https://github.com/anima-labs-ai/cli/releases/tag/v@@VERSION@@"
+
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

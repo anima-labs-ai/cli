@@ -1,0 +1,8 @@
+# Anima CLI — Winget version manifest (top-level).
+# Pins the default locale and links to the sibling installer + locale files.
+
+PackageIdentifier: AnimaLabs.Anima
+PackageVersion: "@@VERSION@@"
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0
