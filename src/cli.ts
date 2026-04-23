@@ -28,6 +28,9 @@ export function createProgram(): Command {
     .name('anima')
     .description('Anima CLI — Identity infrastructure for AI agents')
     .version('0.1.0')
+    // Required so `am vault exec -- <cmd>` passes child-command flags through
+    // to spawn() instead of being interpreted by us. Cascades to all subcommands.
+    .enablePositionalOptions()
     .option('--json', 'Output results as JSON', false)
     .option('--debug', 'Enable debug output', false)
     .option('--token <token>', 'API token (overrides stored auth)')

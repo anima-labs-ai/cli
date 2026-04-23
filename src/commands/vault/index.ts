@@ -23,8 +23,12 @@ import { proxyCommand } from './proxy.js';
 import { agentCommand, typeCommand } from './agent.js';
 
 export function vaultCommands(): Command {
+  // enablePositionalOptions is required because `am vault exec` uses
+  // passThroughOptions so that flags after `--` get forwarded to the child
+  // process instead of being eaten by Commander.
   const cmd = new Command('vault')
-    .description('Manage password vault and OAuth authentication');
+    .description('Manage password vault and OAuth authentication')
+    .enablePositionalOptions();
 
   cmd.addCommand(provisionCommand());
   cmd.addCommand(deprovisionCommand());
