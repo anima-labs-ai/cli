@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
+import pkg from '../package.json' with { type: 'json' };
 import { addressCommands } from './commands/address/index.js';
 import { authCommands } from './commands/auth/index.js';
 import { identityCommands } from './commands/identity/index.js';
@@ -27,7 +28,7 @@ export function createProgram(): Command {
   program
     .name('anima')
     .description('Anima CLI — Identity infrastructure for AI agents')
-    .version('0.1.0')
+    .version(pkg.version)
     // Required so `am vault exec -- <cmd>` passes child-command flags through
     // to spawn() instead of being interpreted by us. Cascades to all subcommands.
     .enablePositionalOptions()
