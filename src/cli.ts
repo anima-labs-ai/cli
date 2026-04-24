@@ -75,8 +75,9 @@ const isDirectExecution =
   arg1.endsWith('cli.ts') ||
   arg1.endsWith('cli.js') ||
   arg1.endsWith('/anima') ||
-  // Bun-compiled platform binaries: `anima-darwin-arm64`, `anima-linux-x64`, etc.
+  // Bun-compiled platform binaries: `anima-linux-x64`, `anima-linux-arm64`.
   // Match as a path-suffix so unrelated paths like `/home/anima-dev/...` don't trigger.
+  // (We keep the broad regex so `bun build src/cli.ts` with any future target name still works.)
   /anima-[^/]+$/.test(arg1) ||
   isBunDirectRun;
 

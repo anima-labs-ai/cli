@@ -1,22 +1,28 @@
 name: Release
 
-# Phase 3G: dual-track distribution — npm publish + signed binary artifacts.
-# Both tracks run on a tag push (v*). See IMPLEMENTATION_PLAN.md §6G for the
-# full phase breakdown. This workflow covers W63 (G1.1–G1.4). Signing (W64)
-# and distribution channels (W65) attach downstream.
+# Agent-first distribution: Linux binaries (containers, VMs, CI) + npm package
+# (Node/TS agent projects). No macOS/Windows targets — the Anima CLI is
+# consumed by agents, not humans clicking on files, so platform-native
+# signing (Gatekeeper, SmartScreen) buys nothing over Sigstore + npm
+# provenance. The two tracks that matter — and that this workflow ships —
+# both run on a tag push:
+#
+#   1. npm publish with provenance attestation   (Node/TS agent runtimes)
+#   2. Signed Linux binaries (x64 + arm64)       (containers, servers, CI)
+#
+# Both tracks are gated on `github.event_name == 'push'` so a dry-run
+# workflow_dispatch can exercise the build matrix without side effects.
 #
 # Security: no workflow step consumes untrusted external input (issue titles,
 # PR bodies, commit messages, branch names, etc.) in run: blocks. Only matrix
-# values — defined in this file — and github.event_name (a built-in, not a
-# user-controlled string) appear in expressions. Pinned action SHAs should be
-# adopted when we move from pre-release iteration to G3.4 workflow lock-down.
+# values — defined in this file — and github.event_name (a built-in) appear
+# in expressions.
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
-    # Manual trigger for dry-runs — does NOT publish to npm or create releases.
     inputs:
       dry_run:
         description: "Skip npm publish and GitHub Release creation"
@@ -25,12 +31,14 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Track 1 — npm (existing developer path)
+  # Track 1 — npm publish with provenance
   # ---------------------------------------------------------------------------
+  # Primary install path for agent projects in the Node/TS ecosystem.
+  # Provenance attestation (GitHub OIDC → Sigstore) is verifiable via
+  # `npm view @anima-labs/cli --json | jq .dist.attestations`.
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    # Don't run on workflow_dispatch dry-runs.
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -38,8 +46,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pin Bun via .bun-version for reproducibility. `latest` would drift
-      # between CI runs and break the "same commit → same artifact" guarantee.
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -61,18 +67,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Track 2 — Signed binary artifacts (G1.1–G1.4)
+  # Track 2 — Signed Linux binaries
   # ---------------------------------------------------------------------------
-  # Matrix strategy: one job per target so builds run in parallel and a single
-  # target's failure doesn't block the others. `fail-fast: false` keeps the
-  # matrix going so we see all failing targets in one run, not one-at-a-time.
+  # Matrix: x64 + arm64. Each target is signed with Sigstore keyless
+  # (no long-lived signing keys — Cosign exchanges the runner's GitHub
+  # OIDC token for a short-lived Fulcio cert and records the signature
+  # in the public Rekor transparency log). `fail-fast: false` so one
+  # target's failure doesn't hide the other's.
   binaries:
     name: Build ${{ matrix.target }}
     runs-on: ubuntu-latest
-    # G2.6 — `id-token: write` is required for Sigstore keyless signing. Cosign
-    # exchanges the runner's GitHub-issued OIDC token for a short-lived Fulcio
-    # cert; no long-lived signing key is stored anywhere. `contents: read` is
-    # the minimum needed to check out the repo at a tag.
     permissions:
       contents: read
       id-token: write
@@ -80,20 +84,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: bun-darwin-arm64
-            outfile: anima-darwin-arm64
-          - target: bun-darwin-x64
-            outfile: anima-darwin-x64
           - target: bun-linux-arm64
             outfile: anima-linux-arm64
           - target: bun-linux-x64
             outfile: anima-linux-x64
-          - target: bun-windows-x64
-            outfile: anima-windows-x64.exe
     env:
-      # Matrix values pulled into env so `run:` blocks never interpolate
-      # workflow expressions directly — keeps the workflow immune to a
-      # theoretical future where matrix values come from event payload.
       BUN_TARGET: ${{ matrix.target }}
       OUTFILE: ${{ matrix.outfile }}
     steps:
@@ -103,8 +98,6 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      # G2.6 — install cosign once per job. Pinned to v3; the installer action
-      # caches cosign across runs, so this is cheap on repeated builds.
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
         with:
@@ -113,8 +106,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # G1.2 — cross-compile via `bun build --compile`. Bun supports all five
-      # targets from a single Linux runner, which keeps CI cost low.
       - name: Build binary
         run: |
           mkdir -p binaries
@@ -123,21 +114,18 @@ jobs:
             --target="$BUN_TARGET" \
             --outfile="binaries/$OUTFILE"
 
-      # G1.3 — per-binary SHA-256 emitted at build time. We publish the sum
-      # alongside the binary so verifiers don't need to trust the same channel
-      # that delivered the binary itself.
       - name: Emit SHA-256
         run: |
           cd binaries
           sha256sum "$OUTFILE" | tee "$OUTFILE.sha256"
 
-      # G2.6 — Sigstore keyless sign. `--bundle` writes a single file containing
+      # Sigstore keyless sign. `--bundle` writes a single file containing
       # the signature, the Fulcio cert chain, and the Rekor transparency-log
-      # entry — enough to verify offline without calling back to Sigstore infra.
+      # entry — enough to verify offline without calling back to Sigstore.
       # Verification (documented in SECURITY.md):
       #   cosign verify-blob \
       #     --bundle anima-<target>.sigstore.bundle \
-      #     --certificate-identity-regexp 'https://github.com/anima-labs-ai/.+/\.github/workflows/release\.yml@refs/tags/v.+' \
+      #     --certificate-identity-regexp 'https://github.com/anima-labs-ai/cli/\.github/workflows/release\.yml@refs/tags/v.+' \
       #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
       #     anima-<target>
       - name: Sign with cosign (keyless, GitHub OIDC)
@@ -148,10 +136,9 @@ jobs:
             --yes \
             "$OUTFILE"
 
-      # G1.4 — smoke-test. For Linux x64 we can run the binary directly on the
-      # runner. For other targets we rely on the `publish` tag-gate + downstream
-      # platform-specific QA (macOS/Windows runners added when signing lands in
-      # G2). Skip the step for non-native targets so the matrix stays green.
+      # Runs on the same Linux runner that built the x64 binary; for arm64
+      # the binary is a different architecture than the runner, so it's
+      # skipped (gated by the matrix.target check).
       - name: Smoke test (native targets only)
         if: matrix.target == 'bun-linux-x64'
         run: |
@@ -171,262 +158,21 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Preflight — probe signing-secret presence (G2.2, G2.4)
+  # Aggregate → signed GitHub Release
   # ---------------------------------------------------------------------------
-  # GitHub's `secrets` context is NOT available in job-level `if:` expressions,
-  # so the canonical pattern for "skip a job when its secret is missing" is
-  # this preflight: one tiny job reads the secrets into `env:` and publishes
-  # booleans as outputs that downstream jobs gate on. Forks & pre-cert
-  # releases cleanly skip the sign jobs; releases with creds provisioned turn
-  # them on automatically. No code changes required when certs land.
-  preflight:
-    name: Preflight (signing-secret probe)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    outputs:
-      apple_ready: ${{ steps.check.outputs.apple_ready }}
-      windows_ready: ${{ steps.check.outputs.windows_ready }}
-    steps:
-      - id: check
-        env:
-          APPLE_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
-          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_SIGNING_CERT_PFX }}
-        run: |
-          if [ -n "$APPLE_CERT_P12" ]; then
-            echo "apple_ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "apple_ready=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -n "$WINDOWS_CERT_PFX" ]; then
-            echo "windows_ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "windows_ready=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  # ---------------------------------------------------------------------------
-  # G2.2 — macOS codesign + notarization
-  # ---------------------------------------------------------------------------
-  # Conditional on Apple Developer ID secrets. Until G2.1 (enrollment) lands,
-  # this job is skipped and macOS binaries ship Sigstore-only. When the cert
-  # arrives, populate these secrets and the next tag push produces fully
-  # notarized binaries with no workflow edit:
-  #   - APPLE_DEVELOPER_ID_CERT_P12     base64-encoded Developer ID .p12
-  #   - APPLE_DEVELOPER_ID_CERT_PASSWORD  .p12 export password
-  #   - APPLE_TEAM_ID                   10-char team identifier
-  #   - APPLE_NOTARY_USER               App-Store-Connect Apple ID
-  #   - APPLE_NOTARY_PASSWORD           app-specific password (not Apple ID pw)
-  #   - KEYCHAIN_PASSWORD               ephemeral build keychain password
-  sign-macos:
-    name: Sign macOS (${{ matrix.arch }})
-    needs: [binaries, preflight]
-    if: needs.preflight.outputs.apple_ready == 'true'
-    runs-on: macos-latest
-    permissions:
-      # id-token: write for the post-sign cosign attestation refresh.
-      contents: read
-      id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [arm64, x64]
-    env:
-      OUTFILE: anima-darwin-${{ matrix.arch }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: "v2.4.1"
-
-      - name: Download unsigned binary
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.OUTFILE }}
-          path: staging
-
-      # Import the Developer ID cert into an *ephemeral* build keychain —
-      # never the runner's default. The keychain is destroyed with the VM, so
-      # there's no persistent state between runs.
-      - name: Import signing cert
-        env:
-          CERT_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_P12 }}
-          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          echo "$CERT_P12_BASE64" | base64 --decode > cert.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security set-keychain-settings -lut 21600 build.keychain
-          security import cert.p12 -k build.keychain \
-            -P "$CERT_PASSWORD" -T /usr/bin/codesign
-          # Grant codesign non-interactive access so we don't hit a password
-          # prompt mid-run. Required on macOS 10.12+.
-          security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          rm -f cert.p12
-
-      # Hardened runtime is required for notarization. Entitlements live in
-      # .github/codesign/entitlements.plist — see that file's header for the
-      # per-entitlement rationale.
-      - name: Codesign
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          chmod +x "staging/$OUTFILE"
-          codesign --force \
-            --sign "Developer ID Application: Anima Labs, Inc. ($APPLE_TEAM_ID)" \
-            --options runtime \
-            --timestamp \
-            --entitlements .github/codesign/entitlements.plist \
-            "staging/$OUTFILE"
-          codesign --verify --strict --verbose=2 "staging/$OUTFILE"
-
-      # Notarize via notarytool (the v2 path; altool was deprecated 2023-11).
-      # Binaries (not .app/.pkg/.dmg) can't be stapled — Gatekeeper will
-      # online-check on first launch. That's acceptable for CLI distribution.
-      - name: Notarize
-        env:
-          APPLE_NOTARY_USER: ${{ secrets.APPLE_NOTARY_USER }}
-          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          cd staging
-          zip -q "$OUTFILE.zip" "$OUTFILE"
-          xcrun notarytool submit "$OUTFILE.zip" \
-            --apple-id "$APPLE_NOTARY_USER" \
-            --password "$APPLE_NOTARY_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-          rm -f "$OUTFILE.zip"
-
-      # Post-sign: the binary bytes changed, so the Linux-produced hash and
-      # sigstore bundle are stale. Regenerate both before re-uploading.
-      - name: Re-emit SHA-256 and re-attest with cosign
-        run: |
-          cd staging
-          sha256sum "$OUTFILE" | tee "$OUTFILE.sha256"
-          cosign sign-blob \
-            --bundle "$OUTFILE.sigstore.bundle" \
-            --yes \
-            "$OUTFILE"
-
-      # `overwrite: true` replaces the Linux-built artifact with the signed
-      # version under the same name, so the release job's download logic
-      # doesn't need to know whether signing happened.
-      - name: Upload signed artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.OUTFILE }}
-          overwrite: true
-          path: |
-            staging/${{ env.OUTFILE }}
-            staging/${{ env.OUTFILE }}.sha256
-            staging/${{ env.OUTFILE }}.sigstore.bundle
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # G2.4 — Windows signtool
-  # ---------------------------------------------------------------------------
-  # Conditional on Windows signing secrets. Until G2.3 (EV or OV cert
-  # procurement) completes, this job is skipped. Required secrets when ready:
-  #   - WINDOWS_SIGNING_CERT_PFX        base64-encoded .pfx
-  #   - WINDOWS_SIGNING_CERT_PASSWORD   .pfx password
-  sign-windows:
-    name: Sign Windows (x64)
-    needs: [binaries, preflight]
-    if: needs.preflight.outputs.windows_ready == 'true'
-    runs-on: windows-latest
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      OUTFILE: anima-windows-x64.exe
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-        with:
-          cosign-release: "v2.4.1"
-
-      - name: Download unsigned binary
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.OUTFILE }}
-          path: staging
-
-      - name: Decode signing cert
-        shell: bash
-        env:
-          CERT_PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_PFX }}
-        run: |
-          echo "$CERT_PFX_BASE64" | base64 --decode > cert.pfx
-
-      # signtool ships with the Windows SDK pre-installed on windows-latest.
-      # `/tr` + `/td` gives us an RFC 3161 timestamp — critical for the sig
-      # to remain valid after the code-signing cert expires.
-      - name: Sign with signtool
-        shell: pwsh
-        env:
-          CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
-        run: |
-          $signtool = Get-ChildItem `
-            -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
-            -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match 'x64\\signtool\.exe$' } |
-            Select-Object -First 1 -ExpandProperty FullName
-          & $signtool sign `
-            /fd sha256 `
-            /tr http://timestamp.digicert.com `
-            /td sha256 `
-            /f cert.pfx `
-            /p $env:CERT_PASSWORD `
-            "staging\${env:OUTFILE}"
-          & $signtool verify /pa /v "staging\${env:OUTFILE}"
-          Remove-Item cert.pfx
-
-      - name: Re-emit SHA-256 and re-attest with cosign
-        shell: bash
-        run: |
-          cd staging
-          sha256sum "$OUTFILE" | tee "$OUTFILE.sha256"
-          cosign sign-blob \
-            --bundle "$OUTFILE.sigstore.bundle" \
-            --yes \
-            "$OUTFILE"
-
-      - name: Upload signed artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.OUTFILE }}
-          overwrite: true
-          path: |
-            staging/${{ env.OUTFILE }}
-            staging/${{ env.OUTFILE }}.sha256
-            staging/${{ env.OUTFILE }}.sigstore.bundle
-          if-no-files-found: error
-
-  # ---------------------------------------------------------------------------
-  # Aggregate matrix outputs → single GitHub Release
-  # ---------------------------------------------------------------------------
+  # Assembles the matrix outputs, signs the aggregate SHA256SUMS manifest
+  # with Sigstore (so installers can verify all binaries from one bundle),
+  # and publishes the GitHub Release. Optional GPG detached signature for
+  # distro pipelines — gated on GPG_SIGNING_KEY presence, skipped cleanly
+  # when absent.
   release:
     name: Create GitHub Release
-    needs: [binaries, sign-macos, sign-windows]
+    needs: binaries
     runs-on: ubuntu-latest
-    # Release runs when the binaries succeed and the optional sign jobs are
-    # either successful OR skipped (secrets not yet provisioned). A *failed*
-    # sign job — e.g. notarization rejection — correctly blocks the release.
     if: |
       always() &&
       needs.binaries.result == 'success' &&
-      (needs.sign-macos.result == 'success' || needs.sign-macos.result == 'skipped') &&
-      (needs.sign-windows.result == 'success' || needs.sign-windows.result == 'skipped') &&
       github.event_name == 'push'
-    # `id-token: write` lets us keyless-sign the aggregate SHA256SUMS manifest
-    # too — installers that pull one manifest can verify with one bundle.
     permissions:
       contents: write
       id-token: write
@@ -446,20 +192,13 @@ jobs:
       - name: Collect artifacts into release dir
         run: |
           mkdir -p release
-          # actions/download-artifact@v4 places each artifact in its own
-          # subdirectory. Flatten them into a single release/ dir.
           find binaries-staging -type f \
             \( -name 'anima-*' -o -name '*.sha256' -o -name '*.sigstore.bundle' \) \
             -exec cp {} release/ \;
-          # G1.3 — combined manifest so `curl | sh` installers can verify all
-          # artifacts against one file instead of fetching per-target sums.
           cd release
           cat *.sha256 > SHA256SUMS
           ls -la
 
-      # G2.6 — sign the aggregate SHA256SUMS. This is the entry point for
-      # installer scripts (get.useanima.sh): verify SHA256SUMS.sigstore.bundle,
-      # then trust every per-binary hash listed inside.
       - name: Sign aggregate SHA256SUMS
         run: |
           cd release
@@ -468,10 +207,8 @@ jobs:
             --yes \
             SHA256SUMS
 
-      # G2.5 — OpenPGP detached signature for Linux distro pipelines that prefer
-      # GPG over Sigstore (Debian/RPM-style chains). Conditional on the
-      # GPG_SIGNING_KEY secret being present — forks and early-stage releases
-      # skip this step cleanly without failing the job.
+      # Optional GPG detached signature. Gated on secret presence — forks
+      # and early-stage releases skip cleanly.
       - name: Import GPG key
         id: gpg_import
         if: ${{ env.GPG_SIGNING_KEY != '' }}
@@ -495,149 +232,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          # Globbing SHA256SUMS* covers the required manifest + bundle and the
-          # optional .asc in one pattern — so `fail_on_unmatched_files: true`
-          # still hard-fails if the required files are missing, while the
-          # pattern stays green when the optional GPG sig isn't produced.
           files: |
             release/anima-*
             release/SHA256SUMS*
           generate_release_notes: true
           fail_on_unmatched_files: true
-
-      # G3.4 — export the SHA map as a job output so downstream jobs can
-      # patch package manifests without re-downloading / re-computing.
-      - name: Export SHA outputs
-        id: shas
-        run: |
-          cd release
-          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          echo "darwin_arm64=$(awk '$2 == "anima-darwin-arm64"   {print $1}' SHA256SUMS)" >> "$GITHUB_OUTPUT"
-          echo "darwin_x64=$(awk '$2 == "anima-darwin-x64"       {print $1}' SHA256SUMS)"   >> "$GITHUB_OUTPUT"
-          echo "linux_arm64=$(awk '$2 == "anima-linux-arm64"     {print $1}' SHA256SUMS)"   >> "$GITHUB_OUTPUT"
-          echo "linux_x64=$(awk '$2 == "anima-linux-x64"         {print $1}' SHA256SUMS)"   >> "$GITHUB_OUTPUT"
-          echo "windows_x64=$(awk '$2 == "anima-windows-x64.exe" {print $1}' SHA256SUMS)"   >> "$GITHUB_OUTPUT"
-    outputs:
-      version:       ${{ steps.shas.outputs.version }}
-      darwin_arm64:  ${{ steps.shas.outputs.darwin_arm64 }}
-      darwin_x64:    ${{ steps.shas.outputs.darwin_x64 }}
-      linux_arm64:   ${{ steps.shas.outputs.linux_arm64 }}
-      linux_x64:     ${{ steps.shas.outputs.linux_x64 }}
-      windows_x64:   ${{ steps.shas.outputs.windows_x64 }}
-
-  # ---------------------------------------------------------------------------
-  # G3.4 — publish to Homebrew tap
-  # ---------------------------------------------------------------------------
-  # Syncs cli/scripts/install/anima.rb → anima-labs-ai/homebrew-anima,
-  # patching version + SHAs per-architecture. Conditional on the
-  # HOMEBREW_TAP_TOKEN secret (a fine-grained PAT scoped to the tap repo).
-  # Skipped cleanly when the token isn't present — no failure.
-  publish-homebrew:
-    name: Publish Homebrew formula
-    needs: release
-    runs-on: ubuntu-latest
-    if: ${{ needs.release.result == 'success' }}
-    steps:
-      - name: Check token presence
-        id: gate
-        env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [ -n "$TAP_TOKEN" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::HOMEBREW_TAP_TOKEN not set — skipping tap update. Set it in repo secrets to enable."
-          fi
-
-      - name: Checkout cli (for formula template)
-        if: steps.gate.outputs.enabled == 'true'
-        uses: actions/checkout@v4
-        with:
-          path: cli
-
-      - name: Checkout tap repo
-        if: steps.gate.outputs.enabled == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: anima-labs-ai/homebrew-anima
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: tap
-
-      - name: Patch formula
-        if: steps.gate.outputs.enabled == 'true'
-        env:
-          VERSION:      ${{ needs.release.outputs.version }}
-          SHA_DARWIN_ARM64: ${{ needs.release.outputs.darwin_arm64 }}
-          SHA_DARWIN_X64:   ${{ needs.release.outputs.darwin_x64 }}
-          SHA_LINUX_ARM64:  ${{ needs.release.outputs.linux_arm64 }}
-          SHA_LINUX_X64:    ${{ needs.release.outputs.linux_x64 }}
-        run: |
-          mkdir -p tap/Formula
-          cp cli/scripts/install/anima.rb tap/Formula/anima.rb
-          # In-place patches. We edit the version line + each sha256 line by
-          # matching the marker comment that sits next to it. The markers are
-          # deliberately unique strings (@@NAME@@) so sed is unambiguous and
-          # safe against accidental matches.
-          sed -i -e "s/version \"0\.0\.0\".*# @@VERSION@@/version \"$VERSION\"/" tap/Formula/anima.rb
-          sed -i -e "/@@SHA_DARWIN_ARM64@@/ s/\"[0-9a-f]\{64\}\"/\"$SHA_DARWIN_ARM64\"/" tap/Formula/anima.rb
-          sed -i -e "/@@SHA_DARWIN_X64@@/   s/\"[0-9a-f]\{64\}\"/\"$SHA_DARWIN_X64\"/"   tap/Formula/anima.rb
-          sed -i -e "/@@SHA_LINUX_ARM64@@/  s/\"[0-9a-f]\{64\}\"/\"$SHA_LINUX_ARM64\"/"  tap/Formula/anima.rb
-          sed -i -e "/@@SHA_LINUX_X64@@/    s/\"[0-9a-f]\{64\}\"/\"$SHA_LINUX_X64\"/"    tap/Formula/anima.rb
-
-      - name: Commit & push
-        if: steps.gate.outputs.enabled == 'true'
-        env:
-          VERSION: ${{ needs.release.outputs.version }}
-        working-directory: tap
-        run: |
-          git config user.name  "anima-release-bot"
-          git config user.email "release-bot@useanima.sh"
-          git add Formula/anima.rb
-          # Exit cleanly if nothing changed (re-running a tagged release with
-          # identical artifacts shouldn't fail the workflow).
-          if git diff --cached --quiet; then
-            echo "::notice::No formula changes — already up to date."
-            exit 0
-          fi
-          git commit -m "anima $VERSION"
-          git push origin HEAD
-
-  # ---------------------------------------------------------------------------
-  # G3.4 — publish to winget-pkgs
-  # ---------------------------------------------------------------------------
-  # Uses the community-standard vedantmgoyal9/winget-releaser action to open a
-  # PR against microsoft/winget-pkgs. Conditional on WINGET_TOKEN (a PAT with
-  # public_repo scope that can fork + PR). The action handles manifest
-  # generation, validation against the wingetcreate schema, and PR creation.
-  publish-winget:
-    name: Publish Winget manifest
-    needs: release
-    runs-on: windows-latest
-    if: ${{ needs.release.result == 'success' }}
-    steps:
-      - name: Check token presence
-        id: gate
-        shell: bash
-        env:
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        run: |
-          if [ -n "$WINGET_TOKEN" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::WINGET_TOKEN not set — skipping winget submission."
-          fi
-
-      - name: Submit to winget-pkgs
-        if: steps.gate.outputs.enabled == 'true'
-        uses: vedantmgoyal9/winget-releaser@main
-        with:
-          identifier: AnimaLabs.Anima
-          # The action reads the installer URL pattern and fills in SHAs by
-          # downloading & hashing the release asset itself — so we don't need
-          # to forward the hash we already computed. It's redundant
-          # computation but it keeps the action contract clean.
-          installers-regex: '^anima-windows-x64\.exe$'
-          token: ${{ secrets.WINGET_TOKEN }}
-          version: ${{ needs.release.outputs.version }}
