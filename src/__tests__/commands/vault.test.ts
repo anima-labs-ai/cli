@@ -341,8 +341,11 @@ describe('vault commands', () => {
     setRoute('DELETE', '/vault/credentials/cred_1', {
       status: 200,
       body: { success: true },
-      assert: ({ body }) => {
-        expect(body).toEqual({ agentId: 'agent_1' });
+      assert: ({ url, body }) => {
+        // DELETE carries no body (RFC 7231) — agentId must ride in the query
+        // string or the server 400s. See api-client.delete() for the fix.
+        expect(url.searchParams.get('agentId')).toEqual('agent_1');
+        expect(body).toBeUndefined();
       },
     });
 

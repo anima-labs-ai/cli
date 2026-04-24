@@ -66,12 +66,36 @@ export function redactCommand(): Command {
         const client = await requireAuth(globals);
         const input = await readStdin();
 
-        // Fetch all credentials for this agent
-        const { items } = await client.get<{ items: VaultCredential[] }>('/vault/credentials', {
-          agentId: opts.agent,
-        });
+        // The list endpoint ALWAYS masks — there is no bulk reveal=true because
+        // we never want to dump all plaintext in one shot. For redaction we
+        // need the real values, so we enumerate IDs from the list and fetch
+        // each one with reveal=true. This requires a master key (agent keys
+        // get 403) and costs N+1 round-trips, but it's the only correct path
+        // and it matches how masking is enforced server-side.
+        const { items: masked } = await client.get<{ items: VaultCredential[] }>(
+          '/vault/credentials',
+          { agentId: opts.agent },
+        );
 
-        output.debug(`Loaded ${items.length} credential(s) for redaction`);
+        output.debug(`Loaded ${masked.length} credential(s) — fetching plaintext for redaction`);
+
+        const items: VaultCredential[] = [];
+        for (const stub of masked) {
+          try {
+            const full = await client.get<VaultCredential>(`/vault/credentials/${stub.id}`, {
+              agentId: opts.agent,
+              reveal: 'true',
+            });
+            items.push(full);
+          } catch (err) {
+            // One broken credential shouldn't poison the whole redaction.
+            // Log and continue — we'll miss its secrets in the output, but
+            // that's strictly better than crashing and leaking the OTHERS.
+            output.debug(
+              `Skipping credential ${stub.id}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
 
         // Collect all secret values
         const secrets: string[] = [];

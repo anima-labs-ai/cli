@@ -14,7 +14,11 @@ import { shareCommand } from './share.js';
 import { tokenCommand } from './token.js';
 import { injectCommand } from './inject.js';
 import { redactCommand } from './redact.js';
-import { oauthCommand } from './oauth.js';
+// NOTE: `am vault oauth` (OAuth Apps + Connect Links) was removed from the CLI
+// on 2026-04-25 — the credential-broker model handles third-party auth through
+// vault credentials + vtk_ ephemeral tokens instead of a separate OAuth
+// catalogue. The HTTP endpoints for OAuth linking remain on the API for the
+// console, but the CLI no longer exposes them as first-class commands.
 import { execCommand } from './exec.js';
 import { auditCommand } from './audit.js';
 import { reloadCommand } from './reload.js';
@@ -27,7 +31,7 @@ export function vaultCommands(): Command {
   // passThroughOptions so that flags after `--` get forwarded to the child
   // process instead of being eaten by Commander.
   const cmd = new Command('vault')
-    .description('Manage password vault and OAuth authentication')
+    .description('Manage the agent credential vault (store, share, inject, exec)')
     .enablePositionalOptions();
 
   cmd.addCommand(provisionCommand());
@@ -45,7 +49,6 @@ export function vaultCommands(): Command {
   cmd.addCommand(tokenCommand());
   cmd.addCommand(injectCommand());
   cmd.addCommand(redactCommand());
-  cmd.addCommand(oauthCommand());
 
   // New in v0.5 — zero-knowledge execution primitives
   cmd.addCommand(execCommand());

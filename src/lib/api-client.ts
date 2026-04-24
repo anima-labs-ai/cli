@@ -74,8 +74,21 @@ export class ApiClient {
     return this.request<T>('PATCH', `${this.baseUrl}${path}`, body);
   }
 
-  async delete<T>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>('DELETE', `${this.baseUrl}${path}`, body);
+  async delete<T>(path: string, params?: Record<string, string | undefined>): Promise<T> {
+    // DELETE carries no body per RFC 7231 — put agentId and friends in the
+    // query string, same shape as `get()`. This used to accept a `body`
+    // parameter, which the server silently dropped, causing "missing agentId"
+    // 400s. Callers passing `{ agentId: x }` still work because the URL now
+    // gets `?agentId=x` appended.
+    let url = `${this.baseUrl}${path}`;
+    if (params) {
+      const filtered = Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined),
+      ) as Record<string, string>;
+      const qs = new URLSearchParams(filtered).toString();
+      if (qs) url += `?${qs}`;
+    }
+    return this.request<T>('DELETE', url);
   }
 
   private async request<T>(method: string, url: string, body?: unknown): Promise<T> {

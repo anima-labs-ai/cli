@@ -34,11 +34,15 @@ interface ShareCreateOptions {
 function shareCreateCommand(): Command {
   return new Command('create')
     .description('Share a credential with another agent')
-    .option('--agent <id>', 'Source agent ID')
+    .option('--agent <id>', 'Source agent ID (the agent granting access)')
     .requiredOption('--credential <id>', 'Credential ID to share')
-    .requiredOption('--target <id>', 'Target agent ID')
-    .option('--permission <perm>', 'Permission level (READ, USE, MANAGE)', 'READ')
-    .option('--ttl <seconds>', 'Optional share TTL in seconds')
+    .requiredOption('--target <id>', 'Target agent ID (the agent receiving access)')
+    .option(
+      '--permission <perm>',
+      'READ = view metadata only; USE = fetch for runtime use (default); MANAGE = view + update + re-share',
+      'READ',
+    )
+    .option('--ttl <seconds>', 'Share TTL in seconds (omit for never-expiring share)')
     .action(async function (this: Command) {
       const opts = this.opts<ShareCreateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
@@ -46,8 +50,10 @@ function shareCreateCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
+        // Contract field is `sourceAgentId` — `agentId` was the old name and is no
+        // longer accepted by the API. Keep the CLI flag `--agent` for ergonomics.
         const body: Record<string, unknown> = {
-          agentId: opts.agent,
+          sourceAgentId: opts.agent,
           credentialId: opts.credential,
           targetAgentId: opts.target,
           permission: opts.permission,
