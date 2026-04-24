@@ -10,3 +10,8 @@ coverage/
 # Phase 3G: bun build --compile outputs. Produced locally for smoke-tests
 # and in CI for releases; never checked in (large + per-host).
 binaries/
+
+# Scratch auth config written by CLI tests (e.g. vault.test.ts). Each run
+# leaves a per-test fixture directory behind; never commit them.
+.test-auth-config/
+**/.test-auth-config/
