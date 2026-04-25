@@ -36,11 +36,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "commander": "^14.0.0",
-    "picocolors": "^1.1.0",
-    "ora": "^8.2.0",
+    "@clack/prompts": "^1.2.0",
     "cli-table3": "^0.6.5",
-    "env-paths": "^3.0.0"
+    "commander": "^14.0.0",
+    "env-paths": "^3.0.0",
+    "ora": "^8.2.0",
+    "picocolors": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

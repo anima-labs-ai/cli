@@ -1,9 +1,9 @@
 Usage: anima init [options]
 
-Set up Anima CLI with guided wizard
+Set up Anima CLI — provisions a fresh agent (email + phone) in 60 seconds
 
 Options:
-  --non-interactive  Use defaults without prompting
+  --non-interactive  Use defaults without prompting (CI mode)
   --api-key <key>    API key (required in non-interactive mode)
   --api-url <url>    API URL
   --org <org>        Default organization
