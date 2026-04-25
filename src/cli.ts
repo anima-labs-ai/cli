@@ -21,6 +21,8 @@ import { initCommand } from './commands/init/index.js';
 import { a2aCommands } from './commands/a2a/index.js';
 import { messageCommand } from './commands/message/index.js';
 import { voiceCommands } from './commands/voice/index.js';
+import { doctorCommand } from './commands/doctor/index.js';
+import { tailCommand } from './commands/tail/index.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -57,6 +59,8 @@ export function createProgram(): Command {
   program.addCommand(a2aCommands());
   program.addCommand(messageCommand());
   program.addCommand(voiceCommands());
+  program.addCommand(doctorCommand());
+  program.addCommand(tailCommand());
 
   program.exitOverride();
 
