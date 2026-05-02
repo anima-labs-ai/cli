@@ -27,7 +27,7 @@
   },
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs');const f='dist/cli.js';const c=fs.readFileSync(f,'utf8').replace(/^#!.*\\n/,'');fs.writeFileSync(f,'#!/usr/bin/env node\\n'+c)\"",
-    "build:binary": "mkdir -p binaries && bun build src/cli.ts --compile --outfile binaries/anima-$(uname -s | tr A-Z a-z)-$(uname -m)",
+    "build:binary": "mkdir -p binaries && OUT=binaries/anima-$(uname -s | tr A-Z a-z)-$(uname -m) && bun build src/cli.ts --compile --outfile \"$OUT\" && case \"$(uname -s)\" in Darwin) codesign --remove-signature \"$OUT\" >/dev/null 2>&1 || true; codesign --sign - --force \"$OUT\" >/dev/null;; esac",
     "build:binary:all": "mkdir -p binaries && bun build src/cli.ts --compile --target=bun-linux-x64 --outfile binaries/anima-linux-x64 && bun build src/cli.ts --compile --target=bun-linux-arm64 --outfile binaries/anima-linux-arm64",
     "build:checksums": "cd binaries && shasum -a 256 anima-linux-x64 anima-linux-arm64 > checksums.txt",
     "prepublishOnly": "npm run build",
