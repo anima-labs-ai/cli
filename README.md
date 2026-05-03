@@ -227,6 +227,10 @@ bun test
 bun run typecheck
 ```
 
+## Community
+
+Join the [Anima Discord](https://discord.gg/pY3GK59Z9E) to ask questions, share what you're building in `#showcase`, and stay up to date with releases in `#announcements`.
+
 ## License
 
 MIT - see [LICENSE](./LICENSE)
@@ -234,6 +238,7 @@ MIT - see [LICENSE](./LICENSE)
 ## Links
 
 - [Documentation](https://docs.useanima.sh)
+- [Discord](https://discord.gg/pY3GK59Z9E)
 - [GitHub](https://github.com/anima-labs-ai/cli)
 - [Issues](https://github.com/anima-labs-ai/cli/issues)
 - [Anima Platform](https://useanima.sh)
