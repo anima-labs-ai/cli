@@ -17,7 +17,7 @@ export function configSetCommand(): Command {
     .option('-p, --profile <name>', 'Set value in a named profile')
     .action(async function (this: Command, key: string, value: string) {
       const globals = this.optsWithGlobals<GlobalOptions & { profile?: string }>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       if (!isValidConfigKey(key)) {
         output.error(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`);

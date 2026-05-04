@@ -50,7 +50,7 @@ export function securityEventsCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<EventsOptions>();
       const globals = this.optsWithGlobals<EventsOptions & GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const query: Record<string, string> = {};
       if (opts.severity !== undefined) {

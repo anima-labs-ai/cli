@@ -21,7 +21,7 @@ export function securityScanCommand(): Command {
     .argument('<content>', 'Content to scan (URL, email address, or text)')
     .action(async function (this: Command, content: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

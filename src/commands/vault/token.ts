@@ -39,7 +39,7 @@ function tokenCreateCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<TokenCreateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -90,7 +90,7 @@ function tokenExchangeCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<TokenExchangeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -137,7 +137,7 @@ function tokenRevokeCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<TokenRevokeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

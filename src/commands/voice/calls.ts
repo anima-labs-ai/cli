@@ -49,7 +49,7 @@ export function listCallsCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<ListCallsOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -67,14 +67,13 @@ export function listCallsCommand(): Command {
           return;
         }
 
-        if (!response.calls || response.calls.length === 0) {
-          output.info('No calls found');
-          return;
-        }
-
+        const calls = response.calls ?? [];
+        const summary = calls.length === 0
+          ? 'No calls found'
+          : `${calls.length} of ${response.total} call(s)`;
         output.table(
           ['ID', 'Direction', 'State', 'From', 'To', 'Tier', 'Duration', 'Started'],
-          response.calls.map((c) => [
+          calls.map((c) => [
             c.id.slice(0, 8),
             c.direction,
             c.state,
@@ -84,9 +83,8 @@ export function listCallsCommand(): Command {
             formatDuration(c.durationSeconds ?? undefined),
             formatDate(c.startedAt),
           ]),
+          { summary, pagination: { total: response.total ?? calls.length } },
         );
-
-        output.info(`\n${response.calls.length} of ${response.total} call(s)`);
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           output.error(`Failed to list calls: ${error.message}`);

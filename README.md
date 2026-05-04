@@ -1,38 +1,62 @@
 # @anima-labs/cli
 
-Official command-line interface for [Anima](https://useanima.sh) — identity infrastructure for AI agents. Manage agent identities, email, phone numbers, virtual cards, password vaults, and runtime configuration from your terminal.
+Official command-line interface for [Anima](https://useanima.sh) — identity infrastructure for AI agents. Email, phone, voice, virtual cards, vault, addresses, and a unified policy engine — one CLI, one identity per agent.
 
-## Installation
-
-### Bun (recommended)
-
-```bash
-bun add -g @anima-labs/cli
-```
-
-### npm
+## Install
 
 ```bash
 npm install -g @anima-labs/cli
 ```
 
-## Quick Start
+That's it. Run `anima onboard` to authenticate and walk through the agentic-commerce flow end-to-end.
 
-```bash
-# Set up your CLI (guided wizard)
-anima init
+### Tell your agent to set you up
 
-# Authenticate
-anima auth login
+In Claude Code, Cursor, Codex, or any MCP-aware agent:
 
-# Create an agent identity
-anima identity create --name "my-agent" --display-name "My Agent"
-
-# Send an email
-anima email send --from agent@yourdomain.com --to user@example.com --subject "Hello" --body "Hi there"
+```
+Read useanima.sh/skill.md and get me set up with Anima
 ```
 
-Primary binary: **`anima`**
+The agent reads the skill manifest, installs the CLI, registers itself as an MCP server, and finishes onboarding for you.
+
+### MCP server
+
+Anima CLI doubles as an MCP server. Add to your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "anima": {
+      "command": "npx",
+      "args": ["-y", "@anima-labs/cli", "--mcp"]
+    }
+  }
+}
+```
+
+Or run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Codex, Windsurf, Zed) automatically.
+
+### Alternative installs
+
+```bash
+bun add -g @anima-labs/cli           # bun
+brew install anima-labs/tap/anima    # homebrew (macOS / Linux)
+npx @anima-labs/cli init             # try without installing
+```
+
+## Output: agent vs human
+
+By default every command prints **agent format** — compact single-line JSON, ~30-40% smaller than pretty JSON, machine-parseable. Pass `--human` for a pretty terminal view.
+
+```bash
+anima card list                  # agent default: {"cards":[…]}
+anima card list --human          # ┌── card box-drawn table
+anima card list --format yaml    # explicit yaml
+anima card list --format jsonl   # one record per line
+```
+
+Primary binary: **`anima`**. Short alias: **`am`**.
 
 ## Command Reference
 

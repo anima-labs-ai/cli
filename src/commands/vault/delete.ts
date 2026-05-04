@@ -19,7 +19,7 @@ export function deleteCommand(): Command {
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<DeleteOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

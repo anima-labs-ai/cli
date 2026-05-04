@@ -32,7 +32,7 @@ export function killSwitchCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<KillSwitchOptions>();
       const globals = this.optsWithGlobals<KillSwitchOptions & GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       if ((opts.active ?? false) === (opts.inactive ?? false)) {
         output.error('Specify exactly one of --active or --inactive');

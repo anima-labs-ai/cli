@@ -16,7 +16,7 @@ export function configGetCommand(): Command {
     .option('-p, --profile <name>', 'Get value from a specific profile (skip precedence)')
     .action(async function (this: Command, key: string) {
       const globals = this.optsWithGlobals<GlobalOptions & { profile?: string }>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       if (!isValidConfigKey(key)) {
         output.error(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`);

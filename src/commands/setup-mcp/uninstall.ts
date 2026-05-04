@@ -142,7 +142,7 @@ export function uninstallMcpCommand(): Command {
     .option('--all', 'Uninstall from all detected clients')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions & UninstallOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const targets = resolveTargets(globals);

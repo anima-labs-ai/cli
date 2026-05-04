@@ -194,6 +194,7 @@ describe('identity commands', () => {
     console.log = logSpy;
 
     await runProgram([
+      '--human',
       'identity',
       'list',
       '--org', 'org_1',

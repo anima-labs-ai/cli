@@ -26,7 +26,7 @@ export function loginCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<LoginOptions>();
       const globals = this.optsWithGlobals<LoginOptions & GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         if (opts.apiKey) {

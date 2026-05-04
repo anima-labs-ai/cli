@@ -44,7 +44,7 @@ export function updateIdentityCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<UpdateIdentityOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       if (!opts.name && !opts.slug && !opts.status && !opts.metadata) {
         output.error('Provide at least one field to update: --name, --slug, --status, or --metadata');

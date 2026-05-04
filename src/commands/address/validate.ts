@@ -21,7 +21,7 @@ export function validateAddressCommand(): Command {
     .action(async function (this: Command, addressId: string) {
       const opts = this.opts<ValidateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

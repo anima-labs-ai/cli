@@ -14,7 +14,7 @@ export function walletFreezeCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<FreezeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -44,7 +44,7 @@ export function walletUnfreezeCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<FreezeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

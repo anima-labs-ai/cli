@@ -140,7 +140,7 @@ export function auditCommand(): Command {
     .action(async function (this: Command, paths: string[]) {
       const opts = this.opts<AuditOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const roots = paths.length > 0 ? paths : [process.cwd()];

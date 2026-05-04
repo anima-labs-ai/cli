@@ -341,7 +341,7 @@ export function installMcpCommand(): Command {
     )
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions & InstallOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const mode: McpInstallMode = globals.mode === 'remote' ? 'remote' : 'stdio';

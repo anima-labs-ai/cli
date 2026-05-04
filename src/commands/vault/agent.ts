@@ -195,7 +195,7 @@ function agentStartCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<AgentStartOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const existing = await isDaemonRunning();
       if (existing !== null) {
@@ -315,7 +315,7 @@ function agentStopCommand(): Command {
     .description('Stop the vault-agent daemon and wipe its in-memory snapshot')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const pid = await isDaemonRunning();
       if (pid === null) {
@@ -355,7 +355,7 @@ function agentStatusCommand(): Command {
     .description('Show daemon status')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const pid = await isDaemonRunning();
       if (pid === null) {
@@ -392,7 +392,7 @@ export function typeCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<{ cred: string }>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const pid = await isDaemonRunning();
       if (pid === null) {

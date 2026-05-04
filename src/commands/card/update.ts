@@ -79,7 +79,7 @@ export function updateCardCommand(): Command {
     .action(async function (this: Command, cardId: string) {
       const opts = this.opts<UpdateCardOptions>();
       const globals = this.optsWithGlobals<UpdateCardOptions & GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const hasSpendLimitUpdate =
         opts.dailyLimit !== undefined || opts.monthlyLimit !== undefined || opts.perAuthLimit !== undefined;

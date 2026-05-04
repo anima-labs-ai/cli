@@ -46,7 +46,7 @@ function shareCreateCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<ShareCreateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -103,7 +103,7 @@ function shareListCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<ShareListOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -156,7 +156,7 @@ function shareRevokeCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<ShareRevokeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

@@ -92,7 +92,7 @@ export function installExtensionCommand(): Command {
     .option('--force', 'Overwrite existing installation')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions & InstallOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const configDir = getConfigDir();
       const extensionDir = join(configDir, 'chrome-extension');

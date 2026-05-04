@@ -201,7 +201,7 @@ export function doctorCommand(): Command {
     .description('Run a health check on Anima CLI configuration, network, auth, and MCP setup')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
       void output;
 
       const results: CheckResult[] = [];

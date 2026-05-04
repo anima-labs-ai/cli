@@ -16,6 +16,10 @@ export interface ApiClientOptions {
   apiKey?: string;
   debug?: boolean;
   timeout?: number;
+  // Test mode — server-side flag that switches mutating commands to test
+  // fixtures (Lithic test BIN for cards, no real outbound email/SMS, x402
+  // sandbox settlement). Honored as `X-Anima-Test-Mode: 1` request header.
+  testMode?: boolean;
 }
 
 interface ErrorResponse {
@@ -46,6 +50,10 @@ export class ApiClient {
       this.headers.Authorization = `Bearer ${options.token}`;
     } else if (options.apiKey) {
       this.headers.Authorization = `Bearer ${options.apiKey}`;
+    }
+
+    if (options.testMode) {
+      this.headers['X-Anima-Test-Mode'] = '1';
     }
   }
 

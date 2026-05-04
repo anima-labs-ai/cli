@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import { a2aCommands } from "./commands/a2a/index.js";
 import { addressCommands } from "./commands/address/index.js";
@@ -15,6 +15,9 @@ import { generateCommand } from "./commands/generate/index.js";
 import { identityCommands } from "./commands/identity/index.js";
 import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
+import { mppCommands } from "./commands/mpp/index.js";
+import { onboardCommand } from "./commands/onboard/index.js";
+import { demoCommand } from "./commands/demo/index.js";
 import { phoneCommands } from "./commands/phone/index.js";
 import { podCommands } from "./commands/pod/index.js";
 import { registryCommands } from "./commands/registry/index.js";
@@ -36,8 +39,35 @@ export function createProgram(): Command {
 		// Required so `am vault exec -- <cmd>` passes child-command flags through
 		// to spawn() instead of being interpreted by us. Cascades to all subcommands.
 		.enablePositionalOptions()
-		.option("--json", "Output results as JSON", false)
+		.option(
+			"--human",
+			"Pretty-print for humans (tables, colors). Default output is agent format (compact JSON).",
+			false,
+		)
+		.option(
+			"--json",
+			"Pretty-printed JSON output (for debugging). Agent default is more compact.",
+			false,
+		)
+		.option(
+			"--format <fmt>",
+			"Output format: agent (default), human, json, yaml, jsonl, md",
+			(value) => {
+				const allowed = ["agent", "human", "json", "yaml", "jsonl", "md"];
+				if (!allowed.includes(value)) {
+					throw new InvalidArgumentError(
+						`format must be one of ${allowed.join(", ")}`,
+					);
+				}
+				return value;
+			},
+		)
 		.option("--debug", "Enable debug output", false)
+		.option(
+			"--test",
+			"Test mode — server uses test fixtures (Lithic test BIN for cards, no real outbound email/SMS, x402 sandbox settlement). Sent as X-Anima-Test-Mode: 1.",
+			false,
+		)
 		.option("--token <token>", "API token (overrides stored auth)")
 		.option("--api-url <url>", "API base URL (overrides stored config)");
 
@@ -58,6 +88,9 @@ export function createProgram(): Command {
 	program.addCommand(webhookCommands());
 	program.addCommand(securityCommands());
 	program.addCommand(initCommand());
+	program.addCommand(onboardCommand());
+	program.addCommand(demoCommand());
+	program.addCommand(mppCommands());
 	program.addCommand(a2aCommands());
 	program.addCommand(messageCommand());
 	program.addCommand(voiceCommands());

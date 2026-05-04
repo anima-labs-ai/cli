@@ -12,7 +12,7 @@ export function discoverCommand(): Command {
     .argument('<url>', 'Agent public URL (e.g. https://agent.example.com)')
     .action(async function (this: Command, url: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const cardUrl = new URL('/.well-known/agent.json', url);

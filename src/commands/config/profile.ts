@@ -18,7 +18,7 @@ export function configProfileCommand(): Command {
       .argument('<name>', 'Profile name to activate')
       .action(async function (this: Command, name: string) {
         const globals = this.optsWithGlobals<GlobalOptions>();
-        const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+        const output = Output.fromGlobals(globals);
 
         try {
           await setActiveProfile(name);
@@ -35,7 +35,7 @@ export function configProfileCommand(): Command {
       .argument('<name>', 'Profile name to delete')
       .action(async function (this: Command, name: string) {
         const globals = this.optsWithGlobals<GlobalOptions>();
-        const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+        const output = Output.fromGlobals(globals);
 
         try {
           await deleteProfile(name);
@@ -51,7 +51,7 @@ export function configProfileCommand(): Command {
       .description('List all profiles')
       .action(async function (this: Command) {
         const globals = this.optsWithGlobals<GlobalOptions>();
-        const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+        const output = Output.fromGlobals(globals);
 
         const profiles = await listProfiles();
 
@@ -83,7 +83,7 @@ export function configProfileCommand(): Command {
       .description('Show the active profile')
       .action(async function (this: Command) {
         const globals = this.optsWithGlobals<GlobalOptions>();
-        const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+        const output = Output.fromGlobals(globals);
 
         const active = await getActiveProfile();
 

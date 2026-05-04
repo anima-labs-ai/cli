@@ -8,7 +8,7 @@ export function logoutCommand(): Command {
     .description('Clear stored authentication credentials')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       await clearAuthConfig();
       output.success('Logged out successfully');

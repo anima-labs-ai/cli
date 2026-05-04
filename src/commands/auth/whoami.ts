@@ -1,8 +1,10 @@
 import { Command } from 'commander';
+import pkg from '../../../package.json' with { type: 'json' };
 import { getAuthConfig } from '../../lib/config.js';
 import { getApiClient } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
 import { Output } from '../../lib/output.js';
+import { checkForUpdate } from '../../lib/update-notifier.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 
 interface WhoamiResponse {
@@ -17,7 +19,12 @@ export function whoamiCommand(): Command {
     .description('Display current authentication status')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = new Output({
+        json: globals.json ?? false,
+        human: globals.human ?? false,
+        format: globals.format,
+        debug: globals.debug ?? false,
+      });
 
       const auth = await getAuthConfig();
 
@@ -26,19 +33,23 @@ export function whoamiCommand(): Command {
         process.exit(1);
       }
 
-      try {
-        const client = await getApiClient(globals);
-        const result = await client.get<WhoamiResponse>('/auth/me');
+      // Run update check in parallel with the API call. Update check times out
+      // at 1.5s and silently returns null on failure, so it never blocks.
+      const [accountResult, update] = await Promise.all([
+        (async () => {
+          try {
+            const client = await getApiClient(globals);
+            const result = await client.get<WhoamiResponse>('/auth/me');
+            return { ok: true as const, data: result };
+          } catch (error: unknown) {
+            return { ok: false as const, error };
+          }
+        })(),
+        checkForUpdate('@anima-labs/cli', pkg.version),
+      ]);
 
-        output.details([
-          ['Email', result.email],
-          ['Organization', result.orgName],
-          ['Org ID', result.orgId],
-          ['Role', result.role],
-          ['Auth Method', auth.apiKey ? 'API Key' : 'Token'],
-          ['API URL', auth.apiUrl ?? 'http://localhost:4001'],
-        ]);
-      } catch (error: unknown) {
+      if (!accountResult.ok) {
+        const error = accountResult.error;
         if (error instanceof ApiError) {
           if (error.status === 401) {
             output.error('Session expired. Run `anima auth login` again.');
@@ -50,5 +61,43 @@ export function whoamiCommand(): Command {
         }
         process.exit(1);
       }
+
+      const result = accountResult.data;
+      const isHumanFormat = (globals.format ?? (globals.human ? 'human' : null)) === 'human';
+
+      if (isHumanFormat || (!globals.json && !globals.format && !globals.human)) {
+        // Human-readable path: pairs in details(), banner for update.
+        if (isHumanFormat || globals.human) {
+          output.details([
+            ['Email', result.email],
+            ['Organization', result.orgName],
+            ['Org ID', result.orgId],
+            ['Role', result.role],
+            ['Auth Method', auth.apiKey ? 'API Key' : 'Token'],
+            ['API URL', auth.apiUrl ?? 'http://localhost:4001'],
+            ['CLI Version', pkg.version],
+          ]);
+          if (update) {
+            output.warn(
+              `Update available: ${update.current_version} → ${update.latest_version}. Run: ${update.update_command}`,
+            );
+          }
+          return;
+        }
+      }
+
+      // Agent / json / yaml / md / jsonl path: structured payload, embedded
+      // update field so agents can act on it without parsing decoration.
+      const payload = {
+        email: result.email,
+        org_id: result.orgId,
+        org_name: result.orgName,
+        role: result.role,
+        auth_method: auth.apiKey ? 'api_key' : 'token',
+        api_url: auth.apiUrl ?? 'http://localhost:4001',
+        cli_version: pkg.version,
+        ...(update ? { update } : {}),
+      };
+      output.payload(payload);
     });
 }

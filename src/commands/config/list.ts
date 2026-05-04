@@ -17,7 +17,7 @@ export function configListCommand(): Command {
     .option('--resolved', 'Show resolved values (with precedence applied)')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions & { profiles?: boolean; resolved?: boolean }>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       if (globals.profiles) {
         const profiles = await listProfiles();

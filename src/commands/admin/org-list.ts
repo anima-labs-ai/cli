@@ -20,7 +20,7 @@ interface OrgListResponse {
 export function orgListCommand(): Command {
   return new Command('list').description('List organizations').action(async function (this: Command) {
     const globals = this.optsWithGlobals<GlobalOptions>();
-    const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+    const output = Output.fromGlobals(globals);
 
     try {
       await requireAuth(globals);

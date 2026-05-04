@@ -33,7 +33,7 @@ export function createPodCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<CreatePodOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const body: Record<string, unknown> = {

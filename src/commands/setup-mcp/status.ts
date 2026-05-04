@@ -104,7 +104,7 @@ export function statusMcpCommand(): Command {
     .description('Show Anima MCP setup status across clients')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const rows: StatusRow[] = getMcpClients().map((client) => {
         const entries = getAnimaEntries(client);

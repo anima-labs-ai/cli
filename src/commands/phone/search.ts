@@ -81,7 +81,7 @@ export function searchPhoneNumbersCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<SearchOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const countryCode = normalizeCountryCode(opts.country);
@@ -108,24 +108,20 @@ export function searchPhoneNumbersCommand(): Command {
           return;
         }
 
-        if (!response.items || response.items.length === 0) {
-          output.info('No available numbers found');
-          return;
-        }
+        const items = response.items ?? [];
+        const headers = ['Number', 'Capabilities', 'Region'];
+        const rows = items.map((item) => {
+          const caps = item.capabilities
+            ? [item.capabilities.sms && 'sms', item.capabilities.mms && 'mms', item.capabilities.voice && 'voice']
+                .filter(Boolean)
+                .join(',')
+            : '-';
+          return [item.phoneNumber, caps, item.region ?? '-'];
+        });
 
-        output.table(
-          ['Number', 'Capabilities', 'Region'],
-          response.items.map((item) => {
-            const caps = item.capabilities
-              ? [item.capabilities.sms && 'sms', item.capabilities.mms && 'mms', item.capabilities.voice && 'voice'].filter(Boolean).join(',')
-              : '-';
-            return [
-              item.phoneNumber,
-              caps,
-              item.region ?? '-',
-            ];
-          }),
-        );
+        output.table(headers, rows, {
+          summary: items.length === 0 ? 'No available numbers found' : `Returned ${items.length} numbers`,
+        });
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           output.error(`Failed to search phone numbers: ${error.message}`);

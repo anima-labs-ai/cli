@@ -6,6 +6,7 @@ import { updateCardCommand } from './update.js';
 import { deleteCardCommand } from './delete.js';
 import { transactionsCommand } from './transactions.js';
 import { killSwitchCommand } from './kill-switch.js';
+import { spendRequestCommands } from './spend-request.js';
 
 export function cardCommands(): Command {
   const cmd = new Command('card')
@@ -18,6 +19,7 @@ export function cardCommands(): Command {
   cmd.addCommand(deleteCardCommand());
   cmd.addCommand(transactionsCommand());
   cmd.addCommand(killSwitchCommand());
+  cmd.addCommand(spendRequestCommands());
 
   return cmd;
 }

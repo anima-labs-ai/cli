@@ -628,9 +628,11 @@ describe('voice commands', () => {
       const body = JSON.parse(lastRequest?.bodyText ?? '{}') as { channels: string[] };
       expect(body.channels).toEqual(['email', 'sms', 'voice']);
 
+      // Default agent format: assert on JSON channel values, not human-format
+      // bracket badges (which only render with --human).
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
-      expect(output).toContain('[voice]');
-      expect(output).toContain('[email]');
+      expect(output).toContain('"channel":"voice"');
+      expect(output).toContain('"channel":"email"');
     });
   });
 

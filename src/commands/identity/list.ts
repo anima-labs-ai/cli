@@ -42,7 +42,7 @@ export function listIdentitiesCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<ListIdentitiesOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -71,6 +71,7 @@ export function listIdentitiesCommand(): Command {
           return;
         }
 
+        const pageSize = result.items.length;
         output.table(
           ['ID', 'Name', 'Slug', 'Email', 'Status', 'Org ID', 'Created At'],
           result.items.map((item) => [
@@ -82,14 +83,15 @@ export function listIdentitiesCommand(): Command {
             item.orgId,
             item.createdAt ?? '',
           ]),
+          {
+            summary: `Returned ${pageSize} identities${result.total !== undefined ? ` (total: ${result.total})` : ''}.`,
+            pagination: {
+              has_more: result.hasMore ?? false,
+              next_cursor: result.nextCursor ?? null,
+              total: result.total,
+            },
+          },
         );
-
-        const pageSize = result.items.length;
-        output.info(`Returned ${pageSize} identities${result.total !== undefined ? ` (total: ${result.total})` : ''}.`);
-        output.info(`Has more: ${result.hasMore ? 'yes' : 'no'}`);
-        if (result.nextCursor) {
-          output.info(`Next cursor: ${result.nextCursor}`);
-        }
       } catch (error: unknown) {
         handleApiError(error, output, 'Failed to list identities');
       }

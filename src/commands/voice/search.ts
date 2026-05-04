@@ -55,7 +55,7 @@ export function searchCommand(): Command {
     .action(async function (this: Command, query: string) {
       const opts = this.opts<SearchOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -97,19 +97,18 @@ async function handleVoiceSearch(
     return;
   }
 
-  if (!response.results || response.results.length === 0) {
-    output.info('No results found');
-    return;
-  }
-
-  for (const r of response.results) {
-    const sim = pc.dim(`(${(r.similarity * 100).toFixed(1)}%)`);
-    const speaker = r.speaker === 'agent' ? pc.cyan('Agent') : pc.yellow('Caller');
-    const callRef = pc.gray(`call:${r.callId.slice(0, 8)}`);
-    console.log(`${sim} ${callRef} ${speaker}: ${r.text}`);
-  }
-
-  output.info(`\n${response.results.length} result(s)`);
+  const results = response.results ?? [];
+  const summary = results.length === 0 ? 'No results found' : `${results.length} result(s)`;
+  output.table(
+    ['Score', 'Call', 'Speaker', 'Text'],
+    results.map((r) => [
+      `${(r.similarity * 100).toFixed(1)}%`,
+      r.callId.slice(0, 8),
+      r.speaker,
+      r.text,
+    ]),
+    { summary },
+  );
 }
 
 async function handleCrossChannel(
@@ -137,30 +136,16 @@ async function handleCrossChannel(
     return;
   }
 
-  if (!response.results || response.results.length === 0) {
-    output.info('No results found');
-    return;
-  }
-
-  for (const r of response.results) {
-    const sim = pc.dim(`(${(r.similarity * 100).toFixed(1)}%)`);
-    const channel = channelBadge(r.channel);
-    const preview = r.content.length > 80 ? `${r.content.slice(0, 80)}...` : r.content;
-    console.log(`${sim} ${channel} ${preview}`);
-  }
-
-  output.info(`\n${response.results.length} result(s)`);
+  const results = response.results ?? [];
+  const summary = results.length === 0 ? 'No results found' : `${results.length} result(s)`;
+  output.table(
+    ['Score', 'Channel', 'Preview'],
+    results.map((r) => [
+      `${(r.similarity * 100).toFixed(1)}%`,
+      r.channel,
+      r.content.length > 80 ? `${r.content.slice(0, 80)}...` : r.content,
+    ]),
+    { summary },
+  );
 }
 
-function channelBadge(channel: string): string {
-  switch (channel) {
-    case 'voice':
-      return pc.magenta('[voice]');
-    case 'email':
-      return pc.blue('[email]');
-    case 'sms':
-      return pc.green('[sms]');
-    default:
-      return pc.gray(`[${channel}]`);
-  }
-}

@@ -13,4 +13,6 @@ Commands:
   delete <cardId>            Delete or cancel a card
   transactions [options]     List card transactions
   kill-switch [options]      Toggle card kill switch
+  spend-request              Human-in-the-loop spend approval lifecycle (Wave 3,
+                             coming soon — create, retrieve, request-approval)
   help [command]             display help for command

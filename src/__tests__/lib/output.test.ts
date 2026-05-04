@@ -15,7 +15,7 @@ describe('Output', () => {
 
   describe('constructor', () => {
     test('creates with default options', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       expect(output).toBeDefined();
     });
 
@@ -78,7 +78,7 @@ describe('Output', () => {
 
   describe('human mode output', () => {
     test('success prints colored message', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       const spy = mock(() => {});
       const originalLog = console.log;
       console.log = spy;
@@ -92,7 +92,7 @@ describe('Output', () => {
     });
 
     test('error prints to stderr', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       const spy = mock(() => {});
       const originalError = console.error;
       console.error = spy;
@@ -106,7 +106,7 @@ describe('Output', () => {
     });
 
     test('warn prints warning', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       const spy = mock(() => {});
       const originalLog = console.log;
       console.log = spy;
@@ -120,7 +120,7 @@ describe('Output', () => {
     });
 
     test('info prints info message', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       const spy = mock(() => {});
       const originalLog = console.log;
       console.log = spy;
@@ -136,7 +136,7 @@ describe('Output', () => {
 
   describe('debug', () => {
     test('suppresses debug output when debug mode off', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       const spy = mock(() => {});
       const originalLog = console.log;
       console.log = spy;
@@ -182,7 +182,7 @@ describe('Output', () => {
     });
 
     test('outputs formatted table in human mode', () => {
-      const output = new Output({ json: false, debug: false });
+      const output = new Output({ human: true, debug: false });
       const spy = mock(() => {});
       const originalLog = console.log;
       console.log = spy;

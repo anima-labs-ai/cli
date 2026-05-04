@@ -3,7 +3,10 @@ import { getAuthConfig } from './config.js';
 
 export interface GlobalOptions {
   json?: boolean;
+  human?: boolean;
+  format?: 'agent' | 'human' | 'json' | 'yaml' | 'jsonl' | 'md';
   debug?: boolean;
+  test?: boolean;
   token?: string;
   apiUrl?: string;
 }
@@ -33,6 +36,7 @@ export async function getApiClient(opts: GlobalOptions): Promise<ApiClient> {
     token: token ?? undefined,
     apiKey: token ? undefined : apiKey,
     debug: opts.debug ?? false,
+    testMode: opts.test ?? false,
   });
 }
 
@@ -75,6 +79,7 @@ export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
             baseUrl,
             token: result.token,
             debug: opts.debug ?? false,
+            testMode: opts.test ?? false,
           });
         } catch {
           throw new ApiError(

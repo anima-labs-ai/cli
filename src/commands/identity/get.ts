@@ -26,7 +26,7 @@ export function getIdentityCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<GetIdentityOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);

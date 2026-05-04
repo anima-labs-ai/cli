@@ -4,7 +4,8 @@
   "description": "Official Anima CLI — Identity infrastructure for AI agents. Manage identities, email, phone numbers, cards, vault secrets, and runtime configuration.",
   "type": "module",
   "bin": {
-    "anima": "dist/cli.js"
+    "anima": "dist/cli.js",
+    "am": "dist/cli.js"
   },
   "files": ["dist"],
   "engines": {

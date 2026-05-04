@@ -48,7 +48,7 @@ export function extensionStatusCommand(): Command {
     .description('Show extension installation status')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const configDir = getConfigDir();
       const bridgeConfigPath = join(configDir, 'extension-config.json');

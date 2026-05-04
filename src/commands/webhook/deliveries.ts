@@ -39,7 +39,7 @@ export function webhookDeliveriesCommand(): Command {
     .action(async function (this: Command, id: string) {
       const opts = this.opts<DeliveriesOptions>();
       const globals = this.optsWithGlobals<DeliveriesOptions & GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       const query: Record<string, string> = {};
       if (opts.limit !== undefined) {

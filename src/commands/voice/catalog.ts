@@ -35,7 +35,7 @@ export function voiceCatalogCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<VoiceCatalogOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = new Output({ json: globals.json ?? false, debug: globals.debug ?? false });
+      const output = Output.fromGlobals(globals);
 
       try {
         const client = await requireAuth(globals);
@@ -52,14 +52,13 @@ export function voiceCatalogCommand(): Command {
           return;
         }
 
-        if (!response.voices || response.voices.length === 0) {
-          output.info('No voices found matching filters');
-          return;
-        }
-
+        const voices = response.voices ?? [];
+        const summary = voices.length === 0
+          ? 'No voices found matching filters'
+          : `${voices.length} voice(s) found`;
         output.table(
           ['ID', 'Name', 'Provider', 'Tier', 'Gender', 'Language', 'Style'],
-          response.voices.map((v) => [
+          voices.map((v) => [
             v.id,
             v.name,
             v.provider,
@@ -68,9 +67,8 @@ export function voiceCatalogCommand(): Command {
             v.language,
             v.style ?? '-',
           ]),
+          { summary },
         );
-
-        output.info(`\n${response.voices.length} voice(s) found`);
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           output.error(`Failed to list voices: ${error.message}`);
