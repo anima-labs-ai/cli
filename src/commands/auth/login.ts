@@ -60,15 +60,21 @@ async function loginWithApiKey(
     debug: globals.debug,
   });
 
-  const result = await client.get<{ email: string }>('/auth/me');
+  // `/orgs/me` validates the API key and returns the org. We use it as a
+  // 200-OK probe + identity surface; `/auth/me` was the historical name and
+  // never existed in prod.
+  const result = await client.get<{ id: string; name: string; slug: string }>('/orgs/me');
 
   await saveAuthConfig({
     apiKey,
     apiUrl,
-    email: result.email,
+    // The org slug is the closest stable identifier we have without a user
+    // record. Stored as `email` in the config for backward compat with
+    // existing config files (the field name is a misnomer at this point).
+    email: result.slug,
   });
 
-  output.success(`Authenticated via API key as ${result.email}`);
+  output.success(`Authenticated via API key for org ${result.name}`);
 }
 
 async function loginWithCredentials(

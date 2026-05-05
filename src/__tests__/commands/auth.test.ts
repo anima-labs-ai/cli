@@ -46,13 +46,20 @@ describe('auth commands', () => {
 
   describe('login', () => {
     test('login with api-key stores credentials', async () => {
+      // login.ts hits /orgs/me; mock returns the org shape. The CLI stores
+      // `org.slug` in the (legacy-named) `email` config field for back-compat.
       mockServer = Bun.serve({
         port: 0,
         fetch() {
-          return new Response(JSON.stringify({ email: 'test@example.com' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return new Response(
+            JSON.stringify({
+              id: 'cm_test_org',
+              name: 'Test Org',
+              slug: 'test-org',
+              tier: 'GROWTH',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
         },
       });
 
@@ -81,7 +88,9 @@ describe('auth commands', () => {
       if (existsSync(authPath)) {
         const saved = JSON.parse(readFileSync(authPath, 'utf-8'));
         expect(saved.apiKey).toBe('sk_test_abc123');
-        expect(saved.email).toBe('test@example.com');
+        // Legacy field name; we now store the org slug (no email available
+        // from `/orgs/me`).
+        expect(saved.email).toBe('test-org');
       }
     });
 
@@ -314,18 +323,19 @@ describe('auth commands', () => {
 
   describe('whoami', () => {
     test('whoami shows account info when authenticated', async () => {
+      // whoami now hits /orgs/me; mock returns the org shape.
       mockServer = Bun.serve({
         port: 0,
         fetch() {
-          return new Response(JSON.stringify({
-            email: 'me@example.com',
-            orgId: 'org-123',
-            orgName: 'My Org',
-            role: 'admin',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return new Response(
+            JSON.stringify({
+              id: 'org-123',
+              name: 'My Org',
+              slug: 'my-org',
+              tier: 'GROWTH',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
         },
       });
 

@@ -27,11 +27,16 @@ import type { GlobalOptions } from "../../lib/auth.js";
 import { getAuthConfig } from "../../lib/config.js";
 import { Output } from "../../lib/output.js";
 
-interface WhoamiResponse {
-	email: string;
-	orgId: string;
-	orgName: string;
-	role: string;
+/**
+ * Subset of `/orgs/me` response we consume. The full response includes
+ * `masterKey` and other fields we never read (and which a separate
+ * server-side redaction task will strip).
+ */
+interface OrgMeResponse {
+	id: string;
+	name: string;
+	slug: string;
+	tier: string;
 }
 
 interface OnboardOptions {
@@ -89,10 +94,12 @@ export function onboardCommand(): Command {
 			}
 
 			// ── Step 2: Identity ──
-			let me: WhoamiResponse | null = null;
+			// Was `/auth/me` — never existed in prod. `/orgs/me` is the working
+			// equivalent. We only consume non-secret fields.
+			let me: OrgMeResponse | null = null;
 			try {
 				const client = await getApiClient(globals);
-				me = await client.get<WhoamiResponse>("/auth/me");
+				me = await client.get<OrgMeResponse>("/orgs/me");
 			} catch (error) {
 				if (error instanceof ApiError && error.status === 401) {
 					if (isAgent) {
@@ -125,10 +132,10 @@ export function onboardCommand(): Command {
 				output.payload({
 					status: "ready",
 					identity: {
-						email: me.email,
-						org_id: me.orgId,
-						org_name: me.orgName,
-						role: me.role,
+						org_id: me.id,
+						org_name: me.name,
+						org_slug: me.slug,
+						tier: me.tier,
 					},
 					next_steps: [
 						{
@@ -158,9 +165,9 @@ export function onboardCommand(): Command {
 
 			// ── Human onboarding flow ──
 			clack.intro("Welcome to Anima");
-			clack.log.success(`Logged in as ${me.email}`);
-			clack.log.info(`Organization: ${me.orgName} (${me.orgId})`);
-			clack.log.info(`Role: ${me.role}`);
+			clack.log.success(`Authenticated for ${me.name}`);
+			clack.log.info(`Organization: ${me.name} (${me.id})`);
+			clack.log.info(`Tier: ${me.tier}`);
 
 			// ── Step 3: Capability matrix ──
 			clack.note(

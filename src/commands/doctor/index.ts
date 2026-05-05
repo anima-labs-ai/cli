@@ -129,8 +129,10 @@ async function checkAuthConfigured(): Promise<CheckResult> {
 async function checkAuthValid(globals: GlobalOptions): Promise<CheckResult> {
   const { check } = await timed('auth:valid', async () => {
     const client = await getApiClient(globals);
-    const me = await client.get<{ email: string; orgName: string }>('/auth/me');
-    return `org=${me.orgName} email=${me.email}`;
+    // `/orgs/me` is the canonical authenticated probe — `/auth/me` was a
+    // historical alias that was never wired up server-side.
+    const me = await client.get<{ id: string; name: string; tier: string }>('/orgs/me');
+    return `org=${me.name} tier=${me.tier}`;
   });
   return check;
 }

@@ -7,11 +7,21 @@ import { Output } from '../../lib/output.js';
 import { checkForUpdate } from '../../lib/update-notifier.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 
-interface WhoamiResponse {
-  email: string;
-  orgId: string;
-  orgName: string;
-  role: string;
+/**
+ * `/orgs/me` returns the full org record. We only consume non-secret fields
+ * here — `masterKey` from the response is intentionally never read or shown
+ * (a separate redaction task strips it server-side).
+ *
+ * Email / role are not part of the org record. A richer `/whoami` endpoint
+ * (with Clerk-pulled email + role) is tracked as a follow-up.
+ */
+interface OrgMeResponse {
+  id: string;
+  name: string;
+  slug: string;
+  tier: string;
+  kybStatus?: string;
+  cardIssuingEnabled?: boolean;
 }
 
 export function whoamiCommand(): Command {
@@ -39,7 +49,11 @@ export function whoamiCommand(): Command {
         (async () => {
           try {
             const client = await getApiClient(globals);
-            const result = await client.get<WhoamiResponse>('/auth/me');
+            // Was `/auth/me` — that route has never existed in prod. `/orgs/me`
+            // exists and returns the org for the authenticated key; we ignore
+            // the (currently leaking) `masterKey` field and surface only safe
+            // fields below.
+            const result = await client.get<OrgMeResponse>('/orgs/me');
             return { ok: true as const, data: result };
           } catch (error: unknown) {
             return { ok: false as const, error };
@@ -69,10 +83,10 @@ export function whoamiCommand(): Command {
         // Human-readable path: pairs in details(), banner for update.
         if (isHumanFormat || globals.human) {
           output.details([
-            ['Email', result.email],
-            ['Organization', result.orgName],
-            ['Org ID', result.orgId],
-            ['Role', result.role],
+            ['Organization', result.name],
+            ['Org ID', result.id],
+            ['Slug', result.slug],
+            ['Tier', result.tier],
             ['Auth Method', auth.apiKey ? 'API Key' : 'Token'],
             ['API URL', auth.apiUrl ?? 'http://localhost:4001'],
             ['CLI Version', pkg.version],
@@ -89,10 +103,10 @@ export function whoamiCommand(): Command {
       // Agent / json / yaml / md / jsonl path: structured payload, embedded
       // update field so agents can act on it without parsing decoration.
       const payload = {
-        email: result.email,
-        org_id: result.orgId,
-        org_name: result.orgName,
-        role: result.role,
+        org_id: result.id,
+        org_name: result.name,
+        org_slug: result.slug,
+        tier: result.tier,
         auth_method: auth.apiKey ? 'api_key' : 'token',
         api_url: auth.apiUrl ?? 'http://localhost:4001',
         cli_version: pkg.version,
