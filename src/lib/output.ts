@@ -34,6 +34,7 @@ export interface OutputOptions {
 }
 
 function resolveFormat(options: OutputOptions): OutputFormat {
+  // Explicit flags always win.
   if (options.format !== undefined) {
     if (!VALID_FORMATS.has(options.format)) {
       throw new InvalidFormatError(String(options.format));
@@ -42,6 +43,18 @@ function resolveFormat(options: OutputOptions): OutputFormat {
   }
   if (options.human) return 'human';
   if (options.json) return 'json';
+
+  // TTY-aware default: interactive shells get human output (colors,
+  // tables, prose); pipes/redirects/non-TTY environments get the agent
+  // format (compact one-line JSON). Same auto-detection principle as
+  // `am auth login` — pick the right default for the context.
+  //
+  // Tests force 'agent' via NODE_ENV=test or ANIMA_FORCE_AGENT_FORMAT=1
+  // so golden snapshots stay deterministic regardless of where they run.
+  if (process.env.NODE_ENV === 'test' || process.env.ANIMA_FORCE_AGENT_FORMAT === '1') {
+    return 'agent';
+  }
+  if (process.stdout.isTTY) return 'human';
   return 'agent';
 }
 

@@ -28,17 +28,25 @@ const CLI_CLIENT_ID = 'anima-cli';
 const LOOPBACK_PORT = 8765;
 const LOOPBACK_REDIRECT_URI = `http://localhost:${LOOPBACK_PORT}/callback`;
 
-// Default scopes the CLI requests. Users can override via a future
-// --scopes flag; for now we ask for read+write across the main domains
-// so the CLI is functional without additional consent steps.
+// Default scopes the CLI requests. Match the canonical Anima Connect
+// scope vocabulary (lowercase colon-notation, Stripe/GitHub style).
+// Definitive list: apps/web/src/lib/oauth/scopes.ts (ANIMA_SCOPES).
+//
+// Conservative defaults — read across the main domains, send for
+// channels the CLI typically operates on (email + SMS), spend approval
+// for cards (per-request — auto-approve is opt-in via a future flag).
+// Users can refine via `am auth login --scopes=cards:read,email:read`
+// (when that lands).
 const DEFAULT_CLI_SCOPES = [
-  'read:cards',
-  'write:cards',
-  'read:agents',
-  'write:agents',
-  'read:vault',
-  'read:phone',
-  'read:email',
+  'cards:read',
+  'cards:spend',
+  'email:read',
+  'email:send_as',
+  'phone:read_sms',
+  'phone:send_sms',
+  'vault:read_all',
+  'addresses:read',
+  'webhooks:subscribe',
 ];
 
 export function loginCommand(): Command {
@@ -81,14 +89,30 @@ export function loginCommand(): Command {
         }
 
         // No flag, non-interactive environment — fail with actionable text.
-        output.error(
-          'Non-interactive environment detected. Pass one of:\n' +
-            '  --api-key=mk_xxx          (recommended for agents, scripts, CI)\n' +
-            '  --email=... --password=... (credentials flow)\n' +
-            '  --web                      (force browser-based OAuth — needs a TTY + display)\n' +
-            '\n' +
-            'Run with a TTY for the default browser-based flow.',
-        );
+        // Short message for the agent format (low-token, code-friendly);
+        // verbose multi-line for humans who want to see all options.
+        const isHumanFormat =
+          (globals.format ?? (globals.human ? 'human' : null)) === 'human' ||
+          (process.stdout.isTTY && !globals.format && !globals.json);
+
+        if (isHumanFormat) {
+          output.error(
+            'Non-interactive environment detected. Pass one of:\n' +
+              '  --api-key=mk_xxx          (recommended for agents, scripts, CI)\n' +
+              '  --email=... --password=... (credentials flow)\n' +
+              '  --web                      (force browser-based OAuth — needs a TTY + display)\n' +
+              '\n' +
+              'Run with a TTY for the default browser-based flow.',
+          );
+        } else {
+          // Compact: agent parses `code` to branch, ignores `hint`.
+          output.payload({
+            status: 'error',
+            code: 'NO_AUTH_FLAG',
+            message: 'Pass --api-key, --email/--password, or --web',
+            hint: 'Default browser flow requires an interactive TTY',
+          });
+        }
         process.exit(1);
       } catch (error: unknown) {
         if (error instanceof ApiError) {
