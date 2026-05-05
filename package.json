@@ -1,6 +1,6 @@
 {
   "name": "@anima-labs/cli",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Official Anima CLI — Identity infrastructure for AI agents. Manage identities, email, phone numbers, cards, vault secrets, and runtime configuration.",
   "type": "module",
   "bin": {

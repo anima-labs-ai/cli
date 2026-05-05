@@ -43,27 +43,53 @@ const DEFAULT_CLI_SCOPES = [
 
 export function loginCommand(): Command {
   return new Command('login')
-    .description('Authenticate with Anima')
-    .option('-e, --email <email>', 'Email address')
-    .option('-p, --password <password>', 'Password')
-    .option('-k, --api-key <key>', 'API key (alternative to email/password)')
-    .option('--web', 'Open the browser to sign in via Anima Connect (OAuth 2.1 + PKCE)')
+    .description('Authenticate with Anima — browser-based OAuth by default; pass --api-key for non-interactive use')
+    .option('-e, --email <email>', 'Email address (with --password for credentials flow)')
+    .option('-p, --password <password>', 'Password (with --email)')
+    .option('-k, --api-key <key>', 'API key — primary path for agents, scripts, CI')
+    .option('--web', 'Force browser-based OAuth flow (default in interactive shells)')
+    .option('--no-web', 'Disable browser auto-detect; require an explicit credential flag')
     .action(async function (this: Command) {
       const opts = this.opts<LoginOptions>();
       const globals = this.optsWithGlobals<LoginOptions & GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        if (opts.web) {
-          await loginWithBrowser(globals, output);
-        } else if (opts.apiKey) {
+        // Explicit credential flags take precedence over auto-detect.
+        if (opts.apiKey) {
           await loginWithApiKey(opts.apiKey, globals, output);
-        } else if (opts.email && opts.password) {
-          await loginWithCredentials(opts.email, opts.password, globals, output);
-        } else {
-          output.error('Provide --web (browser OAuth), --api-key, or --email + --password');
-          process.exit(1);
+          return;
         }
+        if (opts.email && opts.password) {
+          await loginWithCredentials(opts.email, opts.password, globals, output);
+          return;
+        }
+
+        // Auto-detect: in an interactive shell (TTY), default to browser
+        // OAuth — that's the lowest-friction UX for humans setting up the
+        // CLI on a workstation. In a non-TTY environment (CI, containers,
+        // scripts) we fail-loud with a hint to pass --api-key, since
+        // there's no way to drive the browser flow without a human.
+        // `--web` forces the browser path explicitly; `--no-web` opts out.
+        const wantBrowser = opts.web === true;
+        const optedOutOfBrowser = opts.web === false;
+        const isInteractive = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+
+        if (wantBrowser || (isInteractive && !optedOutOfBrowser)) {
+          await loginWithBrowser(globals, output);
+          return;
+        }
+
+        // No flag, non-interactive environment — fail with actionable text.
+        output.error(
+          'Non-interactive environment detected. Pass one of:\n' +
+            '  --api-key=mk_xxx          (recommended for agents, scripts, CI)\n' +
+            '  --email=... --password=... (credentials flow)\n' +
+            '  --web                      (force browser-based OAuth — needs a TTY + display)\n' +
+            '\n' +
+            'Run with a TTY for the default browser-based flow.',
+        );
+        process.exit(1);
       } catch (error: unknown) {
         if (error instanceof ApiError) {
           output.error(`Login failed: ${error.message} (${error.status})`);

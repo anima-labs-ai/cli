@@ -6,7 +6,8 @@ Options:
   -h, --help       display help for command
 
 Commands:
-  login [options]  Authenticate with Anima
+  login [options]  Authenticate with Anima — browser-based OAuth by default;
+                   pass --api-key for non-interactive use
   logout           Clear stored authentication credentials
   whoami           Display current authentication status
   help [command]   display help for command
