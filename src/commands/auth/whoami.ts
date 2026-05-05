@@ -66,12 +66,32 @@ export function whoamiCommand(): Command {
         const error = accountResult.error;
         if (error instanceof ApiError) {
           if (error.status === 401) {
-            output.error('Session expired. Run `anima auth login` again.');
+            output.error('Session expired. Run `am auth login` again.');
+          } else if (error.status === 404) {
+            // 404 on /orgs/me typically means the user is on a stale CLI
+            // that's still hitting `/auth/me` (a route that never existed
+            // in prod). Tell them how to fix it instead of leaking the
+            // raw "Route not found" string from the API.
+            output.error(
+              'API endpoint not found — your CLI is out of date.\n' +
+                'Fix: `npm install -g @anima-labs/cli@latest` (or remove ~/.anima/bin/anima if you have a stale Bun-compiled binary on PATH).',
+            );
+          } else if (error.status >= 500) {
+            output.error(
+              `Anima API returned ${error.status}. Check status.useanima.sh; if persisting, contact support@useanima.sh.`,
+            );
+          } else {
+            output.error(`Failed to fetch account info: ${error.message} (${error.status})`);
+          }
+        } else if (error instanceof Error) {
+          // Network errors (ENOTFOUND, ECONNREFUSED) — give actionable text.
+          if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT/.test(error.message)) {
+            output.error(
+              `Could not reach Anima API at ${auth.apiUrl ?? 'https://api.useanima.sh'}. Check your network connection.`,
+            );
           } else {
             output.error(`Failed to fetch account info: ${error.message}`);
           }
-        } else if (error instanceof Error) {
-          output.error(`Failed to fetch account info: ${error.message}`);
         }
         process.exit(1);
       }

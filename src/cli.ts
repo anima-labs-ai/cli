@@ -117,6 +117,11 @@ const isDirectExecution =
 	arg1.endsWith("cli.ts") ||
 	arg1.endsWith("cli.js") ||
 	arg1.endsWith("/anima") ||
+	// `am` is the short alias bin published in package.json — both bin
+	// entries (anima + am) point at dist/cli.js. Without this branch,
+	// running `am` produced ZERO output (silent exit 0) because the
+	// gate evaluated false and the parseAsync block was skipped.
+	arg1.endsWith("/am") ||
 	// Bun-compiled platform binaries: `anima-linux-x64`, `anima-linux-arm64`.
 	// Match as a path-suffix so unrelated paths like `/home/anima-dev/...` don't trigger.
 	// (We keep the broad regex so `bun build src/cli.ts` with any future target name still works.)

@@ -415,7 +415,7 @@ describe('auth commands', () => {
       process.exit = originalExit;
 
       const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-      expect(output.includes('Session expired. Run `anima auth login` again.')).toBe(true);
+      expect(output.includes('Session expired. Run `am auth login` again.')).toBe(true);
       expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
     });
 
