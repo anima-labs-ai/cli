@@ -212,26 +212,43 @@ async function loginWithBrowser(globals: GlobalOptions, output: Output): Promise
 }
 
 /**
- * Resolve the Anima Connect base URL from the configured API URL.
- * Production: api.useanima.sh → connect.useanima.sh
- * Dev: localhost:4001 → localhost:3000 (or whatever the web app runs on)
+ * Resolve the Anima Connect base URL.
+ *
+ * Priority:
+ *   1. ANIMA_CONNECT_URL env var (explicit override — dev / staging / preview)
+ *   2. Match production: any *.useanima.sh API host → connect.useanima.sh
+ *   3. localhost API host → localhost:3000 (local dev only)
+ *   4. Fallback: https://connect.useanima.sh (production default)
+ *
+ * The fallback used to derive from the API URL, which silently produced
+ * http://localhost:3000 when DEFAULT_API_URL was http://localhost:4001 —
+ * leaking the dev URL into production user flows. Now production-default
+ * is the explicit fallback; localhost-derivation requires an explicit
+ * localhost API URL (which means the user has either passed --api-url or
+ * set ANIMA_API_URL).
  */
 function resolveConnectBase(apiUrl: string): string {
+  // Explicit override always wins.
+  if (process.env.ANIMA_CONNECT_URL) return process.env.ANIMA_CONNECT_URL;
+
   try {
     const url = new URL(apiUrl);
     if (url.hostname.endsWith('.useanima.sh') || url.hostname === 'useanima.sh') {
       return 'https://connect.useanima.sh';
     }
-    // Local-dev assumption: the web app is on port 3000 of the same host.
+    // Localhost dev — only triggers when the user has *explicitly* pointed
+    // the API at localhost. Default API URL is now production, so this
+    // branch is reachable via --api-url=http://localhost:4001 or
+    // ANIMA_API_URL=http://localhost:4001.
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
       return `${url.protocol}//${url.hostname}:3000`;
     }
-    // Custom host (staging, preview deploy) — assume connect lives on the
-    // apex of whatever domain api is on. Dev override via ANIMA_CONNECT_URL.
-    return process.env.ANIMA_CONNECT_URL ?? 'https://connect.useanima.sh';
   } catch {
-    return 'https://connect.useanima.sh';
+    // Malformed apiUrl — fall through to production default.
   }
+  // Custom host (staging / preview / unknown) → production connect by default.
+  // Override via ANIMA_CONNECT_URL when running against a non-prod env.
+  return 'https://connect.useanima.sh';
 }
 
 /**

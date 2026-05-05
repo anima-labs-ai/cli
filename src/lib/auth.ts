@@ -11,7 +11,12 @@ export interface GlobalOptions {
   apiUrl?: string;
 }
 
-const DEFAULT_API_URL = 'http://localhost:4001';
+// Production API. Override via --api-url=http://localhost:4001 (or set
+// ANIMA_API_URL) for local dev. Was 'http://localhost:4001' which leaked
+// into the user-facing OAuth flow — when no auth config existed, the CLI
+// would derive the connect URL from this and open the browser at
+// http://localhost:3000 instead of https://connect.useanima.sh.
+const DEFAULT_API_URL = 'https://api.useanima.sh';
 
 export function resolveApiUrl(opts: GlobalOptions, authApiUrl?: string): string {
   return opts.apiUrl ?? process.env.ANIMA_API_URL ?? authApiUrl ?? DEFAULT_API_URL;
