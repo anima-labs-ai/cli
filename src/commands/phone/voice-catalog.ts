@@ -1,29 +1,12 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface VoiceCatalogOptions {
-  tier?: string;
-  gender?: string;
+  tier?: 'basic' | 'premium';
+  gender?: 'male' | 'female' | 'neutral';
   language?: string;
-}
-
-interface CatalogVoice {
-  id: string;
-  name: string;
-  provider: string;
-  tier: string;
-  gender?: string;
-  language: string;
-  accent?: string;
-  style?: string;
-  ageRange?: string;
-  description?: string;
-}
-
-interface CatalogResponse {
-  voices: CatalogVoice[];
 }
 
 export function voiceCatalogCommand(): Command {
@@ -38,14 +21,18 @@ export function voiceCatalogCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
+        const orpc = await requireOrpcAuth(globals);
 
-        const params: Record<string, string> = {};
-        if (opts.tier) params.tier = opts.tier;
-        if (opts.gender) params.gender = opts.gender;
-        if (opts.language) params.language = opts.language;
+        const input: {
+          tier?: 'basic' | 'premium';
+          gender?: 'male' | 'female' | 'neutral';
+          language?: string;
+        } = {};
+        if (opts.tier) input.tier = opts.tier;
+        if (opts.gender) input.gender = opts.gender;
+        if (opts.language) input.language = opts.language;
 
-        const response = await client.get<CatalogResponse>('/voice/catalog', params);
+        const response = await orpc.voice.catalog(input);
 
         if (globals.json) {
           output.json(response);
@@ -73,7 +60,7 @@ export function voiceCatalogCommand(): Command {
 
         output.info(`\n${response.voices.length} voice(s) found`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list voices: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

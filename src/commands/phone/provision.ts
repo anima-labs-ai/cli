@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type PhoneCapability = 'sms' | 'mms' | 'voice';
 
@@ -10,15 +10,6 @@ interface ProvisionOptions {
   country?: string;
   areaCode?: string;
   capabilities?: string;
-}
-
-interface ProvisionResponse {
-  id: string;
-  phoneNumber: string;
-  provider: string;
-  capabilities: { sms: boolean; mms: boolean; voice: boolean };
-  isPrimary: boolean;
-  tenDlcStatus: string;
 }
 
 function parseCapabilities(input?: string): PhoneCapability[] | undefined {
@@ -88,8 +79,8 @@ export function provisionPhoneNumberCommand(): Command {
           body.capabilities = capabilities;
         }
 
-        const client = await requireAuth(globals);
-        const response = await client.post<ProvisionResponse>('/phone/provision', body);
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.phone.provision(body);
 
         if (globals.json) {
           output.json(response);
@@ -107,7 +98,7 @@ export function provisionPhoneNumberCommand(): Command {
         ]);
         output.success('Phone number provisioned');
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to provision phone number: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

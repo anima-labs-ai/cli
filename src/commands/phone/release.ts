@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ReleaseOptions {
   agent: string;
@@ -19,8 +19,8 @@ export function releasePhoneNumberCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const response = await client.post<Record<string, unknown>>('/phone/release', {
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.phone.release({
           agentId: opts.agent,
           phoneNumber: opts.number,
         });
@@ -32,7 +32,7 @@ export function releasePhoneNumberCommand(): Command {
 
         output.success(`Released phone number ${opts.number}`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to release phone number: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);
