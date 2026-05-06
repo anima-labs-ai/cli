@@ -5,6 +5,7 @@ import { ApiClient, ApiError } from '../../lib/api-client.js';
 import { saveAuthConfig } from '../../lib/config.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions, resolveApiUrl } from '../../lib/auth.js';
+import { createOrpcClientWithCredential, ORPCError } from '../../lib/orpc.js';
 
 interface LoginResponse {
   token: string;
@@ -115,7 +116,7 @@ export function loginCommand(): Command {
         }
         process.exit(1);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ApiError || error instanceof ORPCError) {
           output.error(`Login failed: ${error.message} (${error.status})`);
         } else if (error instanceof Error) {
           output.error(`Login failed: ${error.message}`);
@@ -230,15 +231,21 @@ async function loginWithBrowser(globals: GlobalOptions, output: Output): Promise
     email: 'oauth-user', // userinfo will overwrite this
   });
 
-  // Surface the user's identity from /v1/oauth/userinfo so the success
-  // line shows who actually logged in.
+  // Surface the user's identity from oauth.userinfo so the success line
+  // shows who actually logged in. We can't use requireOrpcAuth here —
+  // the access token isn't on disk yet (saveAuthConfig fired a moment
+  // ago, but the orpc helper reads its credential from getAuthConfig).
+  // createOrpcClientWithCredential takes the in-flight token directly.
   try {
-    const client = new ApiClient({ baseUrl: apiUrl, apiKey: tokens.accessToken, debug: globals.debug });
-    const me = await client.get<{ sub: string; email: string | null; anima: { orgName: string | null } }>(
-      '/v1/oauth/userinfo',
-    );
+    const orpc = createOrpcClientWithCredential({
+      apiUrl,
+      credential: tokens.accessToken,
+      testMode: globals.test,
+    });
+    const me = await orpc.oauth.userInfo({});
     const display = me.email ?? me.sub;
-    const org = me.anima.orgName ?? '(no org)';
+    const orgName = (me as { anima?: { orgName?: string | null } }).anima?.orgName;
+    const org = orgName ?? '(no org)';
     output.success(`Logged in via Anima Connect as ${display} (org: ${org})`);
   } catch {
     output.success(`Logged in via Anima Connect (${tokens.scope.split(' ').length} scopes granted)`);
@@ -404,16 +411,15 @@ async function loginWithApiKey(
   output: Output,
 ): Promise<void> {
   const apiUrl = resolveApiUrl(globals);
-  const client = new ApiClient({
-    baseUrl: apiUrl,
-    apiKey,
-    debug: globals.debug,
+  // org.me both validates the API key (any non-200 throws) and gives us
+  // the org name/slug for the success message. Same chicken-and-egg
+  // reason as the OAuth path: the credential isn't on disk yet.
+  const orpc = createOrpcClientWithCredential({
+    apiUrl,
+    credential: apiKey,
+    testMode: globals.test,
   });
-
-  // `/orgs/me` validates the API key and returns the org. We use it as a
-  // 200-OK probe + identity surface; `/auth/me` was the historical name and
-  // never existed in prod.
-  const result = await client.get<{ id: string; name: string; slug: string }>('/v1/orgs/me');
+  const result = await orpc.org.me({});
 
   await saveAuthConfig({
     apiKey,

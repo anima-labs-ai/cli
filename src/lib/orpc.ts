@@ -76,3 +76,43 @@ export async function requireOrpcAuth(opts: GlobalOptions): Promise<AnimaClient>
   return createOrpcClient(opts);
 }
 
+/**
+ * Build a typed oRPC client with explicit credentials, bypassing the
+ * stored `auth.json`. Used by the login flow: when validating a freshly
+ * minted OAuth access token or a user-provided API key, the credential
+ * isn't on disk yet, so the standard `requireOrpcAuth` chicken-and-egg
+ * doesn't apply. Caller passes the apiUrl + credential directly.
+ */
+export function createOrpcClientWithCredential(params: {
+  apiUrl: string;
+  credential: string;
+  testMode?: boolean;
+}): AnimaClient {
+  const link = new OpenAPILink(contract, {
+    url: () => `${params.apiUrl.replace(/\/$/, '')}/v1`,
+    headers: () => {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${params.credential}`,
+      };
+      if (params.testMode) {
+        headers['X-Anima-Test-Mode'] = '1';
+      }
+      return headers;
+    },
+    customErrorResponseBodyDecoder: (body, response) => {
+      const wrapper = body as Record<string, unknown> | null | undefined;
+      const err = wrapper?.error as Record<string, unknown> | undefined;
+      if (err && typeof err.code === 'string' && typeof err.message === 'string') {
+        return new ORPCError(err.code, {
+          status: response.status,
+          message: err.message,
+          data: err.details,
+        });
+      }
+      return undefined;
+    },
+  });
+
+  return createORPCClient(link);
+}
+
