@@ -1,27 +1,14 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface TransactionsOptions {
   agent: string;
-  status?: string;
-}
-
-interface WalletTransaction {
-  id: string;
-  type: string;
-  amount: number;
-  currency: string;
-  from: string | null;
-  to: string | null;
-  memo: string | null;
-  status: string;
-  createdAt: string;
-}
-
-interface TransactionsResponse {
-  items: WalletTransaction[];
+  limit?: string;
+  cursor?: string;
+  since?: string;
+  until?: string;
 }
 
 export function walletTransactionsCommand(): Command {
@@ -29,51 +16,91 @@ export function walletTransactionsCommand(): Command {
     .alias('txns')
     .description('List wallet transactions for an agent')
     .requiredOption('--agent <id>', 'Agent ID')
-    .option('--status <status>', 'Filter by transaction status')
+    .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
+    .option('--cursor <cursor>', 'Pagination cursor')
+    .option('--since <iso8601>', 'Inclusive start of date range (ISO 8601)', validateIsoDate)
+    .option('--until <iso8601>', 'Inclusive end of date range (ISO 8601)', validateIsoDate)
     .action(async function (this: Command) {
       const opts = this.opts<TransactionsOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const query: Record<string, string> = {};
-        if (opts.status) query.status = opts.status;
-
-        const client = await requireAuth(globals);
-        const response = await client.get<TransactionsResponse>(
-          `/agents/${opts.agent}/wallet/transactions`,
-          query,
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.wallet.transactions({
+          agentId: opts.agent,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          cursor: opts.cursor,
+          since: opts.since,
+          until: opts.until,
+        });
 
         if (globals.json) {
-          output.json(response);
+          output.json(result);
           return;
         }
 
-        if (response.items.length === 0) {
+        if (result.items.length === 0) {
           output.info('No transactions found');
           return;
         }
 
         output.table(
-          ['ID', 'Type', 'Amount', 'From', 'To', 'Status', 'Created'],
-          response.items.map((tx) => [
+          ['ID', 'Amount', 'Protocol', 'Merchant', 'Description', 'Status', 'Created'],
+          result.items.map((tx) => [
             tx.id,
-            tx.type,
             `${tx.amount} ${tx.currency}`,
-            tx.from ?? '-',
-            tx.to ?? '-',
+            tx.protocol,
+            tx.merchant ?? '-',
+            tx.description ?? '-',
             tx.status,
             tx.createdAt,
           ]),
+          {
+            summary: `Returned ${result.items.length} transactions.`,
+            pagination: {
+              has_more: result.pagination.hasMore,
+              next_cursor: result.pagination.nextCursor,
+            },
+          },
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to list transactions: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(error.message);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to list transactions');
       }
     });
+}
+
+function validateLimit(value: string): string {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
+  }
+  return value;
+}
+
+function validateIsoDate(value: string): string {
+  // ISO 8601 datetime quick-check; the server validates the canonical form.
+  if (Number.isNaN(Date.parse(value))) {
+    throw new InvalidArgumentError(`invalid ISO 8601 datetime: ${value}`);
+  }
+  return value;
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 403) {
+      output.error('Forbidden: you do not have access to this wallet.');
+    } else if (error.status === 404) {
+      output.error('Wallet not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }
