@@ -9,9 +9,24 @@ interface ValidateOptions {
 
 export function validateAddressCommand(): Command {
   return new Command('validate')
-    .description('Validate an address against postal standards')
-    .argument('<id>', 'Address ID to validate')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .description(
+      'Validate one specific address against postal standards. ' +
+        'Validates a single address by its ID — not all addresses for an agent. ' +
+        'Find an address ID with `am address list --agent <agentId>`.',
+    )
+    .argument(
+      '<addressId>',
+      'ID of the address to validate (e.g. addr_xxx). Run `am address list --agent <agentId>` to find one.',
+    )
+    .requiredOption('--agent <agentId>', 'Agent that owns the address')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ am address list --agent agt_xxx          # find your address ids
+  $ am address validate addr_yyy --agent agt_xxx
+`,
+    )
     .action(async function (this: Command, addressId: string) {
       const opts = this.opts<ValidateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
