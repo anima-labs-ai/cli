@@ -17,6 +17,7 @@ import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
 import { mppCommands } from "./commands/mpp/index.js";
 import { onboardCommand } from "./commands/onboard/index.js";
+import { orgCommands } from "./commands/org/index.js";
 import { demoCommand } from "./commands/demo/index.js";
 import { phoneCommands } from "./commands/phone/index.js";
 import { podCommands } from "./commands/pod/index.js";
@@ -89,6 +90,7 @@ export function createProgram(): Command {
 	program.addCommand(securityCommands());
 	program.addCommand(initCommand());
 	program.addCommand(onboardCommand());
+	program.addCommand(orgCommands());
 	program.addCommand(demoCommand());
 	program.addCommand(mppCommands());
 	program.addCommand(a2aCommands());
