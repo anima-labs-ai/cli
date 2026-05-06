@@ -9,15 +9,20 @@ interface CredentialsOptions {
 
 interface VerifiableCredential {
   id: string;
+  agentId: string;
+  orgId: string;
   type: string;
-  issuer: string;
-  subject: string;
-  issuanceDate: string;
-  expirationDate: string | null;
-}
-
-interface CredentialsResponse {
-  items: VerifiableCredential[];
+  jwtVc: string;
+  issuerDid: string;
+  subjectDid: string;
+  issuedAt: string;
+  expiresAt: string | null;
+  revoked: boolean;
+  revokedAt: string | null;
+  revocationIndex: number | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export function listCredentialsCommand(): Command {
@@ -31,27 +36,30 @@ export function listCredentialsCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const response = await client.get<CredentialsResponse>(`/agents/${opts.agent}/credentials`);
+        const credentials = await client.get<VerifiableCredential[]>(
+          `/v1/agents/${opts.agent}/credentials`,
+        );
 
         if (globals.json) {
-          output.json(response);
+          output.json(credentials);
           return;
         }
 
-        if (response.items.length === 0) {
+        if (credentials.length === 0) {
           output.info('No credentials found');
           return;
         }
 
         output.table(
-          ['ID', 'Type', 'Issuer', 'Subject', 'Issued', 'Expires'],
-          response.items.map((item) => [
-            item.id,
-            item.type,
-            item.issuer,
-            item.subject,
-            item.issuanceDate,
-            item.expirationDate ?? 'Never',
+          ['ID', 'Type', 'Issuer', 'Subject', 'Issued', 'Expires', 'Revoked'],
+          credentials.map((vc) => [
+            vc.id,
+            vc.type,
+            vc.issuerDid,
+            vc.subjectDid,
+            vc.issuedAt,
+            vc.expiresAt ?? 'Never',
+            vc.revoked ? 'Yes' : 'No',
           ]),
         );
       } catch (error: unknown) {

@@ -8,14 +8,38 @@ interface CardOptions {
 }
 
 interface AgentCard {
-  did: string;
-  agentId: string;
   name: string;
-  description: string | null;
-  capabilities: string[];
-  endpoints: Record<string, string>;
-  createdAt: string;
-  updatedAt: string;
+  description?: string;
+  url: string;
+  did: string;
+  capabilities: {
+    email: boolean;
+    phone: boolean;
+    cards: boolean;
+    vault: boolean;
+    address: boolean;
+    protocols: string[];
+  };
+  verification: {
+    level: 'basic' | 'standard' | 'premium';
+    credentials: string[];
+  };
+  trustScore: number;
+  contact: {
+    email?: string;
+    phone?: string;
+  };
+}
+
+function formatCapabilities(caps: AgentCard['capabilities']): string {
+  const enabled: string[] = [];
+  if (caps.email) enabled.push('email');
+  if (caps.phone) enabled.push('phone');
+  if (caps.cards) enabled.push('cards');
+  if (caps.vault) enabled.push('vault');
+  if (caps.address) enabled.push('address');
+  enabled.push(...caps.protocols);
+  return enabled.join(', ') || '-';
 }
 
 export function getAgentCardCommand(): Command {
@@ -29,7 +53,7 @@ export function getAgentCardCommand(): Command {
 
       try {
         const client = await requireAuth(globals);
-        const result = await client.get<AgentCard>(`/agents/${opts.agent}/card`);
+        const result = await client.get<AgentCard>(`/v1/agents/${opts.agent}/card`);
 
         if (globals.json) {
           output.json(result);
@@ -37,14 +61,16 @@ export function getAgentCardCommand(): Command {
         }
 
         output.details([
-          ['DID', result.did],
-          ['Agent ID', result.agentId],
           ['Name', result.name],
+          ['DID', result.did],
+          ['URL', result.url],
           ['Description', result.description ?? '-'],
-          ['Capabilities', result.capabilities.join(', ') || '-'],
-          ['Endpoints', Object.entries(result.endpoints).map(([k, v]) => `${k}: ${v}`).join('\n') || '-'],
-          ['Created', result.createdAt],
-          ['Updated', result.updatedAt],
+          ['Capabilities', formatCapabilities(result.capabilities)],
+          ['Verification', result.verification.level],
+          ['Credentials', result.verification.credentials.join(', ') || '-'],
+          ['Trust score', String(result.trustScore)],
+          ['Contact email', result.contact.email ?? '-'],
+          ['Contact phone', result.contact.phone ?? '-'],
         ]);
       } catch (error: unknown) {
         if (error instanceof ApiError) {
