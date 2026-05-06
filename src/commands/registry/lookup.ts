@@ -1,22 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface LookupOptions {
   did: string;
-}
-
-interface RegistryAgent {
-  did: string;
-  name: string;
-  description: string | null;
-  category: string | null;
-  capabilities: string[];
-  endpoints: Record<string, string>;
-  verified: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export function lookupAgentCommand(): Command {
@@ -29,32 +17,49 @@ export function lookupAgentCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<RegistryAgent>(`/registry/agents/${encodeURIComponent(opts.did)}`);
+        const orpc = await requireOrpcAuth(globals);
+        const entry = await orpc.registry.lookup({ did: opts.did });
 
         if (globals.json) {
-          output.json(result);
+          output.json(entry);
           return;
         }
 
         output.details([
-          ['DID', result.did],
-          ['Name', result.name],
-          ['Description', result.description ?? '-'],
-          ['Category', result.category ?? '-'],
-          ['Capabilities', result.capabilities.join(', ') || '-'],
-          ['Endpoints', Object.entries(result.endpoints).map(([k, v]) => `${k}: ${v}`).join('\n') || '-'],
-          ['Verified', result.verified ? 'Yes' : 'No'],
-          ['Created', result.createdAt],
-          ['Updated', result.updatedAt],
+          ['DID', entry.did],
+          ['Name', entry.name],
+          ['Description', entry.description ?? '-'],
+          ['Agent ID', entry.agentId],
+          ['Organization ID', entry.orgId],
+          ['Public', entry.public ? 'Yes' : 'No'],
+          ['Capabilities', entry.capabilities.join(', ') || '-'],
+          ['Tags', entry.tags.join(', ') || '-'],
+          ['Trust Score', String(entry.trustScore)],
+          ['KYA Level', entry.kyaLevel],
+          ['Verified', entry.verified ? 'Yes' : 'No'],
+          ['Verified At', entry.verifiedAt ?? 'Never'],
+          ['Listed At', entry.listedAt],
+          ['Updated At', entry.updatedAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to look up agent: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(error.message);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to look up agent');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Agent not found in registry.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }
