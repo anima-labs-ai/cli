@@ -10,20 +10,55 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # The CLI declares `@anima/contracts` as `file:../anima/packages/contracts`,
+      # so we need the anima monorepo checked out as a sibling for `bun install`
+      # to resolve. Since anima-labs-ai/anima is private, the default
+      # `GITHUB_TOKEN` of this workflow cannot read it. A repo secret
+      # `ANIMA_REPO_TOKEN` (a fine-grained PAT with `Contents: Read` on
+      # anima-labs-ai/anima) is required.
+      - name: Verify ANIMA_REPO_TOKEN secret is configured
+        env:
+          ANIMA_REPO_TOKEN: ${{ secrets.ANIMA_REPO_TOKEN }}
+        run: |
+          if [ -z "$ANIMA_REPO_TOKEN" ]; then
+            echo "::error::Repo secret ANIMA_REPO_TOKEN is not set."
+            echo "::error::CI needs a fine-grained PAT with 'Contents: Read' on anima-labs-ai/anima."
+            echo "::error::Steps to fix:"
+            echo "::error::  1. Create the PAT at https://github.com/settings/personal-access-tokens"
+            echo "::error::  2. Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "::error::     Name: ANIMA_REPO_TOKEN, value: <PAT>"
+            exit 1
+          fi
+
+      - name: Checkout CLI
+        uses: actions/checkout@v4
+        with:
+          path: cli
+
+      - name: Checkout anima monorepo (for @anima/contracts)
+        uses: actions/checkout@v4
+        with:
+          repository: anima-labs-ai/anima
+          path: anima
+          token: ${{ secrets.ANIMA_REPO_TOKEN }}
+          fetch-depth: 1
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
+        working-directory: cli
         run: bun install --frozen-lockfile
 
       - name: Type check
+        working-directory: cli
         run: bun run typecheck
 
       - name: Run tests
+        working-directory: cli
         run: bun run test
 
       - name: Build
+        working-directory: cli
         run: bun run build
