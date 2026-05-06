@@ -1,21 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface UsageOptions {
   id: string;
-}
-
-interface PodUsage {
-  podId: string;
-  cpuUsage: number;
-  memoryUsage: number;
-  storageUsage: number;
-  networkIn: number;
-  networkOut: number;
-  uptimeSeconds: number;
-  measuredAt: string;
 }
 
 export function podUsageCommand(): Command {
@@ -28,34 +17,41 @@ export function podUsageCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<PodUsage>(`/pods/${opts.id}/usage`);
+        const orpc = await requireOrpcAuth(globals);
+        const usage = await orpc.pod.usage({ id: opts.id });
 
         if (globals.json) {
-          output.json(result);
+          output.json(usage);
           return;
         }
 
-        const hours = Math.floor(result.uptimeSeconds / 3600);
-        const mins = Math.floor((result.uptimeSeconds % 3600) / 60);
-
         output.details([
-          ['Pod ID', result.podId],
-          ['CPU Usage', `${result.cpuUsage}%`],
-          ['Memory Usage', `${result.memoryUsage}%`],
-          ['Storage Usage', `${result.storageUsage}%`],
-          ['Network In', `${result.networkIn} bytes`],
-          ['Network Out', `${result.networkOut} bytes`],
-          ['Uptime', `${hours}h ${mins}m`],
-          ['Measured At', result.measuredAt],
+          ['Agents', String(usage.agentCount)],
+          ['Emails', String(usage.emailCount)],
+          ['Phones', String(usage.smsCount)],
+          ['Cards', String(usage.cardCount)],
+          ['Vault Items', String(usage.vaultCount)],
+          ['Addresses', String(usage.addressCount)],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get pod usage: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(error.message);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to get pod usage');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Pod not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }
