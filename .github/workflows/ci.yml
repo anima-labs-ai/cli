@@ -10,20 +10,42 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # The CLI declares `@anima/contracts` as `file:../anima/packages/contracts`,
+      # so we need the anima monorepo checked out as a sibling for `bun install`
+      # to resolve. Since anima-labs-ai/anima is private, the default
+      # `GITHUB_TOKEN` of this workflow cannot read it. Set `ANIMA_REPO_TOKEN`
+      # in the repo's secrets to a PAT (or fine-grained token) with `repo:read`
+      # access to anima-labs-ai/anima.
+      - name: Checkout CLI
+        uses: actions/checkout@v4
+        with:
+          path: cli
+
+      - name: Checkout anima monorepo (for @anima/contracts)
+        uses: actions/checkout@v4
+        with:
+          repository: anima-labs-ai/anima
+          path: anima
+          token: ${{ secrets.ANIMA_REPO_TOKEN }}
+          # Shallow clone — we only need src/ at the current SHA, not history.
+          fetch-depth: 1
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
+        working-directory: cli
         run: bun install --frozen-lockfile
 
       - name: Type check
+        working-directory: cli
         run: bun run typecheck
 
       - name: Run tests
+        working-directory: cli
         run: bun run test
 
       - name: Build
+        working-directory: cli
         run: bun run build
