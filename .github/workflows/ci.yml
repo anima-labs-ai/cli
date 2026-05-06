@@ -47,7 +47,22 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
+      # The @anima/contracts package symlinks into the CLI from the
+      # anima sibling checkout via `file:../anima/packages/contracts`.
+      # When tsc walks the symlinked source it needs to resolve the
+      # contracts package's own deps (@orpc/contract, zod) — those
+      # live in anima's node_modules, not the CLI's. So install the
+      # anima monorepo's deps before typechecking the CLI.
+      #
+      # Without this step the CLI typecheck fires dozens of
+      # "Cannot find module '@orpc/contract'" plus cascading
+      # implicit-any errors in CLI files where contract output
+      # types couldn't be inferred.
+      - name: Install anima monorepo deps (for @anima/contracts type resolution)
+        working-directory: anima
+        run: bun install --frozen-lockfile
+
+      - name: Install CLI dependencies
         working-directory: cli
         run: bun install --frozen-lockfile
 
