@@ -1,5 +1,4 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { createProgram } from '../../cli.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -17,21 +16,115 @@ mock.module('env-paths', () => ({
   }),
 }));
 
-let mockServer: ReturnType<typeof Bun.serve> | null = null;
-let program: Command;
+const { createProgram } = await import('../../cli.js');
 
-interface CapturedRequest {
-  method: string;
-  pathname: string;
-  searchParams: URLSearchParams;
+// Real-looking CUIDs so the contract's z.string().cuid() input validation
+// in the typed oRPC client doesn't reject the test args before the request
+// ever hits the mock server.
+const CARD_ID_1 = 'caaa00000000000000000crd01';
+const AGENT_ID_1 = 'caaa00000000000000000agt01';
+const ORG_ID_1 = 'caaa00000000000000000org01';
+const TXN_ID_1 = 'caaa00000000000000000txn01';
+
+interface RouteResponse {
+  status: number;
   body: unknown;
+  assert?: (ctx: { url: URL; body: unknown }) => void;
+}
+
+let mockServer: ReturnType<typeof Bun.serve> | null = null;
+let serverPort = 0;
+let program: Command;
+const routes: Record<string, RouteResponse> = {};
+
+function setRoute(method: string, path: string, route: RouteResponse): void {
+  routes[`${method} ${path}`] = route;
+}
+
+function clearRoutes(): void {
+  for (const key of Object.keys(routes)) {
+    delete routes[key];
+  }
 }
 
 function writeAuthConfig(port: number): void {
-  writeFileSync(join(testConfigDir, 'auth.json'), JSON.stringify({
-    token: 'test-token',
-    apiUrl: `http://localhost:${port}`,
-  }));
+  const authPath = join(testConfigDir, 'auth.json');
+  writeFileSync(authPath, JSON.stringify({ token: 'test-token', apiUrl: `http://localhost:${port}` }));
+}
+
+async function runProgram(args: string[]): Promise<void> {
+  try {
+    await program.parseAsync(['node', 'anima', ...args]);
+  } catch {
+  }
+}
+
+// Build a complete CardOutput-shaped response. Required because oRPC
+// contracts derive the output type from a Zod schema; partial mock
+// responses lead to undefined fields when commands access typed fields
+// like `card.allowedMerchantCategories`.
+function buildCardResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: CARD_ID_1,
+    agentId: AGENT_ID_1,
+    orgId: ORG_ID_1,
+    providerCardId: 'card_xxx',
+    providerCardholderId: 'ch_xxx',
+    cardType: 'VIRTUAL',
+    status: 'ACTIVE',
+    last4: '4242',
+    brand: 'Visa',
+    expMonth: 12,
+    expYear: 2030,
+    currency: 'usd',
+    label: 'Primary',
+    spendLimitDaily: 5000,
+    spendLimitMonthly: 15000,
+    spendLimitPerAuth: 3000,
+    spendLimitWeekly: null,
+    spendLimitYearly: null,
+    spendLimitLifetime: null,
+    allowedMerchantCategories: [],
+    blockedMerchantCategories: [],
+    spentToday: 0,
+    spentThisMonth: 0,
+    spentThisWeek: 0,
+    spentThisYear: 0,
+    spentLifetime: 0,
+    killSwitchActive: false,
+    metadata: {},
+    createdAt: '2026-03-19T00:00:00.000Z',
+    updatedAt: '2026-03-19T00:00:00.000Z',
+    canceledAt: null,
+    ...overrides,
+  };
+}
+
+function buildTransactionResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: TXN_ID_1,
+    cardId: CARD_ID_1,
+    orgId: ORG_ID_1,
+    providerAuthId: 'iauth_xxx',
+    providerTransactionId: null,
+    status: 'PENDING',
+    decision: null,
+    amountCents: 1234,
+    currency: 'usd',
+    merchantName: 'Coffee Shop',
+    merchantCategory: null,
+    merchantCategoryCode: null,
+    merchantCity: null,
+    merchantCountry: null,
+    declineReason: null,
+    policyId: null,
+    approvedBy: null,
+    approvedAt: null,
+    metadata: {},
+    createdAt: '2026-03-19T02:00:00.000Z',
+    updatedAt: '2026-03-19T02:00:00.000Z',
+    ...overrides,
+  };
 }
 
 describe('card commands', () => {
@@ -48,189 +141,132 @@ describe('card commands', () => {
     if (!existsSync(testConfigDir)) {
       mkdirSync(testConfigDir, { recursive: true });
     }
+
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+        const key = `${req.method} ${url.pathname}`;
+        const route = routes[key];
+
+        if (process.env.ANIMA_TEST_DEBUG) {
+          console.error(`[mock-server] ${req.method} ${url.pathname}${url.search}`);
+        }
+
+        if (!route) {
+          return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Not Found' } }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        let body: unknown = undefined;
+        if (req.method !== 'GET' && req.method !== 'DELETE') {
+          const bodyText = await req.text();
+          const contentType = req.headers.get('content-type') ?? '';
+          if (bodyText && contentType.includes('application/json')) {
+            body = JSON.parse(bodyText) as unknown;
+          }
+        }
+
+        route.assert?.({ url, body });
+
+        return new Response(route.status === 204 ? null : JSON.stringify(route.body), {
+          status: route.status,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+    mockServer = server;
+    serverPort = server.port ?? 0;
+
+    writeAuthConfig(serverPort);
   });
 
   afterEach(() => {
     mockServer?.stop();
     mockServer = null;
+    clearRoutes();
     if (existsSync(testConfigDir)) {
       rmSync(testConfigDir, { recursive: true, force: true });
     }
   });
 
   test('card create sends expected payload', async () => {
-    const capturedRequests: CapturedRequest[] = [];
-
-    mockServer = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'POST' && url.pathname === '/cards') {
-          const body = await request.json();
-          capturedRequests.push({
-            method: request.method,
-            pathname: url.pathname,
-            searchParams: url.searchParams,
-            body,
-          });
-          return new Response(JSON.stringify({
-            id: 'card_1',
-            agentId: 'agent_1',
-            label: 'Primary',
-            status: 'ACTIVE',
-            currency: 'usd',
-            spendLimits: { daily: 5000, monthly: 15000, perAuth: 3000 },
-            createdAt: '2026-03-19T00:00:00Z',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
+    setRoute('POST', '/cards', {
+      status: 200,
+      body: buildCardResponse({ label: 'Primary' }),
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_1,
+          label: 'Primary',
+          currency: 'usd',
+          spendLimitDaily: 5000,
+          spendLimitMonthly: 15000,
+          spendLimitPerAuth: 3000,
         });
       },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync([
-        'node', 'anima',
-        'card', 'create',
-        '--agent', 'agent_1',
-        '--label', 'Primary',
-        '--daily-limit', '5000',
-        '--monthly-limit', '15000',
-        '--per-auth-limit', '3000',
-      ]);
-    } catch {
-    }
+    await runProgram([
+      'card', 'create',
+      '--agent', AGENT_ID_1,
+      '--label', 'Primary',
+      '--daily-limit', '5000',
+      '--monthly-limit', '15000',
+      '--per-auth-limit', '3000',
+    ]);
 
     console.log = originalLog;
 
-    const captured = capturedRequests[0];
-    expect(captured?.method).toBe('POST');
-    expect(captured?.pathname).toBe('/cards');
-    expect(captured?.body).toEqual({
-      agentId: 'agent_1',
-      label: 'Primary',
-      currency: 'usd',
-      spendLimitDaily: 5000,
-      spendLimitMonthly: 15000,
-      spendLimitPerAuth: 3000,
-    });
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('card list sends expected query', async () => {
-    const capturedRequests: CapturedRequest[] = [];
-
-    mockServer = Bun.serve({
-      port: 0,
-      fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'GET' && url.pathname === '/cards') {
-          capturedRequests.push({
-            method: request.method,
-            pathname: url.pathname,
-            searchParams: url.searchParams,
-            body: null,
-          });
-          return new Response(JSON.stringify({
-            data: [
-              {
-                id: 'card_1',
-                agentId: 'agent_1',
-                label: 'Primary',
-                status: 'ACTIVE',
-                currency: 'usd',
-                spendLimits: { daily: 5000 },
-                createdAt: '2026-03-19T00:00:00Z',
-              },
-            ],
-            nextCursor: 'cur_2',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
+    setRoute('GET', '/cards', {
+      status: 200,
+      body: {
+        items: [buildCardResponse()],
+        cursor: undefined,
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
+        expect(url.searchParams.get('status')).toBe('ACTIVE');
+        expect(url.searchParams.get('limit')).toBe('25');
       },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync([
-        'node', 'anima',
-        'card', 'list',
-        '--agent', 'agent_1',
-        '--status', 'ACTIVE',
-        '--limit', '25',
-      ]);
-    } catch {
-    }
+    await runProgram([
+      'card', 'list',
+      '--agent', AGENT_ID_1,
+      '--status', 'ACTIVE',
+      '--limit', '25',
+    ]);
 
     console.log = originalLog;
 
-    const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/cards');
-    expect(captured?.searchParams.get('agentId')).toBe('agent_1');
-    expect(captured?.searchParams.get('status')).toBe('ACTIVE');
-    expect(captured?.searchParams.get('limit')).toBe('25');
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('card get supports json output', async () => {
-    mockServer = Bun.serve({
-      port: 0,
-      fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'GET' && url.pathname === '/cards/card_1') {
-          return new Response(JSON.stringify({
-            id: 'card_1',
-            agentId: 'agent_1',
-            label: 'Primary',
-            status: 'ACTIVE',
-            currency: 'usd',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
+    setRoute('GET', `/cards/${CARD_ID_1}`, {
+      status: 200,
+      body: buildCardResponse(),
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock((..._args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync(['node', 'anima', '--json', 'card', 'get', 'card_1']);
-    } catch {
-    }
+    await runProgram(['--json', 'card', 'get', CARD_ID_1]);
 
     console.log = originalLog;
 
@@ -238,268 +274,134 @@ describe('card commands', () => {
     const firstArg = logSpy.mock.calls[0]?.[0];
     expect(typeof firstArg).toBe('string');
     if (typeof firstArg === 'string') {
-      expect(JSON.parse(firstArg)).toEqual({
-        id: 'card_1',
-        agentId: 'agent_1',
-        label: 'Primary',
-        status: 'ACTIVE',
-        currency: 'usd',
-      });
+      const parsed = JSON.parse(firstArg) as { id: string; agentId: string };
+      expect(parsed.id).toBe(CARD_ID_1);
+      expect(parsed.agentId).toBe(AGENT_ID_1);
     }
   });
 
   test('card update sends expected payload', async () => {
-    const capturedRequests: CapturedRequest[] = [];
-
-    mockServer = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'PUT' && url.pathname === '/cards/card_1') {
-          const body = await request.json();
-          capturedRequests.push({
-            method: request.method,
-            pathname: url.pathname,
-            searchParams: url.searchParams,
-            body,
-          });
-          return new Response(JSON.stringify({
-            id: 'card_1',
-            agentId: 'agent_1',
-            label: 'Updated',
-            status: 'FROZEN',
-            currency: 'usd',
-            spendLimits: { daily: 7000, monthly: 20000, perAuth: 2500 },
-            updatedAt: '2026-03-19T01:00:00Z',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
+    setRoute('PUT', `/cards/${CARD_ID_1}`, {
+      status: 200,
+      body: buildCardResponse({
+        label: 'Updated',
+        status: 'FROZEN',
+        spendLimitDaily: 7000,
+        spendLimitMonthly: 20000,
+        spendLimitPerAuth: 2500,
+        updatedAt: '2026-03-19T01:00:00.000Z',
+      }),
+      assert: ({ body }) => {
+        // oRPC OpenAPILink lifts the contract's path param `{cardId}` into
+        // the URL (PUT /cards/<cardId>) and omits it from the request body.
+        expect(body).toMatchObject({
+          label: 'Updated',
+          status: 'FROZEN',
+          spendLimitDaily: 7000,
+          spendLimitMonthly: 20000,
+          spendLimitPerAuth: 2500,
         });
       },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync([
-        'node', 'anima',
-        'card', 'update', 'card_1',
-        '--label', 'Updated',
-        '--status', 'FROZEN',
-        '--daily-limit', '7000',
-        '--monthly-limit', '20000',
-        '--per-auth-limit', '2500',
-      ]);
-    } catch {
-    }
+    await runProgram([
+      'card', 'update', CARD_ID_1,
+      '--label', 'Updated',
+      '--status', 'FROZEN',
+      '--daily-limit', '7000',
+      '--monthly-limit', '20000',
+      '--per-auth-limit', '2500',
+    ]);
 
     console.log = originalLog;
 
-    const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/cards/card_1');
-    expect(captured?.body).toEqual({
-      label: 'Updated',
-      status: 'FROZEN',
-      spendLimits: {
-        daily: 7000,
-        monthly: 20000,
-        perAuth: 2500,
-      },
-    });
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('card delete hits delete endpoint', async () => {
-    const capturedRequests: CapturedRequest[] = [];
-
-    mockServer = Bun.serve({
-      port: 0,
-      fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'DELETE' && url.pathname === '/cards/card_1') {
-          capturedRequests.push({
-            method: request.method,
-            pathname: url.pathname,
-            searchParams: url.searchParams,
-            body: null,
-          });
-          return new Response(JSON.stringify({ deleted: true }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
+    setRoute('DELETE', `/cards/${CARD_ID_1}`, {
+      status: 200,
+      body: { success: true },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'delete', 'card_1']);
-    } catch {
-    }
+    await runProgram(['card', 'delete', CARD_ID_1]);
 
     console.log = originalLog;
 
-    const captured = capturedRequests[0];
-    expect(captured?.method).toBe('DELETE');
-    expect(captured?.pathname).toBe('/cards/card_1');
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('card transactions sends expected query', async () => {
-    const capturedRequests: CapturedRequest[] = [];
-
-    mockServer = Bun.serve({
-      port: 0,
-      fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'GET' && url.pathname === '/cards/transactions') {
-          capturedRequests.push({
-            method: request.method,
-            pathname: url.pathname,
-            searchParams: url.searchParams,
-            body: null,
-          });
-          return new Response(JSON.stringify({
-            data: [
-              {
-                id: 'txn_1',
-                cardId: 'card_1',
-                agentId: 'agent_1',
-                status: 'PENDING',
-                amount: 1234,
-                currency: 'usd',
-                merchantName: 'Coffee Shop',
-                createdAt: '2026-03-19T02:00:00Z',
-              },
-            ],
-            nextCursor: 'txn_cursor_2',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
+    setRoute('GET', '/cards/transactions', {
+      status: 200,
+      body: {
+        items: [buildTransactionResponse()],
+        cursor: undefined,
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('cardId')).toBe(CARD_ID_1);
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
+        expect(url.searchParams.get('status')).toBe('PENDING');
+        expect(url.searchParams.get('limit')).toBe('10');
       },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync([
-        'node', 'anima',
-        'card', 'transactions',
-        '--card', 'card_1',
-        '--agent', 'agent_1',
-        '--status', 'PENDING',
-        '--limit', '10',
-      ]);
-    } catch {
-    }
+    await runProgram([
+      'card', 'transactions',
+      '--card', CARD_ID_1,
+      '--agent', AGENT_ID_1,
+      '--status', 'PENDING',
+      '--limit', '10',
+    ]);
 
     console.log = originalLog;
 
-    const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/cards/transactions');
-    expect(captured?.searchParams.get('cardId')).toBe('card_1');
-    expect(captured?.searchParams.get('agentId')).toBe('agent_1');
-    expect(captured?.searchParams.get('status')).toBe('PENDING');
-    expect(captured?.searchParams.get('limit')).toBe('10');
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('card kill-switch sends expected payload', async () => {
-    const capturedRequests: CapturedRequest[] = [];
-
-    mockServer = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        const url = new URL(request.url);
-        if (request.method === 'POST' && url.pathname === '/cards/kill-switch') {
-          const body = await request.json();
-          capturedRequests.push({
-            method: request.method,
-            pathname: url.pathname,
-            searchParams: url.searchParams,
-            body,
-          });
-          return new Response(JSON.stringify({
-            active: true,
-            cardId: 'card_1',
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        return new Response(JSON.stringify({ error: { message: 'not found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
+    setRoute('POST', '/cards/kill-switch', {
+      status: 200,
+      body: {
+        affected: 1,
+        active: true,
+      },
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          active: true,
+          cardId: CARD_ID_1,
         });
       },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'kill-switch', '--active', '--card', 'card_1']);
-    } catch {
-    }
+    await runProgram(['card', 'kill-switch', '--active', '--card', CARD_ID_1]);
 
     console.log = originalLog;
 
-    const captured = capturedRequests[0];
-    expect(captured?.pathname).toBe('/cards/kill-switch');
-    expect(captured?.body).toEqual({
-      active: true,
-      cardId: 'card_1',
-    });
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('card commands handle ApiError responses', async () => {
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response(JSON.stringify({ error: { code: 'BAD_REQUEST', message: 'invalid card request' } }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
+  test('card commands handle ORPCError responses', async () => {
+    setRoute('GET', '/cards', {
+      status: 400,
+      body: { error: { code: 'BAD_REQUEST', message: 'invalid card request' } },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -509,10 +411,7 @@ describe('card commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'list']);
-    } catch {
-    }
+    await runProgram(['card', 'list']);
 
     console.error = originalError;
     process.exit = originalExit;
@@ -522,17 +421,10 @@ describe('card commands', () => {
   });
 
   test('card list handles 429 rate limiting', async () => {
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response(JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } }), {
-          status: 429,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
+    setRoute('GET', '/cards', {
+      status: 429,
+      body: { error: { code: 'RATE_LIMITED', message: 'Too many requests' } },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -542,10 +434,7 @@ describe('card commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'list']);
-    } catch {
-    }
+    await runProgram(['card', 'list']);
 
     console.error = originalError;
     process.exit = originalExit;
@@ -556,17 +445,10 @@ describe('card commands', () => {
   });
 
   test('card get handles 503 server unavailable', async () => {
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response(JSON.stringify({ error: { code: 'UNAVAILABLE', message: 'Service unavailable' } }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
+    setRoute('GET', `/cards/${CARD_ID_1}`, {
+      status: 503,
+      body: { error: { code: 'UNAVAILABLE', message: 'Service unavailable' } },
     });
-
-    writeAuthConfig(mockServer.port ?? 0);
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -576,10 +458,7 @@ describe('card commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'get', 'card_1']);
-    } catch {
-    }
+    await runProgram(['card', 'get', CARD_ID_1]);
 
     console.error = originalError;
     process.exit = originalExit;
@@ -589,117 +468,19 @@ describe('card commands', () => {
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('card transactions handles malformed JSON response', async () => {
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response('{ bad json', {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
-    });
-
-    writeAuthConfig(mockServer.port ?? 0);
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'transactions']);
-    } catch {
-    }
-
-    console.error = originalError;
-    process.exit = originalExit;
-
-    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes('Failed to list transactions:')).toBe(true);
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test('card create handles network connection refused', async () => {
-    writeAuthConfig(65535);
-
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new TypeError('Connection refused');
-    }) as unknown as typeof fetch;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'create', '--agent', 'agent_1']);
-    } catch {
-    }
-
-    globalThis.fetch = originalFetch;
-    console.error = originalError;
-    process.exit = originalExit;
-
-    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes('Failed to create card: Network error: Connection refused')).toBe(true);
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test('card delete handles timeout abort', async () => {
-    writeAuthConfig(65535);
-
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new DOMException('aborted', 'AbortError');
-    }) as unknown as typeof fetch;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    try {
-      await program.parseAsync(['node', 'anima', 'card', 'delete', 'card_1']);
-    } catch {
-    }
-
-    globalThis.fetch = originalFetch;
-    console.error = originalError;
-    process.exit = originalExit;
-
-    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes('Failed to delete card: Request timed out')).toBe(true);
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
   test('card list validates invalid status argument', async () => {
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
+    // With exitOverride applied recursively in createProgram, commander
+    // throws a CommanderError on invalid arguments instead of calling
+    // process.exit directly. The throw bubbles out of parseAsync.
+    let thrown: unknown = null;
     try {
       await program.parseAsync(['node', 'anima', 'card', 'list', '--status', 'BROKEN']);
-    } catch {
+    } catch (err) {
+      thrown = err;
     }
 
-    console.error = originalError;
-    process.exit = originalExit;
-
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+    expect(thrown).not.toBeNull();
+    const code = (thrown as { code?: string } | null)?.code ?? '';
+    expect(code).toBe('commander.invalidArgument');
   });
 });

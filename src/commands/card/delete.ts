@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 export function deleteCardCommand(): Command {
   return new Command('delete')
@@ -12,8 +12,8 @@ export function deleteCardCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.delete<Record<string, unknown>>(`/cards/${cardId}`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.cards.delete({ cardId });
 
         if (globals.json) {
           output.json(result);
@@ -22,7 +22,7 @@ export function deleteCardCommand(): Command {
 
         output.success(`Card ${cardId} deleted`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to delete card: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to delete card: ${error.message}`);

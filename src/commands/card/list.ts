@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type CardStatus = 'ACTIVE' | 'FROZEN' | 'CANCELED';
 
@@ -10,31 +10,6 @@ interface ListCardsOptions {
   status?: CardStatus;
   cursor?: string;
   limit?: number;
-}
-
-interface SpendLimits {
-  daily?: number;
-  monthly?: number;
-  perAuth?: number;
-  weekly?: number;
-  yearly?: number;
-  lifetime?: number;
-}
-
-interface Card {
-  id: string;
-  agentId: string;
-  label?: string;
-  status: string;
-  currency: string;
-  spendLimits?: SpendLimits;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-interface ListCardsResponse {
-  data: Card[];
-  nextCursor?: string;
 }
 
 function parseLimit(value: string): number {
@@ -53,8 +28,8 @@ function parseStatus(value: string): CardStatus {
   return upper;
 }
 
-function formatMoney(cents?: number): string {
-  if (cents === undefined) {
+function formatMoney(cents: number | null | undefined): string {
+  if (cents === undefined || cents === null) {
     return '-';
   }
   return `$${(cents / 100).toFixed(2)}`;
@@ -72,24 +47,14 @@ export function listCardsCommand(): Command {
       const globals = this.optsWithGlobals<ListCardsOptions & GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
-      const query: Record<string, string> = {};
-
-      if (opts.agent !== undefined) {
-        query.agentId = opts.agent;
-      }
-      if (opts.status !== undefined) {
-        query.status = opts.status;
-      }
-      if (opts.cursor !== undefined) {
-        query.cursor = opts.cursor;
-      }
-      if (opts.limit !== undefined) {
-        query.limit = String(opts.limit);
-      }
-
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<ListCardsResponse>('/cards', query);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.cards.list({
+          agentId: opts.agent,
+          status: opts.status,
+          cursor: opts.cursor,
+          limit: opts.limit ?? 20,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -98,22 +63,22 @@ export function listCardsCommand(): Command {
 
         output.table(
           ['ID', 'Agent', 'Label', 'Status', 'Currency', 'Daily Limit', 'Created At'],
-          result.data.map((card) => [
+          result.items.map((card) => [
             card.id,
             card.agentId,
             card.label ?? '-',
             card.status,
             card.currency,
-            formatMoney(card.spendLimits?.daily),
-            card.createdAt ?? '-',
+            formatMoney(card.spendLimitDaily),
+            card.createdAt,
           ]),
         );
 
-        if (result.nextCursor) {
-          output.info(`Next cursor: ${result.nextCursor}`);
+        if (result.cursor) {
+          output.info(`Next cursor: ${result.cursor}`);
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list cards: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to list cards: ${error.message}`);

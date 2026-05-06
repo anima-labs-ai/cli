@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type TransactionStatus =
   | 'PENDING'
@@ -17,22 +17,6 @@ interface TransactionsOptions {
   status?: TransactionStatus;
   cursor?: string;
   limit?: number;
-}
-
-interface Transaction {
-  id: string;
-  cardId: string;
-  agentId: string;
-  status: string;
-  amount: number;
-  currency?: string;
-  merchantName?: string;
-  createdAt?: string;
-}
-
-interface ListTransactionsResponse {
-  data: Transaction[];
-  nextCursor?: string;
 }
 
 function parseLimit(value: string): number {
@@ -77,27 +61,15 @@ export function transactionsCommand(): Command {
       const globals = this.optsWithGlobals<TransactionsOptions & GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
-      const query: Record<string, string> = {};
-
-      if (opts.card !== undefined) {
-        query.cardId = opts.card;
-      }
-      if (opts.agent !== undefined) {
-        query.agentId = opts.agent;
-      }
-      if (opts.status !== undefined) {
-        query.status = opts.status;
-      }
-      if (opts.cursor !== undefined) {
-        query.cursor = opts.cursor;
-      }
-      if (opts.limit !== undefined) {
-        query.limit = String(opts.limit);
-      }
-
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<ListTransactionsResponse>('/cards/transactions', query);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.cards.listTransactions({
+          cardId: opts.card,
+          agentId: opts.agent,
+          status: opts.status,
+          cursor: opts.cursor,
+          limit: opts.limit ?? 20,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -105,24 +77,23 @@ export function transactionsCommand(): Command {
         }
 
         output.table(
-          ['ID', 'Card', 'Agent', 'Status', 'Amount', 'Currency', 'Merchant', 'Created At'],
-          result.data.map((transaction) => [
+          ['ID', 'Card', 'Status', 'Amount', 'Currency', 'Merchant', 'Created At'],
+          result.items.map((transaction) => [
             transaction.id,
             transaction.cardId,
-            transaction.agentId,
             transaction.status,
-            formatMoney(transaction.amount),
-            transaction.currency ?? '-',
+            formatMoney(transaction.amountCents),
+            transaction.currency,
             transaction.merchantName ?? '-',
-            transaction.createdAt ?? '-',
+            transaction.createdAt,
           ]),
         );
 
-        if (result.nextCursor) {
-          output.info(`Next cursor: ${result.nextCursor}`);
+        if (result.cursor) {
+          output.info(`Next cursor: ${result.cursor}`);
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list transactions: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to list transactions: ${error.message}`);

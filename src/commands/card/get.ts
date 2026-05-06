@@ -1,35 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-interface SpendLimits {
-  daily?: number;
-  monthly?: number;
-  perAuth?: number;
-  weekly?: number;
-  yearly?: number;
-  lifetime?: number;
-}
-
-interface Card {
-  id: string;
-  agentId: string;
-  label?: string;
-  status: string;
-  currency: string;
-  spendLimits?: SpendLimits;
-  categories?: {
-    allowed?: string[];
-    blocked?: string[];
-  };
-  metadata?: Record<string, string>;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-function formatMoney(cents?: number): string | undefined {
-  if (cents === undefined) {
+function formatMoney(cents: number | null | undefined): string | undefined {
+  if (cents === undefined || cents === null) {
     return undefined;
   }
   return `$${(cents / 100).toFixed(2)}`;
@@ -44,8 +19,8 @@ export function getCardCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<Card>(`/cards/${cardId}`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.cards.get({ cardId });
 
         if (globals.json) {
           output.json(result);
@@ -55,23 +30,23 @@ export function getCardCommand(): Command {
         output.details([
           ['Card ID', result.id],
           ['Agent ID', result.agentId],
-          ['Label', result.label],
+          ['Label', result.label ?? '-'],
           ['Status', result.status],
           ['Currency', result.currency],
-          ['Daily Limit', formatMoney(result.spendLimits?.daily)],
-          ['Monthly Limit', formatMoney(result.spendLimits?.monthly)],
-          ['Per Auth Limit', formatMoney(result.spendLimits?.perAuth)],
-          ['Weekly Limit', formatMoney(result.spendLimits?.weekly)],
-          ['Yearly Limit', formatMoney(result.spendLimits?.yearly)],
-          ['Lifetime Limit', formatMoney(result.spendLimits?.lifetime)],
-          ['Allowed Categories', result.categories?.allowed?.join(', ')],
-          ['Blocked Categories', result.categories?.blocked?.join(', ')],
-          ['Metadata', result.metadata ? JSON.stringify(result.metadata) : undefined],
+          ['Daily Limit', formatMoney(result.spendLimitDaily) ?? '-'],
+          ['Monthly Limit', formatMoney(result.spendLimitMonthly) ?? '-'],
+          ['Per Auth Limit', formatMoney(result.spendLimitPerAuth) ?? '-'],
+          ['Weekly Limit', formatMoney(result.spendLimitWeekly) ?? '-'],
+          ['Yearly Limit', formatMoney(result.spendLimitYearly) ?? '-'],
+          ['Lifetime Limit', formatMoney(result.spendLimitLifetime) ?? '-'],
+          ['Allowed Categories', result.allowedMerchantCategories.length > 0 ? result.allowedMerchantCategories.join(', ') : '-'],
+          ['Blocked Categories', result.blockedMerchantCategories.length > 0 ? result.blockedMerchantCategories.join(', ') : '-'],
+          ['Metadata', Object.keys(result.metadata).length > 0 ? JSON.stringify(result.metadata) : '-'],
           ['Created At', result.createdAt],
           ['Updated At', result.updatedAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to get card: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to get card: ${error.message}`);
