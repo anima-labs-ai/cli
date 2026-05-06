@@ -1,60 +1,60 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-interface ScanResult {
-  safe: boolean;
-  threats: Threat[];
-  scannedAt?: string;
-}
-
-interface Threat {
-  type: string;
-  severity: string;
-  description: string;
+interface ScanOptions {
+  org?: string;
 }
 
 export function securityScanCommand(): Command {
   return new Command('scan')
-    .description('Scan content for security threats')
-    .argument('<content>', 'Content to scan (URL, email address, or text)')
-    .action(async function (this: Command, content: string) {
+    .description('Show scanner health status')
+    .option('--org <orgId>', 'Organization ID (derived from auth if omitted)')
+    .action(async function (this: Command) {
+      const opts = this.opts<ScanOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<ScanResult>('/security/scan', { content });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.security.scannerStatus({ orgId: opts.org });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        if (result.safe) {
-          output.success('Content scan passed — no threats detected');
+        output.details([
+          ['AI Scanner Active', result.aiScanner.active ? 'yes' : 'no'],
+          ['Provider', result.aiScanner.provider ?? '-'],
+          ['Fallback Reason', result.aiScanner.fallbackReason ?? '-'],
+        ]);
+
+        if (result.aiScanner.active) {
+          output.success('Scanner is operational');
         } else {
-          output.warn(`Content scan found ${result.threats.length} threat(s)`);
-        }
-
-        if (result.threats.length > 0) {
-          output.table(
-            ['Type', 'Severity', 'Description'],
-            result.threats.map((t) => [t.type, t.severity, t.description]),
-          );
-        }
-
-        if (result.scannedAt) {
-          output.info(`Scanned at: ${result.scannedAt}`);
+          output.warn('Scanner is not active');
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to scan content: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to scan content: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to fetch scanner status');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 403) {
+      output.error('Forbidden: you do not have access to this organization.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }
