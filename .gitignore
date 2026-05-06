@@ -15,3 +15,4 @@ binaries/
 # leaves a per-test fixture directory behind; never commit them.
 .test-auth-config/
 **/.test-auth-config/
+**/.test-*-config/

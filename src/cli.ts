@@ -143,6 +143,19 @@ if (isDirectExecution) {
 				) {
 					return;
 				}
+				// `excessArguments` fires when an option value contains spaces
+				// and the user didn't quote it: `--street1 my street` parses
+				// as `--street1=my` + an unexpected positional `street`. The
+				// raw message ("too many arguments... got 1") doesn't tell
+				// the user what actually went wrong — append a concrete hint.
+				if (commanderError.code === "commander.excessArguments") {
+					console.error(`Error: ${commanderError.message}`);
+					console.error(
+						'Hint: option values with spaces must be quoted. ' +
+							'Example: --street1 "123 Main St" (not --street1 123 Main St).',
+					);
+					process.exit(1);
+				}
 			}
 			if (error instanceof Error) {
 				console.error(`Error: ${error.message}`);

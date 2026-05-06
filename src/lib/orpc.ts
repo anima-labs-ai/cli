@@ -18,19 +18,27 @@ import { ORPCError, createORPCClient } from '@orpc/client';
 import type { ContractRouterClient } from '@orpc/contract';
 import { OpenAPILink } from '@orpc/openapi-client/fetch';
 
-import { type GlobalOptions, ensureAuthHeaders } from './auth.js';
+import { type GlobalOptions, ensureAuthHeaders, resolveApiUrl } from './auth.js';
+import { getAuthConfig } from './config.js';
 
 export { ORPCError };
 
 export type AnimaClient = ContractRouterClient<typeof contract>;
 
 /**
- * Build a typed oRPC client. Headers are resolved per-request so OAuth
- * tokens can refresh transparently between calls.
+ * Build a typed oRPC client. URL and headers are resolved per-request:
+ *   - `url()` reads the stored auth config so `--api-url` flag, env var,
+ *     and persisted `auth.apiUrl` (set during `am auth login`) all flow
+ *     into the request, matching legacy `getApiClient` behavior.
+ *   - `headers()` re-runs OAuth token refresh between calls so a long-
+ *     running CLI process never falls off the 1h access-token cliff.
  */
 export function createOrpcClient(opts: GlobalOptions): AnimaClient {
   const link = new OpenAPILink(contract, {
-    url: () => resolveBaseUrl(opts),
+    url: async () => {
+      const auth = await getAuthConfig();
+      return resolveApiUrl(opts, auth.apiUrl);
+    },
     headers: async () => ensureAuthHeaders(opts),
     // The API normalizes errors into {error:{code,message,details}} which
     // doesn't match oRPC's default {defined,code,status,message} shape.
@@ -65,7 +73,3 @@ export async function requireOrpcAuth(opts: GlobalOptions): Promise<AnimaClient>
   return createOrpcClient(opts);
 }
 
-function resolveBaseUrl(opts: GlobalOptions): string {
-  // Lazy import to avoid a circular dep with auth.ts.
-  return opts.apiUrl ?? process.env.ANIMA_API_URL ?? 'https://api.useanima.sh';
-}
