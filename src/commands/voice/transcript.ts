@@ -1,21 +1,8 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import pc from 'picocolors';
-
-interface TranscriptSegment {
-  speaker: string;
-  text: string;
-  startTime: number;
-  endTime: number;
-  confidence?: number;
-}
-
-interface TranscriptResponse {
-  callId: string;
-  segments: TranscriptSegment[];
-}
 
 function formatTimestamp(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -34,17 +21,15 @@ export function transcriptCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const response = await client.get<TranscriptResponse>(
-          `/voice/calls/${callId}/transcript`,
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.voice.getTranscript({ callId });
 
         if (globals.json) {
           output.json(response);
           return;
         }
 
-        let segments = response.segments ?? [];
+        let segments = response.segments;
 
         if (opts.speaker) {
           segments = segments.filter((s) => s.speaker === opts.speaker);
@@ -64,7 +49,7 @@ export function transcriptCommand(): Command {
 
         output.info(`\n${segments.length} segment(s)`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to get transcript: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

@@ -17,6 +17,7 @@ import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
 import { mppCommands } from "./commands/mpp/index.js";
 import { onboardCommand } from "./commands/onboard/index.js";
+import { orgCommands } from "./commands/org/index.js";
 import { demoCommand } from "./commands/demo/index.js";
 import { phoneCommands } from "./commands/phone/index.js";
 import { podCommands } from "./commands/pod/index.js";
@@ -89,6 +90,7 @@ export function createProgram(): Command {
 	program.addCommand(securityCommands());
 	program.addCommand(initCommand());
 	program.addCommand(onboardCommand());
+	program.addCommand(orgCommands());
 	program.addCommand(demoCommand());
 	program.addCommand(mppCommands());
 	program.addCommand(a2aCommands());
@@ -99,9 +101,21 @@ export function createProgram(): Command {
 	program.addCommand(completionCommand());
 	program.addCommand(generateCommand());
 
-	program.exitOverride();
+	// `exitOverride()` only takes effect on the command it's called on —
+	// it does NOT cascade to subcommands. Without applying it recursively,
+	// errors from `am address create ...` (a subcommand) would bypass the
+	// top-level catch block, so customizations like the
+	// "commander.excessArguments" hint below would never fire.
+	applyExitOverrideRecursive(program);
 
 	return program;
+}
+
+function applyExitOverrideRecursive(cmd: Command): void {
+	cmd.exitOverride();
+	for (const sub of cmd.commands) {
+		applyExitOverrideRecursive(sub);
+	}
 }
 
 const arg1 = process.argv[1] ?? "";
@@ -142,6 +156,26 @@ if (isDirectExecution) {
 					commanderError.code === "commander.version"
 				) {
 					return;
+				}
+				// `excessArguments` fires when an option value contains spaces
+				// and the user didn't quote it: `--street1 my street` parses
+				// as `--street1=my` + an unexpected positional `street`. The
+				// raw message ("too many arguments... got 1") doesn't tell
+				// the user what actually went wrong — append a concrete hint.
+				if (commanderError.code === "commander.excessArguments") {
+					console.error(
+						'Hint: option values with spaces must be quoted. ' +
+							'Example: --street1 "123 Main St" (not --street1 123 Main St).',
+					);
+					process.exit(1);
+				}
+				// Any other `commander.*` error (missing required option,
+				// invalid argument, unknown option, etc.) — commander has
+				// already printed its own `error: ...` line via writeErr.
+				// Re-printing as `Error: error: ...` produced an ugly
+				// double-stamp. Just exit.
+				if (commanderError.code.startsWith("commander.")) {
+					process.exit(1);
 				}
 			}
 			if (error instanceof Error) {

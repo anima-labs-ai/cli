@@ -1,15 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../../lib/auth.js';
-import { ApiError } from '../../../lib/api-client.js';
-
-interface VerifyDomainResponse {
-  id?: string;
-  domain?: string;
-  verified?: boolean;
-  status?: string;
-  [key: string]: unknown;
-}
+import { type GlobalOptions } from '../../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 
 export function verifyDomainCommand(): Command {
   return new Command('verify')
@@ -20,8 +12,9 @@ export function verifyDomainCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<VerifyDomainResponse>(`/domains/${id}/verify`, {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.domain.verify({
+          id,
           domainId: id,
         });
 
@@ -31,18 +24,30 @@ export function verifyDomainCommand(): Command {
         }
 
         output.details([
-          ['ID', result.id ?? id],
+          ['ID', result.id],
           ['Domain', result.domain],
           ['Status', result.status],
-          ['Verified', result.verified === undefined ? undefined : String(result.verified)],
+          ['Verified', result.verified ? 'Yes' : 'No'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to verify domain: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to verify domain: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to verify domain');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Domain not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

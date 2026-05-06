@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createProgram } from '../../cli.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
-import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const testConfigDir = join(import.meta.dir, '.test-extension-config');
@@ -17,16 +17,6 @@ mock.module('env-paths', () => ({
   }),
 }));
 
-function getChromeExtensionsPath(baseDir: string): string {
-  if (process.platform === 'darwin') {
-    return join(baseDir, 'Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Extensions');
-  }
-  if (process.platform === 'win32') {
-    return join(baseDir, 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'Extensions');
-  }
-  return join(baseDir, '.config', 'google-chrome', 'Default', 'Extensions');
-}
-
 function parseLastJsonLog(logSpy: ReturnType<typeof mock>): unknown {
   const calls = logSpy.mock.calls;
   const last = calls[calls.length - 1];
@@ -39,19 +29,8 @@ function parseLastJsonLog(logSpy: ReturnType<typeof mock>): unknown {
 
 describe('extension commands', () => {
   let program: Command;
-  let originalHome: string | undefined;
-  let originalUserProfile: string | undefined;
-  let originalLocalAppData: string | undefined;
 
   beforeEach(() => {
-    originalHome = process.env.HOME;
-    originalUserProfile = process.env.USERPROFILE;
-    originalLocalAppData = process.env.LOCALAPPDATA;
-
-    process.env.HOME = testConfigDir;
-    process.env.USERPROFILE = testConfigDir;
-    process.env.LOCALAPPDATA = join(testConfigDir, 'AppData', 'Local');
-
     resetPathsCache();
     setPathsOverride({
       config: testConfigDir,
@@ -60,114 +39,34 @@ describe('extension commands', () => {
       log: testConfigDir,
       temp: testConfigDir,
     });
-
     program = createProgram();
-
     mkdirSync(testConfigDir, { recursive: true });
-    mkdirSync(getChromeExtensionsPath(testConfigDir), { recursive: true });
   });
 
   afterEach(() => {
-    if (originalHome === undefined) {
-      Reflect.deleteProperty(process.env, 'HOME');
-    } else {
-      process.env.HOME = originalHome;
-    }
-
-    if (originalUserProfile === undefined) {
-      Reflect.deleteProperty(process.env, 'USERPROFILE');
-    } else {
-      process.env.USERPROFILE = originalUserProfile;
-    }
-
-    if (originalLocalAppData === undefined) {
-      Reflect.deleteProperty(process.env, 'LOCALAPPDATA');
-    } else {
-      process.env.LOCALAPPDATA = originalLocalAppData;
-    }
-
     rmSync(testConfigDir, { recursive: true, force: true });
   });
 
-  test('install creates extension directory', async () => {
-    await program.parseAsync(['node', 'anima', 'extension', 'install']);
-
-    expect(existsSync(join(testConfigDir, 'chrome-extension'))).toBe(true);
-  });
-
-  test('install writes manifest.json', async () => {
-    await program.parseAsync(['node', 'anima', 'extension', 'install']);
-
-    const manifest = JSON.parse(readFileSync(join(testConfigDir, 'chrome-extension', 'manifest.json'), 'utf-8')) as {
-      manifest_version: number;
-      name: string;
-      version: string;
-      description: string;
-      permissions: string[];
-      background: { service_worker: string };
-      action: { default_popup: string };
-    };
-
-    expect(manifest).toEqual({
-      manifest_version: 3,
-      name: 'Anima Pay',
-      version: '0.1.0',
-      description: 'Anima payment card autofill for AI agents',
-      permissions: ['activeTab', 'storage'],
-      background: { service_worker: 'background.js' },
-      action: { default_popup: 'popup.html' },
-    });
-  });
-
-  test('install writes background.js placeholder', async () => {
-    await program.parseAsync(['node', 'anima', 'extension', 'install']);
-
-    const backgroundJs = readFileSync(join(testConfigDir, 'chrome-extension', 'background.js'), 'utf-8');
-    expect(backgroundJs).toContain("chrome.runtime.onInstalled.addListener(() => { console.log('Anima Pay extension installed'); });");
-  });
-
-  test('install writes popup.html placeholder', async () => {
-    await program.parseAsync(['node', 'anima', 'extension', 'install']);
-
-    const popupHtml = readFileSync(join(testConfigDir, 'chrome-extension', 'popup.html'), 'utf-8');
-    expect(popupHtml).toContain('Anima Pay - Extension installed');
-  });
-
-  test('install writes extension bridge config', async () => {
-    await program.parseAsync(['node', 'anima', 'extension', 'install']);
-
-    const bridge = JSON.parse(readFileSync(join(testConfigDir, 'extension-config.json'), 'utf-8')) as {
-      installed: boolean;
-      extensionDir: string;
-      version: string;
-      installedAt: string;
-    };
-
-    expect(bridge.installed).toBe(true);
-    expect(bridge.extensionDir).toBe(join(testConfigDir, 'chrome-extension'));
-    expect(bridge.version).toBe('0.1.0');
-    expect(Number.isNaN(Date.parse(bridge.installedAt))).toBe(false);
-  });
-
-  test('install --force overwrites existing installation', async () => {
-    mkdirSync(join(testConfigDir, 'chrome-extension'), { recursive: true });
-    writeFileSync(join(testConfigDir, 'chrome-extension', 'manifest.json'), JSON.stringify({ name: 'Old' }, null, 2));
-    writeFileSync(join(testConfigDir, 'extension-config.json'), JSON.stringify({
-      installed: true,
-      extensionDir: join(testConfigDir, 'chrome-extension'),
-      version: '0.0.1',
-      installedAt: '2020-01-01T00:00:00.000Z',
-    }, null, 2));
-
-    await program.parseAsync(['node', 'anima', 'extension', 'install', '--force']);
-
-    const manifest = JSON.parse(readFileSync(join(testConfigDir, 'chrome-extension', 'manifest.json'), 'utf-8')) as { name: string; version: string };
-    expect(manifest.name).toBe('Anima Pay');
-    expect(manifest.version).toBe('0.1.0');
-  });
-
-  test('status shows installed extension info', async () => {
-    await program.parseAsync(['node', 'anima', 'extension', 'install']);
+  test('status shows installed extension info when bridge config is present', async () => {
+    // Seed the bridge config + a real extension directory. Previously this
+    // was set up by `am extension install` (now removed); the extension
+    // ships out-of-band, so the test directly fakes the on-disk state the
+    // status command reads.
+    const extensionDir = join(testConfigDir, 'chrome-extension');
+    mkdirSync(extensionDir, { recursive: true });
+    writeFileSync(
+      join(testConfigDir, 'extension-config.json'),
+      JSON.stringify(
+        {
+          installed: true,
+          extensionDir,
+          version: '0.1.0',
+          installedAt: '2026-05-06T00:00:00.000Z',
+        },
+        null,
+        2,
+      ),
+    );
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
@@ -186,8 +85,8 @@ describe('extension commands', () => {
 
     expect(payload.installed).toBe(true);
     expect(payload.version).toBe('0.1.0');
-    expect(payload.directory).toBe(join(testConfigDir, 'chrome-extension'));
-    expect(Number.isNaN(Date.parse(payload.installedAt))).toBe(false);
+    expect(payload.directory).toBe(extensionDir);
+    expect(payload.installedAt).toBe('2026-05-06T00:00:00.000Z');
   });
 
   test('status reports not installed when no config', async () => {

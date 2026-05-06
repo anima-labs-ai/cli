@@ -1,36 +1,49 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-type Severity = 'low' | 'medium' | 'high' | 'critical';
+type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+type EventType =
+  | 'PII_DETECTED'
+  | 'INJECTION_DETECTED'
+  | 'RATE_LIMITED'
+  | 'BLOCKED'
+  | 'APPROVED'
+  | 'REJECTED';
 
 interface EventsOptions {
+  org?: string;
+  agent?: string;
+  type?: EventType;
   severity?: Severity;
   limit?: number;
   cursor?: string;
 }
 
-interface SecurityEvent {
-  id: string;
-  type: string;
-  severity: string;
-  message: string;
-  source?: string;
-  timestamp?: string;
-}
-
-interface EventsResponse {
-  data: SecurityEvent[];
-  nextCursor?: string;
-}
-
 function parseSeverity(value: string): Severity {
-  const lower = value.toLowerCase();
-  if (lower !== 'low' && lower !== 'medium' && lower !== 'high' && lower !== 'critical') {
+  const upper = value.toUpperCase();
+  if (upper !== 'LOW' && upper !== 'MEDIUM' && upper !== 'HIGH' && upper !== 'CRITICAL') {
     throw new InvalidArgumentError('Severity must be low, medium, high, or critical');
   }
-  return lower;
+  return upper;
+}
+
+function parseType(value: string): EventType {
+  const upper = value.toUpperCase();
+  if (
+    upper !== 'PII_DETECTED' &&
+    upper !== 'INJECTION_DETECTED' &&
+    upper !== 'RATE_LIMITED' &&
+    upper !== 'BLOCKED' &&
+    upper !== 'APPROVED' &&
+    upper !== 'REJECTED'
+  ) {
+    throw new InvalidArgumentError(
+      'Type must be one of PII_DETECTED, INJECTION_DETECTED, RATE_LIMITED, BLOCKED, APPROVED, REJECTED',
+    );
+  }
+  return upper;
 }
 
 function parseLimit(value: string): number {
@@ -44,28 +57,31 @@ function parseLimit(value: string): number {
 export function securityEventsCommand(): Command {
   return new Command('events')
     .description('List security events')
+    .option('--org <orgId>', 'Organization ID (derived from auth if omitted)')
+    .option('--agent <agentId>', 'Filter events by agent')
+    .option(
+      '--type <type>',
+      'Filter by type (PII_DETECTED|INJECTION_DETECTED|RATE_LIMITED|BLOCKED|APPROVED|REJECTED)',
+      parseType,
+    )
     .option('--severity <level>', 'Filter by severity (low|medium|high|critical)', parseSeverity)
     .option('--limit <n>', 'Page size (1-100)', parseLimit)
     .option('--cursor <cursor>', 'Pagination cursor')
     .action(async function (this: Command) {
       const opts = this.opts<EventsOptions>();
-      const globals = this.optsWithGlobals<EventsOptions & GlobalOptions>();
+      const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
-      const query: Record<string, string> = {};
-      if (opts.severity !== undefined) {
-        query.severity = opts.severity;
-      }
-      if (opts.limit !== undefined) {
-        query.limit = String(opts.limit);
-      }
-      if (opts.cursor !== undefined) {
-        query.cursor = opts.cursor;
-      }
-
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<EventsResponse>('/security/events', query);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.security.listEvents({
+          orgId: opts.org,
+          agentId: opts.agent,
+          type: opts.type,
+          severity: opts.severity,
+          limit: opts.limit,
+          cursor: opts.cursor,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -73,27 +89,43 @@ export function securityEventsCommand(): Command {
         }
 
         output.table(
-          ['ID', 'Type', 'Severity', 'Message', 'Source', 'Timestamp'],
-          result.data.map((evt) => [
+          ['ID', 'Type', 'Severity', 'Agent', 'Message', 'Resolved', 'Created At'],
+          result.items.map((evt) => [
             evt.id,
             evt.type,
             evt.severity,
-            evt.message,
-            evt.source ?? '-',
-            evt.timestamp ?? '-',
+            evt.agentId ?? '-',
+            evt.messageId ?? '-',
+            evt.resolved ? 'yes' : 'no',
+            evt.createdAt instanceof Date ? evt.createdAt.toISOString() : String(evt.createdAt),
           ]),
+          {
+            summary: `Returned ${result.items.length} events.`,
+            pagination: {
+              has_more: result.pagination.hasMore,
+              next_cursor: result.pagination.nextCursor,
+            },
+          },
         );
-
-        if (result.nextCursor) {
-          output.info(`Next cursor: ${result.nextCursor}`);
-        }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to list security events: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to list security events: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to list security events');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 403) {
+      output.error('Forbidden: you do not have access to this organization.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

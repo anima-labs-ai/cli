@@ -413,7 +413,7 @@ async function loginWithApiKey(
   // `/orgs/me` validates the API key and returns the org. We use it as a
   // 200-OK probe + identity surface; `/auth/me` was the historical name and
   // never existed in prod.
-  const result = await client.get<{ id: string; name: string; slug: string }>('/orgs/me');
+  const result = await client.get<{ id: string; name: string; slug: string }>('/v1/orgs/me');
 
   await saveAuthConfig({
     apiKey,
@@ -439,7 +439,7 @@ async function loginWithCredentials(
     debug: globals.debug,
   });
 
-  const result = await client.post<LoginResponse>('/auth/login', { email, password });
+  const result = await client.post<LoginResponse>('/v1/auth/login', { email, password });
 
   await saveAuthConfig({
     token: result.token,

@@ -1,34 +1,43 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ValidateOptions {
   agent: string;
 }
 
-interface ValidateResponse {
-  valid: boolean;
-  normalizedAddress: Record<string, unknown> | null;
-  errors: string[];
-}
-
 export function validateAddressCommand(): Command {
   return new Command('validate')
-    .description('Validate an address against postal standards')
-    .argument('<id>', 'Address ID to validate')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .description(
+      'Validate one specific address against postal standards. ' +
+        'Validates a single address by its ID — not all addresses for an agent. ' +
+        'Find an address ID with `am address list --agent <agentId>`.',
+    )
+    .argument(
+      '<addressId>',
+      'ID of the address to validate (e.g. addr_xxx). Run `am address list --agent <agentId>` to find one.',
+    )
+    .requiredOption('--agent <agentId>', 'Agent that owns the address')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ am address list --agent agt_xxx          # find your address ids
+  $ am address validate addr_yyy --agent agt_xxx
+`,
+    )
     .action(async function (this: Command, addressId: string) {
       const opts = this.opts<ValidateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const response = await client.post<ValidateResponse>(
-          `/addresses/${addressId}/validate`,
-          { agentId: opts.agent },
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.address.validate({
+          id: addressId,
+          agentId: opts.agent,
+        });
 
         if (globals.json) {
           output.json(response);
@@ -39,14 +48,19 @@ export function validateAddressCommand(): Command {
           output.success('Address is valid');
         } else {
           output.error('Address validation failed');
-          if (response.errors.length > 0) {
-            for (const err of response.errors) {
-              output.info(`  - ${err}`);
+          if (response.suggestions.length > 0) {
+            for (const suggestion of response.suggestions) {
+              const street = suggestion.street2
+                ? `${suggestion.street1}, ${suggestion.street2}`
+                : suggestion.street1;
+              output.info(
+                `  - ${street}, ${suggestion.city}, ${suggestion.state} ${suggestion.postalCode} ${suggestion.country}`,
+              );
             }
           }
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to validate address: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

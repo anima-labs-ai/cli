@@ -1,30 +1,29 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-interface Webhook {
-  id: string;
-  url: string;
-  events: string[];
-  status: string;
-  createdAt?: string;
-}
-
-interface ListWebhooksResponse {
-  data: Webhook[];
+interface ListWebhooksOptions {
+  limit?: string;
+  cursor?: string;
 }
 
 export function listWebhooksCommand(): Command {
   return new Command('list')
     .description('List webhooks')
+    .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
+    .option('--cursor <cursor>', 'Pagination cursor')
     .action(async function (this: Command) {
+      const opts = this.opts<ListWebhooksOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<ListWebhooksResponse>('/webhooks');
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.webhook.list({
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          cursor: opts.cursor,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -32,22 +31,49 @@ export function listWebhooksCommand(): Command {
         }
 
         output.table(
-          ['ID', 'URL', 'Events', 'Status', 'Created At'],
-          result.data.map((wh) => [
+          ['ID', 'URL', 'Events', 'Active', 'Created At'],
+          result.items.map((wh) => [
             wh.id,
             wh.url,
             wh.events.join(', '),
-            wh.status,
-            wh.createdAt ?? '-',
+            wh.active ? 'Yes' : 'No',
+            wh.createdAt,
           ]),
+          {
+            summary: `Returned ${result.items.length} webhooks.`,
+            pagination: {
+              has_more: result.pagination.hasMore,
+              next_cursor: result.pagination.nextCursor,
+            },
+          },
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to list webhooks: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to list webhooks: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to list webhooks');
       }
     });
+}
+
+function validateLimit(value: string): string {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
+  }
+  return value;
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 403) {
+      output.error('Forbidden: you do not have access to list webhooks.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

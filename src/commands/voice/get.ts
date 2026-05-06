@@ -1,25 +1,9 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-interface CallDetails {
-  id: string;
-  agentId: string;
-  direction: string;
-  state: string;
-  from: string;
-  to: string;
-  tier: string;
-  voiceId?: string;
-  durationSeconds?: number | null;
-  startedAt: string;
-  endedAt?: string | null;
-  recordingUrl?: string;
-  metadata?: Record<string, unknown>;
-}
-
-function formatDuration(seconds?: number): string {
+function formatDuration(seconds?: number | null): string {
   if (seconds === undefined || seconds === null) return '-';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -35,8 +19,8 @@ export function getCallCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const call = await client.get<CallDetails>(`/voice/calls/${callId}`);
+        const orpc = await requireOrpcAuth(globals);
+        const call = await orpc.voice.getCall({ callId });
 
         if (globals.json) {
           output.json(call);
@@ -51,14 +35,13 @@ export function getCallCommand(): Command {
           ['From', call.from],
           ['To', call.to],
           ['Tier', call.tier],
-          ['Voice ID', call.voiceId ?? '-'],
-          ['Duration', formatDuration(call.durationSeconds ?? undefined)],
+          ['Duration', formatDuration(call.durationSeconds)],
           ['Started', new Date(call.startedAt).toLocaleString()],
           ['Ended', call.endedAt ? new Date(call.endedAt).toLocaleString() : '-'],
-          ['Recording', call.recordingUrl ?? 'None'],
+          ['End reason', call.endReason ?? '-'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to get call: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

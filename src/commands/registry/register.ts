@@ -1,73 +1,82 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface RegisterOptions {
-  did: string;
+  agentId: string;
   name: string;
   description?: string;
-  category?: string;
-  capabilities?: string;
-}
-
-interface RegistryAgent {
-  did: string;
-  name: string;
-  description: string | null;
-  category: string | null;
-  capabilities: string[];
-  verified: boolean;
-  createdAt: string;
+  tags?: string;
+  public?: boolean;
 }
 
 export function registerAgentCommand(): Command {
   return new Command('register')
     .description('Register an agent in the public registry')
-    .requiredOption('--did <did>', 'Agent DID')
-    .requiredOption('--name <name>', 'Display name')
-    .option('--description <desc>', 'Agent description')
-    .option('--category <category>', 'Category (e.g. assistant, tool, service)')
-    .option('--capabilities <caps>', 'Comma-separated capabilities')
+    .requiredOption('--agent-id <id>', 'Agent ID (CUID)')
+    .requiredOption('--name <name>', 'Display name (2-200 chars)')
+    .option('--description <desc>', 'Agent description (max 2000 chars)')
+    .option('--tags <tags>', 'Comma-separated tags (max 20)')
+    .option('--public', 'List the agent publicly')
     .action(async function (this: Command) {
       const opts = this.opts<RegisterOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const body: Record<string, unknown> = {
-          did: opts.did,
+        const orpc = await requireOrpcAuth(globals);
+        const entry = await orpc.registry.register({
+          agentId: opts.agentId,
           name: opts.name,
-        };
-        if (opts.description) body.description = opts.description;
-        if (opts.category) body.category = opts.category;
-        if (opts.capabilities) body.capabilities = opts.capabilities.split(',').map(s => s.trim());
-
-        const client = await requireAuth(globals);
-        const result = await client.post<RegistryAgent>('/registry/agents', body);
+          description: opts.description,
+          tags: opts.tags ? opts.tags.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
+          public: opts.public,
+        });
 
         if (globals.json) {
-          output.json(result);
+          output.json(entry);
           return;
         }
 
         output.details([
-          ['DID', result.did],
-          ['Name', result.name],
-          ['Description', result.description ?? '-'],
-          ['Category', result.category ?? '-'],
-          ['Capabilities', result.capabilities.join(', ') || '-'],
-          ['Verified', result.verified ? 'Yes' : 'No'],
-          ['Created', result.createdAt],
+          ['DID', entry.did],
+          ['Name', entry.name],
+          ['Description', entry.description ?? '-'],
+          ['Agent ID', entry.agentId],
+          ['Organization ID', entry.orgId],
+          ['Public', entry.public ? 'Yes' : 'No'],
+          ['Capabilities', entry.capabilities.join(', ') || '-'],
+          ['Tags', entry.tags.join(', ') || '-'],
+          ['Trust Score', String(entry.trustScore)],
+          ['KYA Level', entry.kyaLevel],
+          ['Verified', entry.verified ? 'Yes' : 'No'],
+          ['Listed At', entry.listedAt],
         ]);
-        output.success('Agent registered');
+        output.success(`Agent registered: ${entry.did}`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to register agent: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(error.message);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to register agent');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 403) {
+      output.error('Forbidden: you do not have access to this agent.');
+    } else if (error.status === 404) {
+      output.error('Agent not found.');
+    } else if (error.status === 409) {
+      output.error(`${context}: ${error.message}`);
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

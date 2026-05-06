@@ -1,14 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface SyncOptions {
   agent?: string;
-}
-
-interface SyncResponse {
-  success: true;
 }
 
 export function syncCommand(): Command {
@@ -21,20 +17,22 @@ export function syncCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<SyncResponse>('/vault/sync', {
-          agentId: opts.agent,
-        });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.sync({ agentId: opts.agent });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        output.success(`Vault synced for agent ${opts.agent}`);
+        output.success(`Vault synced for agent ${opts.agent ?? 'current'}`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to sync vault: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to sync vault: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to sync vault: ${error.message}`);
         }

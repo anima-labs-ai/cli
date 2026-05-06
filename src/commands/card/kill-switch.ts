@@ -1,25 +1,13 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface KillSwitchOptions {
   active?: boolean;
   inactive?: boolean;
   agent?: string;
   card?: string;
-}
-
-interface KillSwitchRequest {
-  active: boolean;
-  agentId?: string;
-  cardId?: string;
-}
-
-interface KillSwitchResponse {
-  active: boolean;
-  agentId?: string;
-  cardId?: string;
 }
 
 export function killSwitchCommand(): Command {
@@ -39,21 +27,13 @@ export function killSwitchCommand(): Command {
         process.exit(1);
       }
 
-      const body: KillSwitchRequest = {
-        active: opts.active ?? false,
-      };
-
-      if (opts.agent !== undefined) {
-        body.agentId = opts.agent;
-      }
-
-      if (opts.card !== undefined) {
-        body.cardId = opts.card;
-      }
-
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<KillSwitchResponse>('/cards/kill-switch', body);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.cards.killSwitch({
+          active: opts.active ?? false,
+          agentId: opts.agent,
+          cardId: opts.card,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -62,11 +42,10 @@ export function killSwitchCommand(): Command {
 
         output.details([
           ['Active', result.active ? 'true' : 'false'],
-          ['Agent ID', result.agentId],
-          ['Card ID', result.cardId],
+          ['Affected', String(result.affected)],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to toggle kill switch: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to toggle kill switch: ${error.message}`);

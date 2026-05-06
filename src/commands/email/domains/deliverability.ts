@@ -1,23 +1,9 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../../lib/auth.js';
-import { ApiError } from '../../../lib/api-client.js';
+import { type GlobalOptions } from '../../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 
-interface DeliverabilityResponse {
-  sent: number;
-  delivered: number;
-  bounced: number;
-  complained: number;
-  deliveryRate?: number;
-  bounceRate?: number;
-  complaintRate?: number;
-  [key: string]: unknown;
-}
-
-function formatRate(rate: number | undefined): string | undefined {
-  if (rate === undefined) {
-    return undefined;
-  }
+function formatRate(rate: number): string {
   return `${(rate * 100).toFixed(2)}%`;
 }
 
@@ -30,8 +16,8 @@ export function domainDeliverabilityCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<DeliverabilityResponse>(`/domains/${id}/deliverability`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.domain.deliverability({ id });
 
         if (globals.json) {
           output.json(result);
@@ -39,21 +25,34 @@ export function domainDeliverabilityCommand(): Command {
         }
 
         output.details([
+          ['Domain', result.domain],
           ['Sent', String(result.sent)],
           ['Delivered', String(result.delivered)],
           ['Bounced', String(result.bounced)],
           ['Complained', String(result.complained)],
-          ['Delivery Rate', formatRate(result.deliveryRate)],
           ['Bounce Rate', formatRate(result.bounceRate)],
           ['Complaint Rate', formatRate(result.complaintRate)],
+          ['Healthy', result.isHealthy ? 'Yes' : 'No'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to fetch deliverability: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to fetch deliverability: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to fetch deliverability');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Domain not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

@@ -1,23 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface BalanceOptions {
   agent: string;
-}
-
-interface WalletResponse {
-  id: string;
-  agentId: string;
-  address: string;
-  currency: string;
-  balance: number;
-  status: string;
-  spendLimitDaily: number | null;
-  spendLimitMonthly: number | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export function walletBalanceCommand(): Command {
@@ -30,31 +17,50 @@ export function walletBalanceCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<WalletResponse>(`/agents/${opts.agent}/wallet`);
+        const orpc = await requireOrpcAuth(globals);
+        const wallet = await orpc.wallet.get({ agentId: opts.agent });
 
         if (globals.json) {
-          output.json(result);
+          output.json(wallet);
           return;
         }
 
         output.details([
-          ['Wallet ID', result.id],
-          ['Agent ID', result.agentId],
-          ['Address', result.address],
-          ['Balance', `${result.balance} ${result.currency}`],
-          ['Status', result.status],
-          ['Daily Limit', result.spendLimitDaily !== null ? String(result.spendLimitDaily) : 'None'],
-          ['Monthly Limit', result.spendLimitMonthly !== null ? String(result.spendLimitMonthly) : 'None'],
-          ['Created', result.createdAt],
+          ['Wallet ID', wallet.id],
+          ['Agent ID', wallet.agentId],
+          ['Organization ID', wallet.orgId],
+          ['DID', wallet.did ?? '-'],
+          ['Balance', `${wallet.balance} ${wallet.currency}`],
+          ['Status', wallet.status],
+          ['Daily Limit', wallet.dailyLimit !== null ? `${wallet.dailyLimit} ${wallet.currency}` : 'None'],
+          ['Monthly Limit', wallet.monthlyLimit !== null ? `${wallet.monthlyLimit} ${wallet.currency}` : 'None'],
+          ['Spent Today', `${wallet.spentToday} ${wallet.currency}`],
+          ['Spent This Month', `${wallet.spentThisMonth} ${wallet.currency}`],
+          ['Total Spent', `${wallet.totalSpent} ${wallet.currency}`],
+          ['Created', wallet.createdAt],
+          ['Updated', wallet.updatedAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get wallet: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(error.message);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to get wallet');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 403) {
+      output.error('Forbidden: you do not have access to this wallet.');
+    } else if (error.status === 404) {
+      output.error('Wallet not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

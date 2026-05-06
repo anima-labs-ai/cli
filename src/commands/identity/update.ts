@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type IdentityStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 
@@ -11,26 +11,6 @@ interface UpdateIdentityOptions {
   slug?: string;
   status?: IdentityStatus;
   metadata?: string;
-}
-
-interface UpdateIdentityRequest {
-  id: string;
-  name?: string;
-  slug?: string;
-  status?: IdentityStatus;
-  metadata?: Record<string, unknown>;
-}
-
-interface Identity {
-  id: string;
-  orgId: string;
-  name: string;
-  slug: string;
-  email?: string;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  metadata?: unknown;
 }
 
 export function updateIdentityCommand(): Command {
@@ -52,46 +32,38 @@ export function updateIdentityCommand(): Command {
       }
 
       try {
-        const client = await requireAuth(globals);
-        const body: UpdateIdentityRequest = { id: opts.id };
-
-        if (opts.name) {
-          body.name = opts.name;
-        }
-
-        if (opts.slug) {
-          body.slug = opts.slug;
-        }
-
-        if (opts.status) {
-          body.status = opts.status;
-        }
-
-        if (opts.metadata) {
-          body.metadata = parseMetadata(opts.metadata);
-        }
-
-        const result = await client.patch<Identity>(`/agents/${opts.id}`, body);
+        const orpc = await requireOrpcAuth(globals);
+        const agent = await orpc.agent.update({
+          id: opts.id,
+          name: opts.name,
+          slug: opts.slug,
+          status: opts.status,
+          metadata: opts.metadata ? parseMetadata(opts.metadata) : undefined,
+        });
 
         if (globals.json) {
-          output.json(result);
+          output.json(agent);
           return;
         }
 
+        const primaryEmail = agent.emailIdentities.find((e) => e.isPrimary)?.email;
+        const primaryPhone = agent.phoneIdentities.find((p) => p.isPrimary)?.phoneNumber;
+
         output.details([
-          ['ID', result.id],
-          ['Organization ID', result.orgId],
-          ['Name', result.name],
-          ['Slug', result.slug],
-          ['Email', result.email],
-          ['Status', result.status],
-          ['Created At', result.createdAt],
-          ['Updated At', result.updatedAt],
-          ['Metadata', result.metadata ? JSON.stringify(result.metadata) : undefined],
+          ['ID', agent.id],
+          ['Organization ID', agent.orgId],
+          ['Name', agent.name],
+          ['Slug', agent.slug],
+          ['Status', agent.status],
+          ['API Key Prefix', agent.apiKeyPrefix ?? '-'],
+          ['Primary Email', primaryEmail ?? '-'],
+          ['Primary Phone', primaryPhone ?? '-'],
+          ['Updated At', agent.updatedAt],
+          ['Metadata', Object.keys(agent.metadata).length > 0 ? JSON.stringify(agent.metadata) : '-'],
         ]);
-        output.success(`Identity updated: ${result.id}`);
+        output.success(`Identity updated: ${agent.id}`);
       } catch (error: unknown) {
-        handleApiError(error, output, 'Failed to update identity');
+        handleOrpcError(error, output, 'Failed to update identity');
       }
     });
 }
@@ -101,11 +73,11 @@ function parseMetadata(raw: string): Record<string, unknown> {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new ApiError(400, 'INVALID_METADATA', 'Metadata must be valid JSON object');
+    throw new Error('Metadata must be valid JSON');
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new ApiError(400, 'INVALID_METADATA', 'Metadata must be a JSON object');
+    throw new Error('Metadata must be a JSON object');
   }
 
   return parsed as Record<string, unknown>;
@@ -118,8 +90,8 @@ function validateStatus(value: string): IdentityStatus {
   throw new InvalidArgumentError('status must be one of ACTIVE, SUSPENDED, DELETED');
 }
 
-function handleApiError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ApiError) {
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
     if (error.status === 401) {
       output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 404) {

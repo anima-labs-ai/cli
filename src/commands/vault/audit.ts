@@ -2,7 +2,8 @@ import { Command } from 'commander';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { requireOrpcAuth } from '../../lib/orpc.js';
 import { loadAnimaConfig } from '../../lib/secret-ref.js';
 
 interface AuditOptions {
@@ -150,23 +151,31 @@ export function auditCommand(): Command {
         // internal tokens that don't fit any public pattern.
         const vaultLiterals: string[] = [];
         try {
-          const client = await requireAuth(globals);
-          const { items } = await client.get<{ items: Array<Record<string, unknown>> }>(
-            '/vault/credentials',
-            { agentId: opts.agent, reveal: 'true' },
-          );
-          for (const cred of items) {
-            const login = cred.login as Record<string, unknown> | undefined;
-            const apiKey = cred.apiKey as Record<string, unknown> | undefined;
-            const oauth = cred.oauthToken as Record<string, unknown> | undefined;
-            const cert = cred.certificate as Record<string, unknown> | undefined;
-            for (const v of [
-              login?.password, login?.totp,
-              apiKey?.key,
-              oauth?.accessToken,
-              cert?.privateKey,
-            ]) {
-              if (typeof v === 'string' && v.length >= 12) vaultLiterals.push(v);
+          const orpc = await requireOrpcAuth(globals);
+          // The list endpoint always masks — to literal-match we need the
+          // plaintext, which means N+1: enumerate from list, then fetch each
+          // credential with reveal=true. Same pattern as `vault redact`.
+          // Requires a master key (mk_); agent keys get 403 on reveal.
+          const { items: stubs } = await orpc.vault.list({ agentId: opts.agent });
+          for (const stub of stubs) {
+            try {
+              const cred = await orpc.vault.get({
+                id: stub.id,
+                agentId: opts.agent,
+                reveal: true,
+              });
+              for (const v of [
+                cred.login?.password, cred.login?.totp,
+                cred.apiKey?.key,
+                cred.oauthToken?.accessToken,
+                cred.certificate?.privateKey,
+              ]) {
+                if (typeof v === 'string' && v.length >= 12) vaultLiterals.push(v);
+              }
+            } catch (err) {
+              output.debug(
+                `Skipping credential ${stub.id}: ${err instanceof Error ? err.message : String(err)}`,
+              );
             }
           }
           output.debug(`Loaded ${vaultLiterals.length} vault literals for matching`);

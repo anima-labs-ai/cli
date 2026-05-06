@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface DeleteIdentityOptions {
   id: string;
@@ -17,8 +17,8 @@ export function deleteIdentityCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.delete<Record<string, unknown>>(`/agents/${opts.id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.agent.delete({ id: opts.id });
 
         if (globals.json) {
           output.json(result);
@@ -27,13 +27,13 @@ export function deleteIdentityCommand(): Command {
 
         output.success(`Identity deleted: ${opts.id}`);
       } catch (error: unknown) {
-        handleApiError(error, output, 'Failed to delete identity');
+        handleOrpcError(error, output, 'Failed to delete identity');
       }
     });
 }
 
-function handleApiError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ApiError) {
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
     if (error.status === 401) {
       output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 404) {

@@ -1,23 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface CredentialsOptions {
   agent: string;
-}
-
-interface VerifiableCredential {
-  id: string;
-  type: string;
-  issuer: string;
-  subject: string;
-  issuanceDate: string;
-  expirationDate: string | null;
-}
-
-interface CredentialsResponse {
-  items: VerifiableCredential[];
 }
 
 export function listCredentialsCommand(): Command {
@@ -30,32 +17,33 @@ export function listCredentialsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const response = await client.get<CredentialsResponse>(`/agents/${opts.agent}/credentials`);
+        const orpc = await requireOrpcAuth(globals);
+        const credentials = await orpc.identity.listCredentials({ agentId: opts.agent });
 
         if (globals.json) {
-          output.json(response);
+          output.json(credentials);
           return;
         }
 
-        if (response.items.length === 0) {
+        if (credentials.length === 0) {
           output.info('No credentials found');
           return;
         }
 
         output.table(
-          ['ID', 'Type', 'Issuer', 'Subject', 'Issued', 'Expires'],
-          response.items.map((item) => [
-            item.id,
-            item.type,
-            item.issuer,
-            item.subject,
-            item.issuanceDate,
-            item.expirationDate ?? 'Never',
+          ['ID', 'Type', 'Issuer', 'Subject', 'Issued', 'Expires', 'Revoked'],
+          credentials.map((vc) => [
+            vc.id,
+            vc.type,
+            vc.issuerDid,
+            vc.subjectDid,
+            vc.issuedAt,
+            vc.expiresAt ?? 'Never',
+            vc.revoked ? 'Yes' : 'No',
           ]),
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list credentials: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

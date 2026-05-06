@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type PhoneCapability = 'sms' | 'mms' | 'voice';
 
@@ -10,17 +10,6 @@ interface SearchOptions {
   areaCode?: string;
   capabilities?: string;
   limit?: string;
-}
-
-interface SearchPhoneNumber {
-  phoneNumber: string;
-  region?: string;
-  capabilities?: { sms: boolean; mms: boolean; voice: boolean };
-  monthlyCost?: number;
-}
-
-interface SearchResponse {
-  items: SearchPhoneNumber[];
 }
 
 function parseCapabilities(input?: string): PhoneCapability[] | undefined {
@@ -49,9 +38,9 @@ function parseCapabilities(input?: string): PhoneCapability[] | undefined {
   return uniqueCapabilities as PhoneCapability[];
 }
 
-function parseLimit(input?: string): string {
+function parseLimit(input?: string): number {
   if (!input) {
-    return '10';
+    return 10;
   }
 
   const parsed = Number.parseInt(input, 10);
@@ -59,7 +48,7 @@ function parseLimit(input?: string): string {
     throw new Error('Invalid --limit. Must be an integer between 1 and 50');
   }
 
-  return String(parsed);
+  return parsed;
 }
 
 function normalizeCountryCode(input?: string): string {
@@ -88,20 +77,25 @@ export function searchPhoneNumbersCommand(): Command {
         const capabilities = parseCapabilities(opts.capabilities);
         const limit = parseLimit(opts.limit);
 
-        const params = new URLSearchParams();
-        params.set('countryCode', countryCode);
-        params.set('limit', limit);
+        const input: {
+          countryCode: string;
+          limit: number;
+          areaCode?: string;
+          capabilities?: PhoneCapability[];
+        } = {
+          countryCode,
+          limit,
+        };
+
         if (opts.areaCode) {
-          params.set('areaCode', opts.areaCode);
+          input.areaCode = opts.areaCode;
         }
         if (capabilities && capabilities.length > 0) {
-          for (const cap of capabilities) {
-            params.append('capabilities[]', cap);
-          }
+          input.capabilities = capabilities;
         }
 
-        const client = await requireAuth(globals);
-        const response = await client.get<SearchResponse>(`/phone/search?${params}`);
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.phone.search(input);
 
         if (globals.json) {
           output.json(response);
@@ -123,7 +117,7 @@ export function searchPhoneNumbersCommand(): Command {
           summary: items.length === 0 ? 'No available numbers found' : `Returned ${items.length} numbers`,
         });
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to search phone numbers: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

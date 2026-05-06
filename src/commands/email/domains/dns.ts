@@ -1,19 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../../lib/auth.js';
-import { ApiError } from '../../../lib/api-client.js';
-
-interface DomainDnsRecord {
-  type: string;
-  name: string;
-  value: string;
-  priority?: number;
-}
-
-interface DomainDnsResponse {
-  records: DomainDnsRecord[];
-  [key: string]: unknown;
-}
+import { type GlobalOptions } from '../../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 
 export function domainDnsCommand(): Command {
   return new Command('dns')
@@ -24,30 +12,50 @@ export function domainDnsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<DomainDnsResponse>(`/domains/${id}/dns-records`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.domain.dnsRecords({ id });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        output.table(
-          ['Type', 'Name', 'Value', 'Priority'],
-          result.records.map((record) => [
-            record.type,
-            record.name,
-            record.value,
-            record.priority === undefined ? '-' : String(record.priority),
-          ]),
-        );
-      } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to fetch DNS records: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to fetch DNS records: ${error.message}`);
+        const rows: string[][] = [];
+        rows.push(['TXT', result.txt.name, result.txt.value, '-']);
+        rows.push([
+          'MX',
+          result.mailFrom.name,
+          result.mailFrom.mx.value,
+          String(result.mailFrom.mx.priority),
+        ]);
+        rows.push(['TXT (MAIL FROM SPF)', result.mailFrom.name, result.mailFrom.spf, '-']);
+        for (const dkim of result.dkim) {
+          rows.push(['CNAME (DKIM)', dkim.name, dkim.value, '-']);
         }
-        process.exit(1);
+        rows.push(['MX', result.mx.name, result.mx.value, String(result.mx.priority)]);
+        rows.push(['TXT (SPF)', '@', result.spf, '-']);
+        rows.push(['TXT (DMARC)', '_dmarc', result.dmarc, '-']);
+
+        output.table(['Type', 'Name', 'Value', 'Priority'], rows);
+      } catch (error: unknown) {
+        handleOrpcError(error, output, 'Failed to fetch DNS records');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Domain not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

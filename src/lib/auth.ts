@@ -181,7 +181,7 @@ export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
         const refreshClient = new ApiClient({ baseUrl });
         try {
           const result = await refreshClient.post<{ token: string; refreshToken: string; expiresAt: string }>(
-            '/api/v1/auth/refresh',
+            '/v1/auth/refresh',
             { refreshToken: auth.refreshToken }
           );
           await saveAuthConfig({
@@ -213,4 +213,46 @@ export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
   }
 
   return getApiClient(opts);
+}
+
+// ── Header resolution for the typed oRPC client ─────────────────────────────
+//
+// The legacy `requireAuth` constructs an `ApiClient` with the token baked
+// into a static header bag. The oRPC link instead asks for headers per
+// request via an async callback — this lets us honor token rotation
+// (`ensureFreshOAuthToken`) between successive calls in the same process
+// without rebuilding the client. `ensureAuthHeaders` is the bridge.
+//
+// Pass `{ requireToken: true }` to mirror `requireAuth`'s eager check —
+// surfaces the "not authenticated" error before the first network call
+// instead of letting the server return a confusing 401.
+
+export async function ensureAuthHeaders(
+  opts: GlobalOptions,
+  { requireToken = false }: { requireToken?: boolean } = {},
+): Promise<Record<string, string>> {
+  const auth = await ensureFreshOAuthToken(opts);
+
+  const explicitApiKey = process.env.ANIMA_API_KEY;
+  const explicitToken = opts.token ?? process.env.ANIMA_TOKEN;
+  const token = explicitApiKey ? undefined : (explicitToken ?? auth.token);
+  const apiKey = explicitApiKey ?? auth.apiKey;
+
+  if (requireToken && !token && !apiKey) {
+    throw new ApiError(
+      401,
+      'NOT_AUTHENTICATED',
+      'Not authenticated. Run `anima auth login` to authenticate.',
+    );
+  }
+
+  const credential = token ?? apiKey;
+  const headers: Record<string, string> = {};
+  if (credential) {
+    headers.Authorization = `Bearer ${credential}`;
+  }
+  if (opts.test) {
+    headers['X-Anima-Test-Mode'] = '1';
+  }
+  return headers;
 }

@@ -1,21 +1,13 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type TokenScope = 'autofill' | 'proxy' | 'export';
 
-interface TokenResult {
-  token: string;
-  credentialId: string;
-  scope: TokenScope;
-  expiresAt: string;
-}
-
-interface VaultCredential {
-  id: string;
-  type: string;
-  name: string;
+function validateScope(value: string): TokenScope {
+  if (value === 'autofill' || value === 'proxy' || value === 'export') return value;
+  throw new InvalidArgumentError('scope must be one of autofill, proxy, export');
 }
 
 // ---------------------------------------------------------------------------
@@ -34,7 +26,7 @@ function tokenCreateCommand(): Command {
     .description('Create an ephemeral vault token')
     .option('--agent <id>', 'Agent ID')
     .requiredOption('--credential <id>', 'Credential ID')
-    .option('--scope <scope>', 'Token scope: autofill, proxy, export', 'autofill')
+    .option('--scope <scope>', 'Token scope: autofill, proxy, export', validateScope, 'autofill' as TokenScope)
     .option('--ttl <seconds>', 'TTL in seconds (10-3600, default 60)')
     .action(async function (this: Command) {
       const opts = this.opts<TokenCreateOptions>();
@@ -42,15 +34,13 @@ function tokenCreateCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const body: Record<string, unknown> = {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.createToken({
           agentId: opts.agent,
           credentialId: opts.credential,
           scope: opts.scope,
-        };
-        if (opts.ttl) body.ttlSeconds = Number(opts.ttl);
-
-        const result = await client.post<TokenResult>('/vault/token', body);
+          ttlSeconds: opts.ttl ? Number(opts.ttl) : undefined,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -65,8 +55,12 @@ function tokenCreateCommand(): Command {
           ['Expires', result.expiresAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to create token: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to create token: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to create token: ${error.message}`);
         }
@@ -93,10 +87,8 @@ function tokenExchangeCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<VaultCredential>('/vault/token/exchange', {
-          token: opts.vtk,
-        });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.exchangeToken({ token: opts.vtk });
 
         if (globals.json) {
           output.json(result);
@@ -110,8 +102,14 @@ function tokenExchangeCommand(): Command {
           ['Name', result.name],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to exchange token: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else if (error.status === 404 || error.status === 410) {
+            output.error('Token is invalid, expired, or already used.');
+          } else {
+            output.error(`Failed to exchange token: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to exchange token: ${error.message}`);
         }
@@ -140,14 +138,11 @@ function tokenRevokeCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<{ success: boolean; revoked: number }>(
-          '/vault/token/revoke',
-          {
-            agentId: opts.agent,
-            credentialId: opts.credential,
-          },
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.revokeTokens({
+          agentId: opts.agent,
+          credentialId: opts.credential,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -156,8 +151,12 @@ function tokenRevokeCommand(): Command {
 
         output.success(`Revoked ${result.revoked} token(s)`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to revoke tokens: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to revoke tokens: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to revoke tokens: ${error.message}`);
         }

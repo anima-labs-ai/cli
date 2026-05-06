@@ -25,7 +25,7 @@ export function orgListCommand(): Command {
     try {
       await requireAuth(globals);
       const api = await getApiClient(globals);
-      const result = await api.get<OrgListResponse | AdminOrg[]>('/admin/orgs');
+      const result = await api.get<OrgListResponse | AdminOrg[]>('/v1/admin/orgs');
 
       if (globals.json) {
         output.json(result);

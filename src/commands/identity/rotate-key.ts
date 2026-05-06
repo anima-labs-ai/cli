@@ -1,16 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface RotateIdentityKeyOptions {
   id: string;
-}
-
-interface RotateKeyResponse {
-  id: string;
-  apiKey: string;
-  rotatedAt?: string;
 }
 
 export function rotateIdentityKeyCommand(): Command {
@@ -23,8 +17,8 @@ export function rotateIdentityKeyCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<RotateKeyResponse>(`/agents/${opts.id}/rotate-key`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.agent.rotateKey({ id: opts.id });
 
         if (globals.json) {
           output.json(result);
@@ -32,19 +26,19 @@ export function rotateIdentityKeyCommand(): Command {
         }
 
         output.details([
-          ['ID', result.id],
+          ['ID', opts.id],
           ['API Key', result.apiKey],
-          ['Rotated At', result.rotatedAt],
+          ['Key Prefix', result.apiKeyPrefix],
         ]);
-        output.success(`API key rotated for identity: ${result.id}`);
+        output.success(`API key rotated for identity: ${opts.id}`);
       } catch (error: unknown) {
-        handleApiError(error, output, 'Failed to rotate identity API key');
+        handleOrpcError(error, output, 'Failed to rotate identity API key');
       }
     });
 }
 
-function handleApiError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ApiError) {
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
     if (error.status === 401) {
       output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 404) {

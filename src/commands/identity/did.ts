@@ -1,23 +1,15 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface DidOptions {
   agent: string;
 }
 
-interface DidDocument {
-  did: string;
-  agentId: string;
-  document: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export function getDidCommand(): Command {
   return new Command('did')
-    .description('Get the DID for an agent')
+    .description('Get the DID document for an agent')
     .requiredOption('--agent <id>', 'Agent ID')
     .action(async function (this: Command) {
       const opts = this.opts<DidOptions>();
@@ -25,23 +17,28 @@ export function getDidCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<DidDocument>(`/agents/${opts.agent}/did`);
+        const orpc = await requireOrpcAuth(globals);
+        const document = await orpc.identity.getAgentDid({ agentId: opts.agent });
 
         if (globals.json) {
-          output.json(result);
+          output.json(document);
           return;
         }
 
         output.details([
-          ['DID', result.did],
-          ['Agent ID', result.agentId],
-          ['Created', result.createdAt],
-          ['Updated', result.updatedAt],
+          ['DID', document.id],
+          ['Controller', document.controller ?? '-'],
+          ['Verification Methods', String(document.verificationMethod.length)],
+          ['Authentication Methods', String(document.authentication.length)],
+          ['Services', String(document.service?.length ?? 0)],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get DID: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 404) {
+            output.error('DID not found for this agent.');
+          } else {
+            output.error(`Failed to get DID: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(error.message);
         }

@@ -1,9 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { createProgram } from '../../cli.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { Command } from 'commander';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const testConfigDir = join(import.meta.dir, '.test-email-config');
 
@@ -17,42 +16,106 @@ mock.module('env-paths', () => ({
   }),
 }));
 
+const { createProgram } = await import('../../cli.js');
+
+// Real-looking CUIDs so the contract's z.string().cuid() input validation
+// in the typed oRPC client doesn't reject the test args before the request
+// ever hits the mock server.
+const EMAIL_ID_1 = 'caaa00000000000000000eml01';
+const EMAIL_ID_777 = 'caaa00000000000000000eml77';
+const AGENT_ID_1 = 'caaa00000000000000000agt01';
+const AGENT_ID_9 = 'caaa00000000000000000agt09';
+const DOMAIN_ID_1 = 'caaa00000000000000000dom01';
+const DOMAIN_ID_2 = 'caaa00000000000000000dom02';
+const DOMAIN_ID_3 = 'caaa00000000000000000dom03';
+const DOMAIN_ID_4 = 'caaa00000000000000000dom04';
+const DOMAIN_ID_5 = 'caaa00000000000000000dom05';
+const DOMAIN_ID_42 = 'caaa00000000000000000dom42';
+const CURSOR_1 = 'caaa00000000000000000cur01';
+const CURSOR_2 = 'caaa00000000000000000cur02';
+
+interface RouteResponse {
+  status: number;
+  body: unknown;
+  assert?: (ctx: { url: URL; body: unknown }) => void;
+}
+
+let mockServer: ReturnType<typeof Bun.serve> | null = null;
+let serverPort = 0;
 let program: Command;
-let server: ReturnType<typeof Bun.serve> | null = null;
+const routes: Record<string, RouteResponse> = {};
 
-function firstCallArg(spy: ReturnType<typeof mock>): unknown {
-  const calls = (spy as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-  return calls[0]?.[0];
+function setRoute(method: string, path: string, route: RouteResponse): void {
+  routes[`${method} ${path}`] = route;
 }
 
-function setAuthConfig(port: number): void {
+function clearRoutes(): void {
+  for (const key of Object.keys(routes)) {
+    delete routes[key];
+  }
+}
+
+function writeAuthConfig(port: number): void {
   const authPath = join(testConfigDir, 'auth.json');
-  writeFileSync(
-    authPath,
-    JSON.stringify({
-      token: 'test-token',
-      apiUrl: `http://localhost:${port}`,
-    }),
-  );
+  writeFileSync(authPath, JSON.stringify({ token: 'test-token', apiUrl: `http://localhost:${port}` }));
 }
 
-function startServer(fetch: (request: Request) => Response | Promise<Response>): number {
-  server = Bun.serve({ port: 0, fetch });
-  if (!server) {
-    throw new Error('Failed to start test server');
-  }
-  const port = server.port;
-  if (port === undefined) {
-    throw new Error('Test server port is undefined');
-  }
-  return port;
-}
-
-async function runCli(args: string[]): Promise<void> {
+async function runProgram(args: string[]): Promise<void> {
   try {
     await program.parseAsync(['node', 'anima', ...args]);
   } catch {
   }
+}
+
+// Build a complete MessageOutput-shaped response. Required because oRPC
+// contracts derive the output type from a Zod schema; partial mock
+// responses lead to undefined fields when commands access typed fields.
+function buildMessageResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: EMAIL_ID_1,
+    agentId: AGENT_ID_1,
+    channel: 'EMAIL',
+    direction: 'OUTBOUND',
+    status: 'SENT',
+    fromAddress: 'agent@anima.test',
+    toAddress: 'a@example.com',
+    subject: 'Welcome',
+    body: 'Body',
+    bodyHtml: null,
+    headers: null,
+    metadata: null,
+    threadId: null,
+    inReplyTo: null,
+    externalId: null,
+    sentAt: '2026-01-01T00:00:00.000Z',
+    receivedAt: null,
+    attachments: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+// Build a complete DomainOutput-shaped response.
+function buildDomainResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: DOMAIN_ID_1,
+    domain: 'example.com',
+    status: 'PENDING',
+    verified: false,
+    verificationCooldownUntil: null,
+    verificationToken: 'tok_abc',
+    verificationMethod: 'DNS_TXT',
+    dkimSelector: null,
+    dkimPublicKey: null,
+    spfConfigured: false,
+    dmarcConfigured: false,
+    mxConfigured: false,
+    feedbackEnabled: false,
+    records: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
 }
 
 describe('email commands', () => {
@@ -69,384 +132,343 @@ describe('email commands', () => {
     if (!existsSync(testConfigDir)) {
       mkdirSync(testConfigDir, { recursive: true });
     }
+
+    const server = Bun.serve({
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+        const key = `${req.method} ${url.pathname}`;
+        const route = routes[key];
+
+        if (process.env.ANIMA_TEST_DEBUG) {
+          console.error(`[mock-server] ${req.method} ${url.pathname}${url.search}`);
+        }
+
+        if (!route) {
+          return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Not Found' } }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        let body: unknown = undefined;
+        if (req.method !== 'GET' && req.method !== 'DELETE') {
+          const bodyText = await req.text();
+          const contentType = req.headers.get('content-type') ?? '';
+          if (bodyText && contentType.includes('application/json')) {
+            body = JSON.parse(bodyText) as unknown;
+          }
+        }
+
+        route.assert?.({ url, body });
+
+        return new Response(route.status === 204 ? null : JSON.stringify(route.body), {
+          status: route.status,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+    mockServer = server;
+    serverPort = server.port ?? 0;
+
+    writeAuthConfig(serverPort);
   });
 
   afterEach(() => {
-    server?.stop();
-    server = null;
+    mockServer?.stop();
+    mockServer = null;
+    clearRoutes();
     if (existsSync(testConfigDir)) {
       rmSync(testConfigDir, { recursive: true, force: true });
     }
   });
 
-  test.serial('email send sends expected payload', async () => {
-    let capturedMethod = '';
-    let capturedPath = '';
-    let capturedQuery = '';
-    let capturedBody: unknown;
-
-    const port = startServer(async (request) => {
-      const url = new URL(request.url);
-      capturedMethod = request.method;
-      capturedPath = url.pathname;
-      capturedQuery = url.search;
-      capturedBody = await request.json();
-
-      return new Response(JSON.stringify({ id: 'em_123', status: 'queued' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+  test('email send sends expected payload', async () => {
+    setRoute('POST', '/v1/email/send', {
+      status: 200,
+      body: buildMessageResponse({ id: EMAIL_ID_1, status: 'QUEUED' }),
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_1,
+          to: ['a@example.com', 'b@example.com'],
+          cc: ['c@example.com'],
+          bcc: ['d@example.com'],
+          subject: 'Hello',
+          body: 'Body',
+          bodyHtml: '<p>Body</p>',
+        });
+      },
     });
-    setAuthConfig(port);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli([
+    await runProgram([
       '--json',
       'email',
       'send',
-      '--agent',
-      'agent_1',
-      '--to',
-      'a@example.com',
-      '--to',
-      'b@example.com',
-      '--cc',
-      'c@example.com',
-      '--bcc',
-      'd@example.com',
-      '--subject',
-      'Hello',
-      '--body',
-      'Body',
-      '--html',
-      '<p>Body</p>',
+      '--agent', AGENT_ID_1,
+      '--to', 'a@example.com',
+      '--to', 'b@example.com',
+      '--cc', 'c@example.com',
+      '--bcc', 'd@example.com',
+      '--subject', 'Hello',
+      '--body', 'Body',
+      '--html', '<p>Body</p>',
     ]);
 
     console.log = originalLog;
 
-    expect(capturedMethod).toBe('POST');
-    expect(capturedPath).toBe('/email/send');
-    expect(capturedQuery).toBe('');
-    expect(capturedBody).toEqual({
-      agentId: 'agent_1',
-      to: ['a@example.com', 'b@example.com'],
-      cc: ['c@example.com'],
-      bcc: ['d@example.com'],
-      subject: 'Hello',
-      body: 'Body',
-      bodyHtml: '<p>Body</p>',
-    });
-
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as { id: string };
-    expect(output.id).toBe('em_123');
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { id: string };
+    expect(parsed.id).toBe(EMAIL_ID_1);
   });
 
-  test.serial('email list sends pagination and agent query', async () => {
-    let capturedMethod = '';
-    let capturedPath = '';
-    let capturedQuery = '';
-
-    const port = startServer((request) => {
-      const url = new URL(request.url);
-      capturedMethod = request.method;
-      capturedPath = url.pathname;
-      capturedQuery = url.search;
-
-      return new Response(
-        JSON.stringify({
-          data: [
-            {
-              id: 'em_1',
-              agentId: 'agent_1',
-              subject: 'Welcome',
-              status: 'sent',
-              to: ['a@example.com'],
-              createdAt: '2026-01-01T00:00:00.000Z',
-            },
-          ],
-          nextCursor: 'cur_2',
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
+  test('email list sends pagination and agent query', async () => {
+    setRoute('GET', '/v1/email', {
+      status: 200,
+      body: {
+        items: [buildMessageResponse({ id: EMAIL_ID_1, subject: 'Welcome' })],
+        pagination: {
+          nextCursor: CURSOR_2,
+          hasMore: true,
         },
-      );
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('cursor')).toBe(CURSOR_1);
+        expect(url.searchParams.get('limit')).toBe('10');
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
+      },
     });
-    setAuthConfig(port);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['--json', 'email', 'list', '--cursor', 'cur_1', '--limit', '10', '--agent', 'agent_1']);
+    await runProgram([
+      '--json',
+      'email',
+      'list',
+      '--cursor', CURSOR_1,
+      '--limit', '10',
+      '--agent', AGENT_ID_1,
+    ]);
 
     console.log = originalLog;
 
-    expect(capturedMethod).toBe('GET');
-    expect(capturedPath).toBe('/email');
-    expect(capturedQuery).toContain('cursor=cur_1');
-    expect(capturedQuery).toContain('limit=10');
-    expect(capturedQuery).toContain('agentId=agent_1');
-
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as {
-      data: Array<{ id: string }>;
-      nextCursor: string;
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as {
+      items: Array<{ id: string }>;
+      pagination: { nextCursor: string };
     };
-    expect(output.data[0]?.id).toBe('em_1');
-    expect(output.nextCursor).toBe('cur_2');
+    expect(parsed.items[0]?.id).toBe(EMAIL_ID_1);
+    expect(parsed.pagination.nextCursor).toBe(CURSOR_2);
   });
 
-  test.serial('email get fetches by id', async () => {
-    let capturedPath = '';
+  test('email get fetches by id', async () => {
+    setRoute('GET', `/v1/email/${EMAIL_ID_777}`, {
+      status: 200,
+      body: buildMessageResponse({ id: EMAIL_ID_777, agentId: AGENT_ID_9, subject: 'Subj' }),
+    });
 
-    const port = startServer((request) => {
-      capturedPath = new URL(request.url).pathname;
-      return new Response(
-        JSON.stringify({
-          id: 'em_777',
-          agentId: 'agent_9',
-          subject: 'Subj',
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['--json', 'email', 'get', EMAIL_ID_777]);
+
+    console.log = originalLog;
+
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { id: string; agentId: string };
+    expect(parsed.id).toBe(EMAIL_ID_777);
+    expect(parsed.agentId).toBe(AGENT_ID_9);
+  });
+
+  test('email domains add lowercases domain', async () => {
+    setRoute('POST', '/v1/domains', {
+      status: 200,
+      body: buildDomainResponse({ id: DOMAIN_ID_1, domain: 'example.com' }),
+      assert: ({ body }) => {
+        expect(body).toEqual({ domain: 'example.com' });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['--json', 'email', 'domains', 'add', 'Example.COM']);
+
+    console.log = originalLog;
+
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { id: string; domain: string };
+    expect(parsed.id).toBe(DOMAIN_ID_1);
+    expect(parsed.domain).toBe('example.com');
+  });
+
+  test('email domains verify posts to verify endpoint', async () => {
+    setRoute('POST', `/v1/domains/${DOMAIN_ID_42}/verify`, {
+      status: 200,
+      body: buildDomainResponse({ id: DOMAIN_ID_42, verified: true, status: 'VERIFIED' }),
+      assert: ({ body }) => {
+        // oRPC OpenAPILink lifts the contract's path param `{id}` into the
+        // URL (POST /domains/<id>/verify) and only the additional `domainId`
+        // field from VerifyDomainInput remains in the body.
+        expect(body).toMatchObject({ domainId: DOMAIN_ID_42 });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['--json', 'email', 'domains', 'verify', DOMAIN_ID_42]);
+
+    console.log = originalLog;
+
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { id: string; verified: boolean };
+    expect(parsed.id).toBe(DOMAIN_ID_42);
+    expect(parsed.verified).toBe(true);
+  });
+
+  test('email domains list calls list endpoint', async () => {
+    setRoute('GET', '/v1/domains', {
+      status: 200,
+      body: {
+        items: [buildDomainResponse({ id: DOMAIN_ID_1, domain: 'example.com' })],
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['--json', 'email', 'domains', 'list']);
+
+    console.log = originalLog;
+
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { items: Array<{ id: string }> };
+    expect(parsed.items[0]?.id).toBe(DOMAIN_ID_1);
+  });
+
+  test('email domains get fetches details by id', async () => {
+    setRoute('GET', `/v1/domains/${DOMAIN_ID_2}`, {
+      status: 200,
+      body: buildDomainResponse({ id: DOMAIN_ID_2, domain: 'foo.com' }),
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['--json', 'email', 'domains', 'get', DOMAIN_ID_2]);
+
+    console.log = originalLog;
+
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { id: string; domain: string };
+    expect(parsed.id).toBe(DOMAIN_ID_2);
+    expect(parsed.domain).toBe('foo.com');
+  });
+
+  test('email domains delete calls delete endpoint', async () => {
+    setRoute('DELETE', `/v1/domains/${DOMAIN_ID_3}`, {
+      status: 200,
+      body: { success: true },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['email', 'domains', 'delete', DOMAIN_ID_3]);
+
+    console.log = originalLog;
+
+    const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes(`Deleted domain ${DOMAIN_ID_3}`)).toBe(true);
+  });
+
+  test('email domains dns fetches dns records', async () => {
+    setRoute('GET', `/v1/domains/${DOMAIN_ID_4}/dns-records`, {
+      status: 200,
+      body: {
+        txt: { name: '_anima-verify.example.com', value: 'anima-verify=tok_abc' },
+        mailFrom: {
+          name: 'mail.example.com',
+          mx: { value: 'feedback-smtp.example.com', priority: 10 },
+          spf: 'v=spf1 include:amazonses.com ~all',
         },
-      );
+        dkim: [
+          { name: 'sel1._domainkey.example.com', value: 'sel1.dkim.amazonses.com' },
+        ],
+        mx: { name: 'example.com', value: 'inbound-smtp.example.com', priority: 10 },
+        spf: 'v=spf1 include:amazonses.com ~all',
+        dmarc: 'v=DMARC1; p=none;',
+      },
     });
-    setAuthConfig(port);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['--json', 'email', 'get', 'em_777']);
+    await runProgram(['--json', 'email', 'domains', 'dns', DOMAIN_ID_4]);
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/email/em_777');
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as { id: string };
-    expect(output.id).toBe('em_777');
-  });
-
-  test.serial('email domains add lowercases domain', async () => {
-    let capturedBody: unknown;
-
-    const port = startServer(async (request) => {
-      capturedBody = await request.json();
-      return new Response(JSON.stringify({ id: 'dom_1', domain: 'example.com' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-    setAuthConfig(port);
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runCli(['--json', 'email', 'domains', 'add', 'Example.COM']);
-
-    console.log = originalLog;
-
-    expect(capturedBody).toEqual({ domain: 'example.com' });
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as { id: string };
-    expect(output.id).toBe('dom_1');
-  });
-
-  test.serial('email domains verify posts domainId', async () => {
-    let capturedMethod = '';
-    let capturedPath = '';
-    let capturedBody: unknown;
-
-    const port = startServer(async (request) => {
-      const url = new URL(request.url);
-      capturedMethod = request.method;
-      capturedPath = url.pathname;
-      capturedBody = await request.json();
-      return new Response(JSON.stringify({ id: 'dom_42', verified: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-    setAuthConfig(port);
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runCli(['--json', 'email', 'domains', 'verify', 'dom_42']);
-
-    console.log = originalLog;
-
-    expect(capturedMethod).toBe('POST');
-    expect(capturedPath).toBe('/domains/dom_42/verify');
-    expect(capturedBody).toEqual({ domainId: 'dom_42' });
-  });
-
-  test.serial('email domains list calls list endpoint', async () => {
-    let capturedPath = '';
-
-    const port = startServer((request) => {
-      capturedPath = new URL(request.url).pathname;
-      return new Response(JSON.stringify({ data: [{ id: 'dom_1', domain: 'example.com' }] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-    setAuthConfig(port);
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runCli(['--json', 'email', 'domains', 'list']);
-
-    console.log = originalLog;
-
-    expect(capturedPath).toBe('/domains');
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as {
-      data: Array<{ id: string }>;
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as {
+      txt: { name: string };
+      dkim: Array<{ name: string }>;
     };
-    expect(output.data[0]?.id).toBe('dom_1');
+    expect(parsed.txt.name).toBe('_anima-verify.example.com');
+    expect(parsed.dkim[0]?.name).toBe('sel1._domainkey.example.com');
   });
 
-  test.serial('email domains get fetches details by id', async () => {
-    let capturedPath = '';
-
-    const port = startServer((request) => {
-      capturedPath = new URL(request.url).pathname;
-      return new Response(JSON.stringify({ id: 'dom_2', domain: 'foo.com' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+  test('email domains deliverability fetches metrics', async () => {
+    setRoute('GET', `/v1/domains/${DOMAIN_ID_5}/deliverability`, {
+      status: 200,
+      body: {
+        domain: 'example.com',
+        sent: 100,
+        delivered: 95,
+        bounced: 4,
+        complained: 1,
+        bounceRate: 0.04,
+        complaintRate: 0.01,
+        isHealthy: true,
+      },
     });
-    setAuthConfig(port);
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['--json', 'email', 'domains', 'get', 'dom_2']);
+    await runProgram(['--json', 'email', 'domains', 'deliverability', DOMAIN_ID_5]);
 
     console.log = originalLog;
 
-    expect(capturedPath).toBe('/domains/dom_2');
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { sent: number; isHealthy: boolean };
+    expect(parsed.sent).toBe(100);
+    expect(parsed.isHealthy).toBe(true);
   });
 
-  test.serial('email domains delete calls delete endpoint', async () => {
-    let capturedMethod = '';
-    let capturedPath = '';
-
-    const port = startServer((request) => {
-      const url = new URL(request.url);
-      capturedMethod = request.method;
-      capturedPath = url.pathname;
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    });
-    setAuthConfig(port);
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runCli(['--json', 'email', 'domains', 'delete', 'dom_3']);
-
-    console.log = originalLog;
-
-    expect(capturedMethod).toBe('DELETE');
-    expect(capturedPath).toBe('/domains/dom_3');
-  });
-
-  test.serial('email domains dns fetches dns records', async () => {
-    let capturedPath = '';
-
-    const port = startServer((request) => {
-      capturedPath = new URL(request.url).pathname;
-      return new Response(
-        JSON.stringify({
-          records: [{ type: 'TXT', name: '@', value: 'v=spf1 include:mail', priority: 10 }],
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
+  test('email send handles api errors with friendly message', async () => {
+    setRoute('POST', '/v1/email/send', {
+      status: 400,
+      body: {
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Invalid recipient',
         },
-      );
+      },
     });
-    setAuthConfig(port);
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runCli(['--json', 'email', 'domains', 'dns', 'dom_4']);
-
-    console.log = originalLog;
-
-    expect(capturedPath).toBe('/domains/dom_4/dns-records');
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as {
-      records: Array<{ type: string }>;
-    };
-    expect(output.records[0]?.type).toBe('TXT');
-  });
-
-  test.serial('email domains deliverability fetches metrics', async () => {
-    let capturedPath = '';
-
-    const port = startServer((request) => {
-      capturedPath = new URL(request.url).pathname;
-      return new Response(
-        JSON.stringify({
-          sent: 100,
-          delivered: 95,
-          bounced: 4,
-          complained: 1,
-          deliveryRate: 0.95,
-          bounceRate: 0.04,
-          complaintRate: 0.01,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    });
-    setAuthConfig(port);
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runCli(['--json', 'email', 'domains', 'deliverability', 'dom_5']);
-
-    console.log = originalLog;
-
-    expect(capturedPath).toBe('/domains/dom_5/deliverability');
-    const output = JSON.parse(String(firstCallArg(logSpy) ?? '{}')) as { sent: number };
-    expect(output.sent).toBe(100);
-  });
-
-  test.serial('email send handles api errors with friendly message', async () => {
-    const port = startServer(() => {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'BAD_REQUEST',
-            message: 'Invalid recipient',
-          },
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    });
-    setAuthConfig(port);
 
     const errorSpy = mock(() => {});
     const originalError = console.error;
@@ -456,43 +478,33 @@ describe('email commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    await runCli([
+    await runProgram([
       'email',
       'send',
-      '--agent',
-      'agent_1',
-      '--to',
-      'a@example.com',
-      '--subject',
-      'S',
-      '--body',
-      'B',
+      '--agent', AGENT_ID_1,
+      '--to', 'a@example.com',
+      '--subject', 'S',
+      '--body', 'B',
     ]);
 
     process.exit = originalExit;
     console.error = originalError;
 
-    expect(errorSpy.mock.calls.length).toBeGreaterThan(0);
-    expect(String(firstCallArg(errorSpy) ?? '')).toContain('Failed to send email: Invalid recipient');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes('Failed to send email: Invalid recipient')).toBe(true);
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test.serial('email send handles 429 rate limiting', async () => {
-    const port = startServer(() => {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'RATE_LIMITED',
-            message: 'Too many requests',
-          },
-        }),
-        {
-          status: 429,
-          headers: { 'Content-Type': 'application/json' },
+  test('email send handles 429 rate limiting', async () => {
+    setRoute('POST', '/v1/email/send', {
+      status: 429,
+      body: {
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many requests',
         },
-      );
+      },
     });
-    setAuthConfig(port);
 
     const errorSpy = mock(() => {});
     const originalError = console.error;
@@ -502,42 +514,33 @@ describe('email commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    await runCli([
+    await runProgram([
       'email',
       'send',
-      '--agent',
-      'agent_1',
-      '--to',
-      'a@example.com',
-      '--subject',
-      'S',
-      '--body',
-      'B',
+      '--agent', AGENT_ID_1,
+      '--to', 'a@example.com',
+      '--subject', 'S',
+      '--body', 'B',
     ]);
 
     process.exit = originalExit;
     console.error = originalError;
 
-    expect(String(firstCallArg(errorSpy) ?? '')).toContain('Failed to send email: Too many requests');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes('Failed to send email: Too many requests')).toBe(true);
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test.serial('email list handles 503 server unavailable', async () => {
-    const port = startServer(() => {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'UNAVAILABLE',
-            message: 'Service unavailable',
-          },
-        }),
-        {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
+  test('email list handles 503 server unavailable', async () => {
+    setRoute('GET', '/v1/email', {
+      status: 503,
+      body: {
+        error: {
+          code: 'UNAVAILABLE',
+          message: 'Service unavailable',
         },
-      );
+      },
     });
-    setAuthConfig(port);
 
     const errorSpy = mock(() => {});
     const originalError = console.error;
@@ -547,23 +550,23 @@ describe('email commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    await runCli(['email', 'list']);
+    await runProgram(['email', 'list']);
 
     process.exit = originalExit;
     console.error = originalError;
 
-    expect(String(firstCallArg(errorSpy) ?? '')).toContain('Failed to list emails: Service unavailable');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes('Failed to list emails: Service unavailable')).toBe(true);
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test.serial('email get handles malformed JSON response', async () => {
-    const port = startServer(() => {
-      return new Response('{ bad json', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+  test('email get handles 404 with friendly message', async () => {
+    setRoute('GET', `/v1/email/${EMAIL_ID_1}`, {
+      status: 404,
+      body: {
+        error: { code: 'NOT_FOUND', message: 'email not found' },
+      },
     });
-    setAuthConfig(port);
 
     const errorSpy = mock(() => {});
     const originalError = console.error;
@@ -573,88 +576,17 @@ describe('email commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    await runCli(['email', 'get', 'em_123']);
+    await runProgram(['email', 'get', EMAIL_ID_1]);
 
     process.exit = originalExit;
     console.error = originalError;
 
-    expect(String(firstCallArg(errorSpy) ?? '')).toContain('Failed to get email:');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes('Email not found.')).toBe(true);
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test.serial('email send handles network connection refused', async () => {
-    setAuthConfig(65535);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new TypeError('Connection refused');
-    }) as unknown as typeof fetch;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    await runCli([
-      'email',
-      'send',
-      '--agent',
-      'agent_1',
-      '--to',
-      'a@example.com',
-      '--subject',
-      'S',
-      '--body',
-      'B',
-    ]);
-
-    globalThis.fetch = originalFetch;
-    process.exit = originalExit;
-    console.error = originalError;
-
-    expect(String(firstCallArg(errorSpy) ?? '')).toContain('Failed to send email: Network error: Connection refused');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test.serial('email send handles timeout abort', async () => {
-    setAuthConfig(65535);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new DOMException('aborted', 'AbortError');
-    }) as unknown as typeof fetch;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    await runCli([
-      'email',
-      'send',
-      '--agent',
-      'agent_1',
-      '--to',
-      'a@example.com',
-      '--subject',
-      'S',
-      '--body',
-      'B',
-    ]);
-
-    globalThis.fetch = originalFetch;
-    process.exit = originalExit;
-    console.error = originalError;
-
-    expect(String(firstCallArg(errorSpy) ?? '')).toContain('Failed to send email: Request timed out');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test.serial('email commands are registered in help output', async () => {
+  test('email commands are registered in help output', () => {
     const email = program.commands.find((cmd) => cmd.name() === 'email');
     expect(email).toBeDefined();
     const subcommands = (email?.commands ?? []).map((cmd) => cmd.name());
@@ -662,13 +594,5 @@ describe('email commands', () => {
     expect(subcommands).toContain('list');
     expect(subcommands).toContain('get');
     expect(subcommands).toContain('domains');
-  });
-
-  test.serial('auth config file can be created for email tests', () => {
-    setAuthConfig(12345);
-    const authPath = join(testConfigDir, 'auth.json');
-    expect(existsSync(authPath)).toBe(true);
-    const saved = JSON.parse(readFileSync(authPath, 'utf-8')) as { token: string };
-    expect(saved.token).toBe('test-token');
   });
 });

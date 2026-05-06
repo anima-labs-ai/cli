@@ -25,7 +25,7 @@ export function keyRotateCommand(): Command {
       try {
         await requireAuth(globals);
         const api = await getApiClient(globals);
-        const result = await api.post<RotateKeyResponse>('/admin/keys/rotate', { org: opts.org });
+        const result = await api.post<RotateKeyResponse>('/v1/admin/keys/rotate', { org: opts.org });
 
         if (globals.json) {
           output.json(result);

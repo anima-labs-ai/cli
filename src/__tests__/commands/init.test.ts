@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
 import { createProgram } from "../../cli.js";
-import { resetPathsCache, setPathsOverride } from "../../lib/config.js";
+import { getAuthConfig, resetPathsCache, setPathsOverride } from "../../lib/config.js";
 
 const testConfigDir = join(import.meta.dir, ".test-init-config");
 
@@ -17,8 +17,11 @@ mock.module("env-paths", () => ({
 	}),
 }));
 
-function readAuthConfig(): Record<string, unknown> {
-	return JSON.parse(readFileSync(join(testConfigDir, "auth.json"), "utf-8"));
+// Goes through the public API (file + keychain) since secrets no longer
+// live solely in auth.json — they're split between disk metadata and a
+// platform-native (or in-memory, in tests) credential store.
+async function readAuthConfig(): Promise<Record<string, unknown>> {
+	return (await getAuthConfig()) as Record<string, unknown>;
 }
 
 function readAppConfig(): Record<string, unknown> {
@@ -58,7 +61,7 @@ describe("init command", () => {
 			"ak_test_key_12345",
 		]);
 
-		const auth = readAuthConfig();
+		const auth = await readAuthConfig();
 		expect(auth.apiKey).toBe("ak_test_key_12345");
 		expect(auth.apiUrl).toBe("https://api.useanima.sh");
 	});
@@ -208,7 +211,7 @@ describe("init command", () => {
 			"table",
 		]);
 
-		const auth = readAuthConfig();
+		const auth = await readAuthConfig();
 		const config = readAppConfig();
 
 		expect(auth.token).toBe("existing-token");

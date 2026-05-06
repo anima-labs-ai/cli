@@ -1,25 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-
-type PhoneCapability = 'sms' | 'mms' | 'voice';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ListOptions {
   agent: string;
-}
-
-interface ProvisionedPhoneNumber {
-  id: string;
-  phoneNumber: string;
-  provider: string;
-  capabilities: { sms: boolean; mms: boolean; voice: boolean };
-  isPrimary: boolean;
-  tenDlcStatus: string;
-}
-
-interface ListResponse {
-  items: ProvisionedPhoneNumber[];
 }
 
 export function listPhoneNumbersCommand(): Command {
@@ -32,8 +17,8 @@ export function listPhoneNumbersCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const response = await client.get<ListResponse>('/phone/numbers', { agentId: opts.agent });
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.phone.list({ agentId: opts.agent });
 
         if (globals.json) {
           output.json(response);
@@ -59,7 +44,7 @@ export function listPhoneNumbersCommand(): Command {
           }),
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list phone numbers: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

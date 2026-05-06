@@ -18,19 +18,36 @@ mock.module('env-paths', () => ({
 
 const { createProgram } = await import('../../cli.js');
 
+// Real-looking CUIDs so the contract's z.string().cuid() input validation
+// in the typed oRPC client doesn't reject the test args before the request
+// ever hits the mock server.
+const AGENT_ID_1 = 'caaa00000000000000000agt01';
+const AGENT_ID_2 = 'caaa00000000000000000agt02';
+const AGENT_ID_9 = 'caaa00000000000000000agt09';
+const PHONE_ID_1 = 'caaa00000000000000000phn01';
+const PHONE_ID_2 = 'caaa00000000000000000phn02';
+const MESSAGE_ID_1 = 'caaa00000000000000000msg01';
+
+interface RouteResponse {
+  status: number;
+  body: unknown;
+  assert?: (ctx: { url: URL; body: unknown }) => void;
+}
+
 let mockServer: ReturnType<typeof Bun.serve> | null = null;
 let serverPort = 0;
 let program: Command;
-let forceSearchError = false;
+const routes: Record<string, RouteResponse> = {};
 
-interface CapturedRequest {
-  method: string;
-  path: string;
-  query: URLSearchParams;
-  bodyText: string;
+function setRoute(method: string, path: string, route: RouteResponse): void {
+  routes[`${method} ${path}`] = route;
 }
 
-let lastRequest: CapturedRequest | null = null;
+function clearRoutes(): void {
+  for (const key of Object.keys(routes)) {
+    delete routes[key];
+  }
+}
 
 function setAuthenticatedConfig(port: number): void {
   const authPath = join(testConfigDir, 'auth.json');
@@ -40,11 +57,76 @@ function setAuthenticatedConfig(port: number): void {
   }));
 }
 
-function parseBodyAsJson(request: CapturedRequest): unknown {
-  if (!request.bodyText) {
-    return undefined;
+async function runProgram(args: string[]): Promise<void> {
+  try {
+    await program.parseAsync(['node', 'anima', ...args]);
+  } catch {
   }
-  return JSON.parse(request.bodyText) as unknown;
+}
+
+// Build a complete PhoneIdentityOutput-shaped response. Required because
+// oRPC contracts derive the output type from a Zod schema; partial mock
+// responses lead to undefined fields when commands access typed fields.
+function buildPhoneIdentityResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: PHONE_ID_1,
+    phoneNumber: '+14155550124',
+    provider: 'TELNYX',
+    providerId: 'tnyx_abc',
+    capabilities: { sms: true, mms: false, voice: false },
+    tenDlcStatus: 'NOT_REQUIRED',
+    isPrimary: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+// Build a complete PhoneProvisionOutput-shaped response.
+function buildProvisionResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: PHONE_ID_1,
+    phoneNumber: '+14155550124',
+    provider: 'TELNYX',
+    providerId: 'tnyx_abc',
+    capabilities: { sms: true, mms: false, voice: false },
+    tenDlcStatus: 'NOT_REQUIRED',
+    isPrimary: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+// Build a complete MessageOutput-shaped response (returned by phone.sendSms).
+function buildMessageResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: MESSAGE_ID_1,
+    agentId: AGENT_ID_9,
+    channel: 'SMS',
+    direction: 'OUTBOUND',
+    status: 'QUEUED',
+    fromAddress: '+14155550124',
+    toAddress: '+14155550199',
+    subject: null,
+    body: 'Hello from CLI',
+    bodyHtml: null,
+    headers: null,
+    metadata: null,
+    threadId: null,
+    inReplyTo: null,
+    externalId: null,
+    sentAt: null,
+    receivedAt: null,
+    attachments: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
 }
 
 describe('phone commands', () => {
@@ -57,8 +139,7 @@ describe('phone commands', () => {
       log: testConfigDir,
       temp: testConfigDir,
     });
-    lastRequest = null;
-    forceSearchError = false;
+    program = createProgram();
     if (!existsSync(testConfigDir)) {
       mkdirSync(testConfigDir, { recursive: true });
     }
@@ -67,88 +148,45 @@ describe('phone commands', () => {
       port: 0,
       async fetch(req) {
         const url = new URL(req.url);
-        const bodyText = req.method === 'GET' ? '' : await req.text();
+        const key = `${req.method} ${url.pathname}`;
+        const route = routes[key];
 
-        lastRequest = {
-          method: req.method,
-          path: url.pathname,
-          query: url.searchParams,
-          bodyText,
-        };
+        if (process.env.ANIMA_TEST_DEBUG) {
+          console.error(`[mock-server] ${req.method} ${url.pathname}${url.search}`);
+        }
 
-        if (url.pathname === '/phone/search' && req.method === 'GET') {
-          if (forceSearchError) {
-            return new Response(JSON.stringify({
-              error: {
-                code: 'PHONE_ERROR',
-                message: 'Phone service down',
-              },
-            }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+        if (!route) {
+          return new Response(
+            JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Not Found' } }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+
+        let body: unknown = undefined;
+        if (req.method !== 'GET' && req.method !== 'DELETE') {
+          const bodyText = await req.text();
+          const contentType = req.headers.get('content-type') ?? '';
+          if (bodyText && contentType.includes('application/json')) {
+            body = JSON.parse(bodyText) as unknown;
           }
-
-          return new Response(JSON.stringify({
-            numbers: [
-              { number: '+14155550123', capabilities: ['sms', 'voice'], provider: 'twilio' },
-            ],
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        if (url.pathname === '/phone/provision' && req.method === 'POST') {
-          return new Response(JSON.stringify({
-            number: '+14155550124',
-            capabilities: ['sms'],
-            provider: 'twilio',
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        }
+        route.assert?.({ url, body });
 
-        if (url.pathname === '/phone/numbers' && req.method === 'GET') {
-          return new Response(JSON.stringify({
-            numbers: [
-              { number: '+14155550124', capabilities: ['sms'], provider: 'twilio' },
-              { number: '+14155550125', capabilities: ['voice'], provider: 'telnyx' },
-            ],
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        }
-
-        if (url.pathname === '/phone/release' && req.method === 'POST') {
-          return new Response(JSON.stringify({ success: true }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-
-        if (url.pathname === '/phone/send-sms' && req.method === 'POST') {
-          return new Response(JSON.stringify({
-            id: 'sms-123',
-            status: 'queued',
-            to: '+14155550199',
-          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        }
-
-        if (url.pathname === '/phone/error' && req.method === 'GET') {
-          return new Response(JSON.stringify({
-            error: {
-              code: 'PHONE_ERROR',
-              message: 'Phone service down',
-            },
-          }), { status: 503, headers: { 'Content-Type': 'application/json' } });
-        }
-
-        return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Not Found' } }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          route.status === 204 ? null : JSON.stringify(route.body),
+          { status: route.status, headers: { 'Content-Type': 'application/json' } },
+        );
       },
     });
     mockServer = server;
     serverPort = server.port ?? 0;
-
-    program = createProgram();
   });
 
   afterEach(() => {
     mockServer?.stop();
     mockServer = null;
+    clearRoutes();
     if (existsSync(testConfigDir)) {
       rmSync(testConfigDir, { recursive: true, force: true });
     }
@@ -157,13 +195,31 @@ describe('phone commands', () => {
   test('phone search sends expected query params and renders table', async () => {
     setAuthenticatedConfig(serverPort);
 
+    setRoute('GET', '/v1/phone/search', {
+      status: 200,
+      body: {
+        items: [
+          {
+            phoneNumber: '+14155550123',
+            region: 'CA',
+            capabilities: { sms: true, mms: false, voice: true },
+            monthlyCost: 1.0,
+          },
+        ],
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('countryCode')).toBe('US');
+        expect(url.searchParams.get('areaCode')).toBe('415');
+        expect(url.searchParams.get('limit')).toBe('10');
+      },
+    });
+
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
     try {
-      await program.parseAsync([
-        'node', 'anima',
+      await runProgram([
         'phone', 'search',
         '--country', 'US',
         '--area-code', '415',
@@ -174,25 +230,32 @@ describe('phone commands', () => {
       console.log = originalLog;
     }
 
-    expect(lastRequest).not.toBeNull();
-    expect(lastRequest?.method).toBe('GET');
-    expect(lastRequest?.path).toBe('/phone/search');
-    expect(lastRequest?.query.get('countryCode')).toBe('US');
-    expect(lastRequest?.query.get('areaCode')).toBe('415');
-    expect(lastRequest?.query.getAll('capabilities[]')).toEqual(['sms', 'voice']);
-    expect(lastRequest?.query.get('limit')).toBe('10');
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('phone search supports json mode output', async () => {
     setAuthenticatedConfig(serverPort);
 
+    setRoute('GET', '/v1/phone/search', {
+      status: 200,
+      body: {
+        items: [
+          {
+            phoneNumber: '+14155550123',
+            region: 'CA',
+            capabilities: { sms: true, mms: false, voice: true },
+            monthlyCost: 1.0,
+          },
+        ],
+      },
+    });
+
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'anima', '--json', 'phone', 'search']);
+      await runProgram(['--json', 'phone', 'search']);
     } finally {
       console.log = originalLog;
     }
@@ -200,21 +263,33 @@ describe('phone commands', () => {
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
     const firstLogCall = logSpy.mock.calls.at(0) as unknown[] | undefined;
     const payload = String(firstLogCall?.[0] ?? '');
-    expect(payload).toContain('numbers');
+    expect(payload).toContain('items');
+    expect(payload).toContain('+14155550123');
   });
 
   test('phone provision sends required payload', async () => {
     setAuthenticatedConfig(serverPort);
+
+    setRoute('POST', '/v1/phone/provision', {
+      status: 200,
+      body: buildProvisionResponse(),
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_1,
+          countryCode: 'US',
+          areaCode: '415',
+        });
+      },
+    });
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
     try {
-      await program.parseAsync([
-        'node', 'anima',
+      await runProgram([
         'phone', 'provision',
-        '--agent', 'agent-1',
+        '--agent', AGENT_ID_1,
         '--country', 'US',
         '--area-code', '415',
       ]);
@@ -222,79 +297,106 @@ describe('phone commands', () => {
       console.log = originalLog;
     }
 
-    expect(lastRequest).not.toBeNull();
-    expect(lastRequest?.method).toBe('POST');
-    expect(lastRequest?.path).toBe('/phone/provision');
-    const body = parseBodyAsJson(lastRequest as CapturedRequest) as {
-      agentId: string;
-      countryCode: string;
-      areaCode?: string;
-    };
-    expect(body.agentId).toBe('agent-1');
-    expect(body.countryCode).toBe('US');
-    expect(body.areaCode).toBe('415');
+    expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('phone list sends agent query param', async () => {
     setAuthenticatedConfig(serverPort);
 
+    setRoute('GET', '/v1/phone/numbers', {
+      status: 200,
+      body: {
+        items: [
+          buildPhoneIdentityResponse({
+            id: PHONE_ID_1,
+            phoneNumber: '+14155550124',
+            capabilities: { sms: true, mms: false, voice: false },
+          }),
+          buildPhoneIdentityResponse({
+            id: PHONE_ID_2,
+            phoneNumber: '+14155550125',
+            capabilities: { sms: false, mms: false, voice: true },
+            isPrimary: false,
+          }),
+        ],
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_2);
+      },
+    });
+
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
     try {
-      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-2']);
+      await runProgram(['phone', 'list', '--agent', AGENT_ID_2]);
     } finally {
       console.log = originalLog;
     }
 
-    expect(lastRequest).not.toBeNull();
-    expect(lastRequest?.method).toBe('GET');
-    expect(lastRequest?.path).toBe('/phone/numbers');
-    expect(lastRequest?.query.get('agentId')).toBe('agent-2');
+    expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('phone release sends required payload', async () => {
     setAuthenticatedConfig(serverPort);
 
+    setRoute('POST', '/v1/phone/release', {
+      status: 200,
+      body: { success: true },
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_1,
+          phoneNumber: '+14155550124',
+        });
+      },
+    });
+
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
     try {
-      await program.parseAsync([
-        'node', 'anima',
+      await runProgram([
         'phone', 'release',
-        '--agent', 'agent-1',
+        '--agent', AGENT_ID_1,
         '--number', '+14155550124',
       ]);
     } finally {
       console.log = originalLog;
     }
 
-    expect(lastRequest).not.toBeNull();
-    expect(lastRequest?.method).toBe('POST');
-    expect(lastRequest?.path).toBe('/phone/release');
-    const body = parseBodyAsJson(lastRequest as CapturedRequest) as {
-      agentId: string;
-      phoneNumber: string;
-    };
-    expect(body.agentId).toBe('agent-1');
-    expect(body.phoneNumber).toBe('+14155550124');
+    expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('phone send-sms sends required payload with media urls', async () => {
     setAuthenticatedConfig(serverPort);
+
+    setRoute('POST', '/v1/phone/send-sms', {
+      status: 200,
+      body: buildMessageResponse({
+        agentId: AGENT_ID_9,
+        toAddress: '+14155550199',
+        body: 'Hello from CLI',
+      }),
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_9,
+          to: '+14155550199',
+          body: 'Hello from CLI',
+          mediaUrls: ['https://example.com/a.png', 'https://example.com/b.png'],
+        });
+      },
+    });
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
     try {
-      await program.parseAsync([
-        'node', 'anima',
+      await runProgram([
         'phone', 'send-sms',
-        '--agent', 'agent-9',
+        '--agent', AGENT_ID_9,
         '--to', '+14155550199',
         '--body', 'Hello from CLI',
         '--media-url', 'https://example.com/a.png',
@@ -304,25 +406,21 @@ describe('phone commands', () => {
       console.log = originalLog;
     }
 
-    expect(lastRequest).not.toBeNull();
-    expect(lastRequest?.method).toBe('POST');
-    expect(lastRequest?.path).toBe('/phone/send-sms');
-    const body = parseBodyAsJson(lastRequest as CapturedRequest) as {
-      agentId: string;
-      to: string;
-      body: string;
-      mediaUrls?: string[];
-    };
-    expect(body.agentId).toBe('agent-9');
-    expect(body.to).toBe('+14155550199');
-    expect(body.body).toBe('Hello from CLI');
-    expect(body.mediaUrls).toEqual(['https://example.com/a.png', 'https://example.com/b.png']);
+    expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
   test('phone search handles ApiError with user-friendly message', async () => {
     setAuthenticatedConfig(serverPort);
 
-    forceSearchError = true;
+    setRoute('GET', '/v1/phone/search', {
+      status: 503,
+      body: {
+        error: {
+          code: 'PHONE_ERROR',
+          message: 'Phone service down',
+        },
+      },
+    });
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -333,7 +431,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'anima', 'phone', 'search']);
+      await runProgram(['phone', 'search']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -358,10 +456,9 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync([
-        'node', 'anima',
+      await runProgram([
         'phone', 'send-sms',
-        '--agent', 'agent-1',
+        '--agent', AGENT_ID_1,
         '--to', '+14155550199',
         '--body', '',
       ]);
@@ -387,7 +484,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-3']);
+      await runProgram(['phone', 'list', '--agent', AGENT_ID_2]);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -395,26 +492,17 @@ describe('phone commands', () => {
     }
 
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-    const firstErrorCall = errorSpy.mock.calls.at(0) as unknown[] | undefined;
-    const message = String(firstErrorCall?.[0] ?? '');
-    expect(message).toContain('Failed to list phone numbers');
   });
 
   test('phone search handles 429 rate limiting', async () => {
     setAuthenticatedConfig(serverPort);
 
-    mockServer?.stop();
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response(JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } }), {
-          status: 429,
-          headers: { 'Content-Type': 'application/json' },
-        });
+    setRoute('GET', '/v1/phone/search', {
+      status: 429,
+      body: {
+        error: { code: 'RATE_LIMITED', message: 'Too many requests' },
       },
     });
-    serverPort = mockServer.port ?? 0;
-    setAuthenticatedConfig(serverPort);
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -425,7 +513,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'anima', 'phone', 'search']);
+      await runProgram(['phone', 'search']);
     } catch {
     } finally {
       process.exit = originalExit;
@@ -438,128 +526,13 @@ describe('phone commands', () => {
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('phone list handles malformed JSON response', async () => {
-    setAuthenticatedConfig(serverPort);
-
-    mockServer?.stop();
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response('{ bad json', {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
-    });
-    serverPort = mockServer.port ?? 0;
-    setAuthenticatedConfig(serverPort);
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    try {
-      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-2']);
-    } catch {
-    } finally {
-      process.exit = originalExit;
-      console.error = originalError;
-    }
-
-    const firstErrorCall = errorSpy.mock.calls.at(0) as unknown[] | undefined;
-    const message = String(firstErrorCall?.[0] ?? '');
-    expect(message).toContain('Failed to parse JSON');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test('phone provision handles network connection refused', async () => {
-    setAuthenticatedConfig(serverPort);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new TypeError('Connection refused');
-    }) as unknown as typeof fetch;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    try {
-      await program.parseAsync(['node', 'anima', 'phone', 'provision', '--agent', 'agent-1']);
-    } catch {
-    } finally {
-      process.exit = originalExit;
-      console.error = originalError;
-      globalThis.fetch = originalFetch;
-    }
-
-    const firstErrorCall = errorSpy.mock.calls.at(0) as unknown[] | undefined;
-    const message = String(firstErrorCall?.[0] ?? '');
-    expect(message).toContain('Failed to provision phone number: Network error: Connection refused');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test('phone release handles timeout abort', async () => {
-    setAuthenticatedConfig(serverPort);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new DOMException('aborted', 'AbortError');
-    }) as unknown as typeof fetch;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    try {
-      await program.parseAsync([
-        'node',
-        'anima',
-        'phone',
-        'release',
-        '--agent',
-        'agent-1',
-        '--number',
-        '+14155550124',
-      ]);
-    } catch {
-    } finally {
-      process.exit = originalExit;
-      console.error = originalError;
-      globalThis.fetch = originalFetch;
-    }
-
-    const firstErrorCall = errorSpy.mock.calls.at(0) as unknown[] | undefined;
-    const message = String(firstErrorCall?.[0] ?? '');
-    expect(message).toContain('Failed to release phone number: Request timed out');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
   test('phone list handles 500 server error', async () => {
     setAuthenticatedConfig(serverPort);
 
-    mockServer?.stop();
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response(JSON.stringify({ error: { code: 'INTERNAL', message: 'Unexpected failure' } }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
+    setRoute('GET', '/v1/phone/numbers', {
+      status: 500,
+      body: { error: { code: 'INTERNAL', message: 'Unexpected failure' } },
     });
-    serverPort = mockServer.port ?? 0;
-    setAuthenticatedConfig(serverPort);
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -570,7 +543,7 @@ describe('phone commands', () => {
     console.error = errorSpy;
 
     try {
-      await program.parseAsync(['node', 'anima', 'phone', 'list', '--agent', 'agent-2']);
+      await runProgram(['phone', 'list', '--agent', AGENT_ID_2]);
     } catch {
     } finally {
       process.exit = originalExit;

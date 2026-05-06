@@ -32,7 +32,7 @@ export function keyRevokeCommand(): Command {
       try {
         await requireAuth(globals);
         const api = await getApiClient(globals);
-        const result = await api.post<RevokeKeyResponse>('/admin/keys/revoke', { keyId: opts.keyId });
+        const result = await api.post<RevokeKeyResponse>('/v1/admin/keys/revoke', { keyId: opts.keyId });
 
         if (globals.json) {
           output.json(result);

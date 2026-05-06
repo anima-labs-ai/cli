@@ -1,3 +1,4 @@
+import * as clack from '@clack/prompts';
 import { Command } from 'commander';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, copyFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -126,7 +127,7 @@ function getServerMap(config: Record<string, unknown>, key: string): Record<stri
   return existing as Record<string, unknown>;
 }
 
-function resolveInstallTargets(opts: InstallOptions): McpClientDefinition[] {
+async function resolveInstallTargets(opts: InstallOptions): Promise<McpClientDefinition[]> {
   if (opts.client) {
     const client = findClientByName(opts.client);
     if (!client) {
@@ -150,8 +151,15 @@ function resolveInstallTargets(opts: InstallOptions): McpClientDefinition[] {
     return detected;
   }
 
-  const promptText = `Detected clients: ${detected.map((client) => client.name).join(', ')}\nChoose clients (comma-separated) or type "all": `;
-  const selectedRaw = prompt(promptText)?.trim() ?? '';
+  // `prompt()` was a Bun-only global. The CLI ships as a Node bin, so
+  // referencing it threw "prompt is not defined" at runtime. Use clack
+  // (already a dependency) for portable interactive input.
+  const promptText = `Detected clients: ${detected.map((client) => client.name).join(', ')}\nChoose clients (comma-separated) or type "all":`;
+  const response = await clack.text({ message: promptText });
+  if (clack.isCancel(response)) {
+    throw new Error('Cancelled.');
+  }
+  const selectedRaw = response.trim();
   if (!selectedRaw) {
     throw new Error('No client selected. Re-run with --all or --client <name>.');
   }
@@ -208,7 +216,11 @@ async function resolveApiKey(override?: string): Promise<string> {
     return auth.apiKey.trim();
   }
 
-  const input = prompt('Enter your Anima API key (ak_...):')?.trim() ?? '';
+  const response = await clack.password({ message: 'Enter your Anima API key (ak_...):' });
+  if (clack.isCancel(response)) {
+    throw new Error('Cancelled.');
+  }
+  const input = response.trim();
   if (!input) {
     throw new Error('Anima API key is required for MCP setup.');
   }
@@ -350,7 +362,7 @@ export function installMcpCommand(): Command {
           throw new Error('--url can only be used with --mode remote');
         }
 
-        const targets = resolveInstallTargets(globals);
+        const targets = await resolveInstallTargets(globals);
         const servers = resolveServerDomains(globals.server);
         const apiKey = await resolveApiKey(globals.apiKey);
 

@@ -3,9 +3,8 @@ Usage: anima extension [options] [command]
 Manage Anima Chrome extension
 
 Options:
-  -h, --help         display help for command
+  -h, --help      display help for command
 
 Commands:
-  install [options]  Download and install the Anima Chrome extension
-  status             Show extension installation status
-  help [command]     display help for command
+  status          Show extension installation status
+  help [command]  display help for command

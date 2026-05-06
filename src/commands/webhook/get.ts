@@ -1,17 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-
-interface Webhook {
-  id: string;
-  url: string;
-  events: string[];
-  secret?: string;
-  status: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 export function getWebhookCommand(): Command {
   return new Command('get')
@@ -22,29 +12,46 @@ export function getWebhookCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<Webhook>(`/webhooks/${id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const webhook = await orpc.webhook.get({ id });
 
         if (globals.json) {
-          output.json(result);
+          output.json(webhook);
           return;
         }
 
         output.details([
-          ['Webhook ID', result.id],
-          ['URL', result.url],
-          ['Events', result.events.join(', ')],
-          ['Status', result.status],
-          ['Created At', result.createdAt],
-          ['Updated At', result.updatedAt],
+          ['Webhook ID', webhook.id],
+          ['Organization ID', webhook.orgId],
+          ['URL', webhook.url],
+          ['Events', webhook.events.join(', ')],
+          ['Active', webhook.active ? 'Yes' : 'No'],
+          ['Description', webhook.description ?? '-'],
+          ['Consecutive Failures', String(webhook.consecutiveFailures)],
+          ['Disabled Reason', webhook.disabledReason ?? '-'],
+          ['Disabled At', webhook.disabledAt ?? '-'],
+          ['Created At', webhook.createdAt],
+          ['Updated At', webhook.updatedAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get webhook: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to get webhook: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to get webhook');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Webhook not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

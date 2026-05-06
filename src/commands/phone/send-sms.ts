@@ -1,20 +1,13 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface SendSmsOptions {
   agent: string;
   to: string;
   body: string;
   mediaUrl?: string[];
-}
-
-interface SendSmsResponse {
-  id?: string;
-  status?: string;
-  to?: string;
-  body?: string;
 }
 
 function validateTo(to: string): string {
@@ -66,8 +59,8 @@ export function sendSmsCommand(): Command {
           payload.mediaUrls = opts.mediaUrl;
         }
 
-        const client = await requireAuth(globals);
-        const response = await client.post<SendSmsResponse>('/phone/send-sms', payload);
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.phone.sendSms(payload);
 
         if (globals.json) {
           output.json(response);
@@ -77,11 +70,11 @@ export function sendSmsCommand(): Command {
         output.details([
           ['Message ID', response.id],
           ['Status', response.status],
-          ['To', response.to ?? to],
+          ['To', response.toAddress ?? to],
         ]);
         output.success('SMS sent');
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to send SMS: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

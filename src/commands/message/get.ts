@@ -1,25 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-
-interface MessageResponse {
-  id: string;
-  agentId: string;
-  channel?: string;
-  direction?: string;
-  status?: string;
-  fromAddress?: string;
-  toAddress?: string;
-  subject?: string;
-  body?: string;
-  bodyHtml?: string;
-  threadId?: string;
-  externalId?: string;
-  sentAt?: string;
-  receivedAt?: string;
-  createdAt?: string;
-}
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 export function getMessageCommand(): Command {
   return new Command('get')
@@ -30,37 +12,49 @@ export function getMessageCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<MessageResponse>(`/messages/${id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const message = await orpc.message.get({ id });
 
         if (globals.json) {
-          output.json(result);
+          output.json(message);
           return;
         }
 
         output.details([
-          ['ID', result.id],
-          ['Agent ID', result.agentId],
-          ['Channel', result.channel],
-          ['Direction', result.direction],
-          ['Status', result.status],
-          ['From', result.fromAddress],
-          ['To', result.toAddress],
-          ['Subject', result.subject],
-          ['Thread ID', result.threadId],
-          ['External ID', result.externalId],
-          ['Sent At', result.sentAt],
-          ['Received At', result.receivedAt],
-          ['Created At', result.createdAt],
-          ['Body', result.body],
+          ['ID', message.id],
+          ['Agent ID', message.agentId],
+          ['Channel', message.channel],
+          ['Direction', message.direction],
+          ['Status', message.status],
+          ['From', message.fromAddress],
+          ['To', message.toAddress],
+          ['Subject', message.subject ?? '-'],
+          ['Thread ID', message.threadId ?? '-'],
+          ['External ID', message.externalId ?? '-'],
+          ['Sent At', message.sentAt ?? '-'],
+          ['Received At', message.receivedAt ?? '-'],
+          ['Created At', message.createdAt],
+          ['Body', message.body],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get message: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to get message: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to get message');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Message not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

@@ -1,22 +1,8 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import pc from 'picocolors';
-
-interface CallSummaryResponse {
-  callId: string;
-  oneLiner: string;
-  topics: string[];
-  actionItems: string[];
-  decisions: string[];
-  openQuestions: string[];
-  nextSteps: string[];
-  intent: string;
-  outcome: string;
-  narrative?: string;
-  generatedAt: string;
-}
 
 export function summaryCommand(): Command {
   return new Command('summary')
@@ -29,10 +15,8 @@ export function summaryCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const summary = await client.get<CallSummaryResponse>(
-          `/voice/calls/${callId}/summary`,
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const summary = await orpc.voice.getSummary({ callId });
 
         if (globals.json) {
           output.json(summary);
@@ -46,7 +30,10 @@ export function summaryCommand(): Command {
         console.log(`${pc.bold('Outcome:')} ${summary.outcome}`);
 
         printList('Topics', summary.topics);
-        printList('Action Items', summary.actionItems);
+        printList(
+          'Action Items',
+          summary.actionItems.map((a) => (a.owner ? `${a.text} (${a.owner})` : a.text)),
+        );
         printList('Decisions', summary.decisions);
         printList('Open Questions', summary.openQuestions);
         printList('Next Steps', summary.nextSteps);
@@ -60,7 +47,7 @@ export function summaryCommand(): Command {
         console.log();
         output.info(`Generated at ${new Date(summary.generatedAt).toLocaleString()}`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to get summary: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

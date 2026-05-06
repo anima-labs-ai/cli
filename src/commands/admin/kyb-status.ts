@@ -25,7 +25,7 @@ export function kybStatusCommand(): Command {
       try {
         await requireAuth(globals);
         const api = await getApiClient(globals);
-        const result = await api.get<KybResponse>(`/admin/orgs/${encodeURIComponent(opts.org)}/kyb`);
+        const result = await api.get<KybResponse>(`/v1/admin/orgs/${encodeURIComponent(opts.org)}/kyb`);
 
         if (globals.json) {
           output.json(result);

@@ -16,8 +16,8 @@
  */
 
 import { Command } from 'commander';
-import { ApiError } from '../../lib/api-client.js';
-import { type GlobalOptions, getApiClient } from '../../lib/auth.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import { Output } from '../../lib/output.js';
 
 interface PlaceCallOptions {
@@ -28,15 +28,6 @@ interface PlaceCallOptions {
   greeting?: string;
   fromNumber?: string;
   consentSource?: string;
-}
-
-interface PlaceCallResponse {
-  callId: string;
-  state: string;
-  from: string;
-  to: string;
-  tier: string;
-  direction: 'OUTBOUND';
 }
 
 const VALID_TIERS = new Set(['basic', 'premium']);
@@ -67,7 +58,7 @@ export function placeCallCommand(): Command {
         output.error('--to must be E.164 format starting with "+" (e.g. +14155550142).');
         process.exit(2);
       }
-      const tier = (opts.tier ?? 'basic').toLowerCase();
+      const tier = (opts.tier ?? 'basic').toLowerCase() as 'basic' | 'premium';
       if (!VALID_TIERS.has(tier)) {
         output.error(`--tier must be one of basic | premium, got "${opts.tier}".`);
         process.exit(2);
@@ -90,18 +81,14 @@ export function placeCallCommand(): Command {
       }
 
       try {
-        const client = await getApiClient(globals);
-        const body: Record<string, unknown> = {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.voice.createCall({
           to: opts.to,
           tier,
-          metadata: { consent_source: opts.consentSource },
-        };
-        if (opts.agent) body.agentId = opts.agent;
-        if (opts.voiceId) body.voiceId = opts.voiceId;
-        if (opts.greeting) body.greeting = opts.greeting;
-        if (opts.fromNumber) body.fromNumber = opts.fromNumber;
-
-        const result = await client.post<PlaceCallResponse>('/voice/calls', body);
+          agentId: opts.agent,
+          greeting: opts.greeting,
+          fromNumber: opts.fromNumber,
+        });
 
         if (globals.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -120,7 +107,7 @@ export function placeCallCommand(): Command {
         output.info(`Tail live updates with: am tail --filter voice --agent ${opts.agent ?? '<id>'}`);
         output.info(`View in dashboard: https://console.useanima.sh/audit (search by callId)`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           // Specialized handling for the gates so the operator sees a
           // useful message rather than a generic stack trace.
           if (error.status === 503) {

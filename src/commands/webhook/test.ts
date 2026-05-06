@@ -1,14 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-
-interface TestWebhookResponse {
-  success: boolean;
-  statusCode?: number;
-  responseTime?: number;
-  error?: string;
-}
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 export function testWebhookCommand(): Command {
   return new Command('test')
@@ -19,31 +12,37 @@ export function testWebhookCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<TestWebhookResponse>(`/webhooks/${id}/test`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.webhook.test({ id });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        if (result.success) {
-          output.success(`Webhook ${id} test succeeded`);
-        } else {
-          output.error(`Webhook ${id} test failed: ${result.error ?? 'unknown error'}`);
-        }
-
+        output.success(`Webhook ${id} test dispatched`);
         output.details([
-          ['Status Code', result.statusCode !== undefined ? String(result.statusCode) : undefined],
-          ['Response Time', result.responseTime !== undefined ? `${result.responseTime}ms` : undefined],
+          ['Delivery ID', result.deliveryId],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to test webhook: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to test webhook: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to test webhook');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Webhook not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

@@ -1,7 +1,7 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ListEmailsOptions {
   cursor?: string;
@@ -9,25 +9,19 @@ interface ListEmailsOptions {
   agent?: string;
 }
 
-interface EmailListItem {
-  id: string;
-  agentId: string;
-  subject?: string;
-  status?: string;
-  createdAt?: string;
-  to?: string[];
-}
-
-interface ListEmailsResponse {
-  items: EmailListItem[];
-  pagination?: { nextCursor?: string | null; hasMore?: boolean };
+function validateLimit(value: string): string {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
+  }
+  return value;
 }
 
 export function listEmailsCommand(): Command {
   return new Command('list')
     .description('List emails')
     .option('--cursor <cursor>', 'Pagination cursor')
-    .option('--limit <number>', 'Page size (1-100, default 20)')
+    .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--agent <id>', 'Filter by agent ID')
     .action(async function (this: Command) {
       const opts = this.opts<ListEmailsOptions>();
@@ -35,24 +29,12 @@ export function listEmailsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const params: Record<string, string> = {};
-        if (opts.cursor) {
-          params.cursor = opts.cursor;
-        }
-        if (opts.agent) {
-          params.agentId = opts.agent;
-        }
-        if (opts.limit) {
-          const parsedLimit = Number.parseInt(opts.limit, 10);
-          if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-            output.error('Limit must be an integer between 1 and 100.');
-            process.exit(1);
-          }
-          params.limit = String(parsedLimit);
-        }
-
-        const client = await requireAuth(globals);
-        const result = await client.get<ListEmailsResponse>('/email', params);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.email.list({
+          cursor: opts.cursor,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          agentId: opts.agent,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -71,22 +53,34 @@ export function listEmailsCommand(): Command {
             email.id,
             email.agentId,
             email.subject ?? '-',
-            email.status ?? '-',
-            email.to?.join(', ') ?? '-',
-            email.createdAt ?? '-',
+            email.status,
+            email.toAddress,
+            email.createdAt,
           ]),
+          {
+            pagination: {
+              has_more: result.pagination.hasMore,
+              next_cursor: result.pagination.nextCursor,
+            },
+          },
         );
-
-        if (result.pagination?.nextCursor) {
-          output.info(`Next cursor: ${result.pagination.nextCursor}`);
-        }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to list emails: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to list emails: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to list emails');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

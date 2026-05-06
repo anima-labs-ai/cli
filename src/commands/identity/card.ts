@@ -1,21 +1,30 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface CardOptions {
   agent: string;
 }
 
-interface AgentCard {
-  did: string;
-  agentId: string;
-  name: string;
-  description: string | null;
-  capabilities: string[];
-  endpoints: Record<string, string>;
-  createdAt: string;
-  updatedAt: string;
+interface AgentCardCapabilities {
+  email: boolean;
+  phone: boolean;
+  cards: boolean;
+  vault: boolean;
+  address: boolean;
+  protocols: string[];
+}
+
+function formatCapabilities(caps: AgentCardCapabilities): string {
+  const enabled: string[] = [];
+  if (caps.email) enabled.push('email');
+  if (caps.phone) enabled.push('phone');
+  if (caps.cards) enabled.push('cards');
+  if (caps.vault) enabled.push('vault');
+  if (caps.address) enabled.push('address');
+  enabled.push(...caps.protocols);
+  return enabled.join(', ') || '-';
 }
 
 export function getAgentCardCommand(): Command {
@@ -28,27 +37,33 @@ export function getAgentCardCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<AgentCard>(`/agents/${opts.agent}/card`);
+        const orpc = await requireOrpcAuth(globals);
+        const card = await orpc.identity.getAgentCard({ agentId: opts.agent });
 
         if (globals.json) {
-          output.json(result);
+          output.json(card);
           return;
         }
 
         output.details([
-          ['DID', result.did],
-          ['Agent ID', result.agentId],
-          ['Name', result.name],
-          ['Description', result.description ?? '-'],
-          ['Capabilities', result.capabilities.join(', ') || '-'],
-          ['Endpoints', Object.entries(result.endpoints).map(([k, v]) => `${k}: ${v}`).join('\n') || '-'],
-          ['Created', result.createdAt],
-          ['Updated', result.updatedAt],
+          ['Name', card.name],
+          ['DID', card.did],
+          ['URL', card.url],
+          ['Description', card.description ?? '-'],
+          ['Capabilities', formatCapabilities(card.capabilities)],
+          ['Verification', card.verification.level],
+          ['Credentials', card.verification.credentials.join(', ') || '-'],
+          ['Trust score', String(card.trustScore)],
+          ['Contact email', card.contact.email ?? '-'],
+          ['Contact phone', card.contact.phone ?? '-'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get agent card: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 404) {
+            output.error('Agent card not found.');
+          } else {
+            output.error(`Failed to get agent card: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(error.message);
         }

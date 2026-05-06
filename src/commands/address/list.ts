@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type AddressType = 'BILLING' | 'SHIPPING' | 'MAILING' | 'REGISTERED';
 
@@ -10,21 +10,15 @@ interface ListOptions {
   type?: string;
 }
 
-interface AddressItem {
-  id: string;
-  type: AddressType;
-  label: string | null;
-  street1: string;
-  street2: string | null;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  validated: boolean;
-}
+const VALID_TYPES: ReadonlySet<AddressType> = new Set<AddressType>([
+  'BILLING',
+  'SHIPPING',
+  'MAILING',
+  'REGISTERED',
+]);
 
-interface ListResponse {
-  items: AddressItem[];
+function isAddressType(value: string): value is AddressType {
+  return (VALID_TYPES as ReadonlySet<string>).has(value);
 }
 
 export function listAddressesCommand(): Command {
@@ -38,27 +32,36 @@ export function listAddressesCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const query: Record<string, string> = { agentId: opts.agent };
+        let typeFilter: AddressType | undefined;
         if (opts.type) {
-          query.type = opts.type.toUpperCase();
+          const upper = opts.type.toUpperCase();
+          if (!isAddressType(upper)) {
+            throw new Error(
+              `Invalid address type: ${opts.type}. Allowed values: BILLING, SHIPPING, MAILING, REGISTERED`,
+            );
+          }
+          typeFilter = upper;
         }
 
-        const client = await requireAuth(globals);
-        const response = await client.get<ListResponse>('/addresses', query);
+        const orpc = await requireOrpcAuth(globals);
+        const items = await orpc.address.list({
+          agentId: opts.agent,
+          type: typeFilter,
+        });
 
         if (globals.json) {
-          output.json(response);
+          output.json(items);
           return;
         }
 
-        if (response.items.length === 0) {
+        if (items.length === 0) {
           output.info('No addresses found');
           return;
         }
 
         output.table(
           ['ID', 'Type', 'Label', 'Street', 'City', 'State', 'Postal Code', 'Country', 'Validated'],
-          response.items.map((item) => [
+          items.map((item) => [
             item.id,
             item.type,
             item.label ?? '-',
@@ -71,7 +74,7 @@ export function listAddressesCommand(): Command {
           ]),
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list addresses: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

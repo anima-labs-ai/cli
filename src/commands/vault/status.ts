@@ -1,16 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface StatusOptions {
   agent?: string;
-}
-
-interface VaultStatusResponse {
-  serverUrl: string;
-  lastSync: string | null;
-  status: 'unlocked' | 'locked' | 'unauthenticated';
 }
 
 export function statusCommand(): Command {
@@ -23,10 +17,8 @@ export function statusCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<VaultStatusResponse>('/vault/status', {
-          agentId: opts.agent,
-        });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.status({ agentId: opts.agent });
 
         if (globals.json) {
           output.json(result);
@@ -40,8 +32,12 @@ export function statusCommand(): Command {
           ['Last Sync', result.lastSync ?? 'Never'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to fetch vault status: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to fetch vault status: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to fetch vault status: ${error.message}`);
         }

@@ -33,7 +33,7 @@ export function memberRoleCommand(): Command {
         const api = await getApiClient(globals);
 
         const result = await api.put<MemberRoleResponse>(
-          `/admin/orgs/${encodeURIComponent(opts.org)}/members/${encodeURIComponent(opts.email)}`,
+          `/v1/admin/orgs/${encodeURIComponent(opts.org)}/members/${encodeURIComponent(opts.email)}`,
           { role: opts.role },
         );
 
