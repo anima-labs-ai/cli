@@ -193,7 +193,7 @@ describe('card commands', () => {
   });
 
   test('card create sends expected payload', async () => {
-    setRoute('POST', '/cards', {
+    setRoute('POST', '/v1/cards', {
       status: 200,
       body: buildCardResponse({ label: 'Primary' }),
       assert: ({ body }) => {
@@ -227,7 +227,7 @@ describe('card commands', () => {
   });
 
   test('card list sends expected query', async () => {
-    setRoute('GET', '/cards', {
+    setRoute('GET', '/v1/cards', {
       status: 200,
       body: {
         items: [buildCardResponse()],
@@ -257,7 +257,7 @@ describe('card commands', () => {
   });
 
   test('card get supports json output', async () => {
-    setRoute('GET', `/cards/${CARD_ID_1}`, {
+    setRoute('GET', `/v1/cards/${CARD_ID_1}`, {
       status: 200,
       body: buildCardResponse(),
     });
@@ -281,7 +281,7 @@ describe('card commands', () => {
   });
 
   test('card update sends expected payload', async () => {
-    setRoute('PUT', `/cards/${CARD_ID_1}`, {
+    setRoute('PUT', `/v1/cards/${CARD_ID_1}`, {
       status: 200,
       body: buildCardResponse({
         label: 'Updated',
@@ -323,7 +323,7 @@ describe('card commands', () => {
   });
 
   test('card delete hits delete endpoint', async () => {
-    setRoute('DELETE', `/cards/${CARD_ID_1}`, {
+    setRoute('DELETE', `/v1/cards/${CARD_ID_1}`, {
       status: 200,
       body: { success: true },
     });
@@ -340,7 +340,7 @@ describe('card commands', () => {
   });
 
   test('card transactions sends expected query', async () => {
-    setRoute('GET', '/cards/transactions', {
+    setRoute('GET', '/v1/cards/transactions', {
       status: 200,
       body: {
         items: [buildTransactionResponse()],
@@ -372,7 +372,7 @@ describe('card commands', () => {
   });
 
   test('card kill-switch sends expected payload', async () => {
-    setRoute('POST', '/cards/kill-switch', {
+    setRoute('POST', '/v1/cards/kill-switch', {
       status: 200,
       body: {
         affected: 1,
@@ -398,7 +398,7 @@ describe('card commands', () => {
   });
 
   test('card commands handle ORPCError responses', async () => {
-    setRoute('GET', '/cards', {
+    setRoute('GET', '/v1/cards', {
       status: 400,
       body: { error: { code: 'BAD_REQUEST', message: 'invalid card request' } },
     });
@@ -421,7 +421,7 @@ describe('card commands', () => {
   });
 
   test('card list handles 429 rate limiting', async () => {
-    setRoute('GET', '/cards', {
+    setRoute('GET', '/v1/cards', {
       status: 429,
       body: { error: { code: 'RATE_LIMITED', message: 'Too many requests' } },
     });
@@ -445,7 +445,7 @@ describe('card commands', () => {
   });
 
   test('card get handles 503 server unavailable', async () => {
-    setRoute('GET', `/cards/${CARD_ID_1}`, {
+    setRoute('GET', `/v1/cards/${CARD_ID_1}`, {
       status: 503,
       body: { error: { code: 'UNAVAILABLE', message: 'Service unavailable' } },
     });

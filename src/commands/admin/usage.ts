@@ -27,7 +27,7 @@ export function usageCommand(): Command {
       try {
         await requireAuth(globals);
         const api = await getApiClient(globals);
-        const result = await api.get<UsageResponse>(`/admin/orgs/${encodeURIComponent(opts.org)}/usage`);
+        const result = await api.get<UsageResponse>(`/v1/admin/orgs/${encodeURIComponent(opts.org)}/usage`);
 
         if (globals.json) {
           output.json(result);

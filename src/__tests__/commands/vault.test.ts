@@ -190,7 +190,7 @@ describe('vault commands', () => {
   });
 
   test('vault provision sends expected body', async () => {
-    setRoute('POST', '/vault/provision', {
+    setRoute('POST', '/v1/vault/provision', {
       status: 200,
       body: buildProvisionResponse(),
       assert: ({ body }) => {
@@ -209,7 +209,7 @@ describe('vault commands', () => {
   });
 
   test('vault deprovision sends expected body', async () => {
-    setRoute('POST', '/vault/deprovision', {
+    setRoute('POST', '/v1/vault/deprovision', {
       status: 200,
       body: { success: true },
       assert: ({ body }) => {
@@ -228,7 +228,7 @@ describe('vault commands', () => {
   });
 
   test('vault status sends expected query and supports json', async () => {
-    setRoute('GET', '/vault/status', {
+    setRoute('GET', '/v1/vault/status', {
       status: 200,
       body: {
         serverUrl: 'http://localhost:8222',
@@ -253,7 +253,7 @@ describe('vault commands', () => {
   });
 
   test('vault sync sends expected body', async () => {
-    setRoute('POST', '/vault/sync', {
+    setRoute('POST', '/v1/vault/sync', {
       status: 200,
       body: { success: true },
       assert: ({ body }) => {
@@ -272,7 +272,7 @@ describe('vault commands', () => {
   });
 
   test('vault store login sends expected body', async () => {
-    setRoute('POST', '/vault/credentials', {
+    setRoute('POST', '/v1/vault/credentials', {
       status: 200,
       body: buildCredentialResponse({
         login: {
@@ -317,7 +317,7 @@ describe('vault commands', () => {
   });
 
   test('vault get fetches credential by id with agent query', async () => {
-    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+    setRoute('GET', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 200,
       body: buildCredentialResponse(),
       assert: ({ url }) => {
@@ -340,7 +340,7 @@ describe('vault commands', () => {
   });
 
   test('vault get with --unmask sends reveal=true', async () => {
-    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+    setRoute('GET', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 200,
       body: buildCredentialResponse({
         login: { username: 'octocat', password: 'plaintext-secret' },
@@ -381,7 +381,7 @@ describe('vault commands', () => {
   });
 
   test('vault list calls credentials endpoint and renders output', async () => {
-    setRoute('GET', '/vault/credentials', {
+    setRoute('GET', '/v1/vault/credentials', {
       status: 200,
       body: {
         items: [buildCredentialResponse({ favorite: true })],
@@ -403,7 +403,7 @@ describe('vault commands', () => {
   });
 
   test('vault search calls search endpoint with filters', async () => {
-    setRoute('GET', '/vault/search', {
+    setRoute('GET', '/v1/vault/search', {
       status: 200,
       body: {
         items: [
@@ -437,7 +437,7 @@ describe('vault commands', () => {
   });
 
   test('vault delete calls delete endpoint with id in URL path', async () => {
-    setRoute('DELETE', `/vault/credentials/${CRED_ID_1}`, {
+    setRoute('DELETE', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 200,
       body: { success: true },
       // OpenAPILink lifts `id` into the URL path. Other inputs (like
@@ -457,7 +457,7 @@ describe('vault commands', () => {
   });
 
   test('vault generate sends requested options and prints password', async () => {
-    setRoute('POST', '/vault/generate-password', {
+    setRoute('POST', '/v1/vault/generate-password', {
       status: 200,
       body: { password: 'xK9!mP2@nL5#' },
       assert: ({ body }) => {
@@ -492,7 +492,7 @@ describe('vault commands', () => {
   });
 
   test('vault totp fetches code and period', async () => {
-    setRoute('GET', `/vault/totp/${CRED_ID_1}`, {
+    setRoute('GET', `/v1/vault/totp/${CRED_ID_1}`, {
       status: 200,
       body: { code: '123456', period: 30 },
       assert: ({ url }) => {
@@ -513,7 +513,7 @@ describe('vault commands', () => {
   });
 
   test('vault share create sends sourceAgentId per renamed contract field', async () => {
-    setRoute('POST', '/vault/share', {
+    setRoute('POST', '/v1/vault/share', {
       status: 200,
       body: buildShareResponse({ permission: 'USE' }),
       assert: ({ body }) => {
@@ -554,7 +554,7 @@ describe('vault commands', () => {
   });
 
   test('vault share list fetches shares with direction filter', async () => {
-    setRoute('GET', '/vault/shares', {
+    setRoute('GET', '/v1/vault/shares', {
       status: 200,
       body: {
         items: [buildShareResponse()],
@@ -582,7 +582,7 @@ describe('vault commands', () => {
   });
 
   test('vault share revoke posts share id', async () => {
-    setRoute('POST', '/vault/share/revoke', {
+    setRoute('POST', '/v1/vault/share/revoke', {
       status: 200,
       body: { success: true },
       assert: ({ body }) => {
@@ -608,7 +608,7 @@ describe('vault commands', () => {
   });
 
   test('vault token create posts credential and ttl', async () => {
-    setRoute('POST', '/vault/token', {
+    setRoute('POST', '/v1/vault/token', {
       status: 200,
       body: {
         token: 'vtk_' + 'a'.repeat(64),
@@ -649,7 +649,7 @@ describe('vault commands', () => {
   });
 
   test('vault token exchange returns credential by token', async () => {
-    setRoute('POST', '/vault/token/exchange', {
+    setRoute('POST', '/v1/vault/token/exchange', {
       status: 200,
       body: buildCredentialResponse(),
       assert: ({ body }) => {
@@ -673,7 +673,7 @@ describe('vault commands', () => {
   });
 
   test('vault token revoke posts agentId + credentialId and reports count', async () => {
-    setRoute('POST', '/vault/token/revoke', {
+    setRoute('POST', '/v1/vault/token/revoke', {
       status: 200,
       body: { success: true, revoked: 3 },
       assert: ({ body }) => {
@@ -700,7 +700,7 @@ describe('vault commands', () => {
   });
 
   test('vault commands handle ORPCError with friendly message', async () => {
-    setRoute('POST', '/vault/provision', {
+    setRoute('POST', '/v1/vault/provision', {
       status: 400,
       body: {
         error: {
@@ -729,7 +729,7 @@ describe('vault commands', () => {
   });
 
   test('vault list handles 429 rate limiting', async () => {
-    setRoute('GET', '/vault/credentials', {
+    setRoute('GET', '/v1/vault/credentials', {
       status: 429,
       body: {
         error: {
@@ -758,7 +758,7 @@ describe('vault commands', () => {
   });
 
   test('vault get handles 404 with friendly message', async () => {
-    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+    setRoute('GET', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 404,
       body: {
         error: {
@@ -787,7 +787,7 @@ describe('vault commands', () => {
   });
 
   test('vault get handles 403 forbidden when reveal requires master key', async () => {
-    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+    setRoute('GET', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 403,
       body: {
         error: {

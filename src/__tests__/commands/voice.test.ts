@@ -205,7 +205,7 @@ describe('voice commands', () => {
   describe('voice catalog', () => {
     test('lists voices with filters', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', '/voice/catalog', {
+      setRoute('GET', '/v1/voice/catalog', {
         status: 200,
         body: {
           voices: [
@@ -233,7 +233,7 @@ describe('voice commands', () => {
 
     test('shows empty message when no voices', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', '/voice/catalog', {
+      setRoute('GET', '/v1/voice/catalog', {
         status: 200,
         body: { voices: [] },
       });
@@ -254,7 +254,7 @@ describe('voice commands', () => {
 
     test('supports json mode', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', '/voice/catalog', {
+      setRoute('GET', '/v1/voice/catalog', {
         status: 200,
         body: { voices: [buildVoice({ id: 'v1', name: 'Test', provider: 'telnyx', tier: 'basic', language: 'en' })] },
       });
@@ -279,7 +279,7 @@ describe('voice commands', () => {
   describe('voice calls', () => {
     test('lists calls with agent filter', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', '/voice/calls', {
+      setRoute('GET', '/v1/voice/calls', {
         status: 200,
         body: {
           calls: [buildCallResponse({ id: CALL_ID_1, agentId: AGENT_ID_1 })],
@@ -305,7 +305,7 @@ describe('voice commands', () => {
 
     test('handles empty call list', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', '/voice/calls', {
+      setRoute('GET', '/v1/voice/calls', {
         status: 200,
         body: { calls: [], total: 0 },
       });
@@ -330,7 +330,7 @@ describe('voice commands', () => {
   describe('voice get', () => {
     test('displays call details', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}`, {
         status: 200,
         body: buildCallResponse({ id: CALL_ID_1, direction: 'OUTBOUND' }),
       });
@@ -351,7 +351,7 @@ describe('voice commands', () => {
 
     test('supports json mode', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}`, {
         status: 200,
         body: buildCallResponse({ id: CALL_ID_1, direction: 'INBOUND', tier: 'basic' }),
       });
@@ -377,7 +377,7 @@ describe('voice commands', () => {
   describe('voice transcript', () => {
     test('displays transcript segments', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}/transcript`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}/transcript`, {
         status: 200,
         body: {
           callId: CALL_ID_1,
@@ -406,7 +406,7 @@ describe('voice commands', () => {
 
     test('filters by speaker', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}/transcript`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}/transcript`, {
         status: 200,
         body: {
           callId: CALL_ID_1,
@@ -438,7 +438,7 @@ describe('voice commands', () => {
   describe('voice summary', () => {
     test('displays call summary', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}/summary`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}/summary`, {
         status: 200,
         body: buildSummaryResponse(),
       });
@@ -460,7 +460,7 @@ describe('voice commands', () => {
 
     test('handles API error', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_MISS}/summary`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_MISS}/summary`, {
         status: 404,
         body: { error: { code: 'NOT_FOUND', message: 'Summary not ready' } },
       });
@@ -491,7 +491,7 @@ describe('voice commands', () => {
   describe('voice score', () => {
     test('displays call score with subscores and metrics', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}/score`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}/score`, {
         status: 200,
         body: buildScoreResponse(),
       });
@@ -513,7 +513,7 @@ describe('voice commands', () => {
 
     test('supports json mode', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('GET', `/voice/calls/${CALL_ID_1}/score`, {
+      setRoute('GET', `/v1/voice/calls/${CALL_ID_1}/score`, {
         status: 200,
         body: buildScoreResponse({ compositeScore: 90 }),
       });
@@ -538,7 +538,7 @@ describe('voice commands', () => {
   describe('voice search', () => {
     test('sends search query to API', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('POST', '/voice/search', {
+      setRoute('POST', '/v1/voice/search', {
         status: 200,
         body: {
           results: [
@@ -580,7 +580,7 @@ describe('voice commands', () => {
 
     test('displays search results', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('POST', '/voice/search', {
+      setRoute('POST', '/v1/voice/search', {
         status: 200,
         body: {
           results: [
@@ -623,7 +623,7 @@ describe('voice commands', () => {
 
     test('handles empty results', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('POST', '/voice/search', {
+      setRoute('POST', '/v1/voice/search', {
         status: 200,
         body: { results: [] },
       });
@@ -644,7 +644,7 @@ describe('voice commands', () => {
 
     test('cross-channel search sends correct channels', async () => {
       setAuthenticatedConfig(serverPort);
-      setRoute('POST', '/voice/search/cross-channel', {
+      setRoute('POST', '/v1/voice/search/cross-channel', {
         status: 200,
         body: {
           results: [

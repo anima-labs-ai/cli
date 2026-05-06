@@ -184,7 +184,7 @@ describe('email commands', () => {
   });
 
   test('email send sends expected payload', async () => {
-    setRoute('POST', '/email/send', {
+    setRoute('POST', '/v1/email/send', {
       status: 200,
       body: buildMessageResponse({ id: EMAIL_ID_1, status: 'QUEUED' }),
       assert: ({ body }) => {
@@ -226,7 +226,7 @@ describe('email commands', () => {
   });
 
   test('email list sends pagination and agent query', async () => {
-    setRoute('GET', '/email', {
+    setRoute('GET', '/v1/email', {
       status: 200,
       body: {
         items: [buildMessageResponse({ id: EMAIL_ID_1, subject: 'Welcome' })],
@@ -267,7 +267,7 @@ describe('email commands', () => {
   });
 
   test('email get fetches by id', async () => {
-    setRoute('GET', `/email/${EMAIL_ID_777}`, {
+    setRoute('GET', `/v1/email/${EMAIL_ID_777}`, {
       status: 200,
       body: buildMessageResponse({ id: EMAIL_ID_777, agentId: AGENT_ID_9, subject: 'Subj' }),
     });
@@ -287,7 +287,7 @@ describe('email commands', () => {
   });
 
   test('email domains add lowercases domain', async () => {
-    setRoute('POST', '/domains', {
+    setRoute('POST', '/v1/domains', {
       status: 200,
       body: buildDomainResponse({ id: DOMAIN_ID_1, domain: 'example.com' }),
       assert: ({ body }) => {
@@ -310,7 +310,7 @@ describe('email commands', () => {
   });
 
   test('email domains verify posts to verify endpoint', async () => {
-    setRoute('POST', `/domains/${DOMAIN_ID_42}/verify`, {
+    setRoute('POST', `/v1/domains/${DOMAIN_ID_42}/verify`, {
       status: 200,
       body: buildDomainResponse({ id: DOMAIN_ID_42, verified: true, status: 'VERIFIED' }),
       assert: ({ body }) => {
@@ -336,7 +336,7 @@ describe('email commands', () => {
   });
 
   test('email domains list calls list endpoint', async () => {
-    setRoute('GET', '/domains', {
+    setRoute('GET', '/v1/domains', {
       status: 200,
       body: {
         items: [buildDomainResponse({ id: DOMAIN_ID_1, domain: 'example.com' })],
@@ -357,7 +357,7 @@ describe('email commands', () => {
   });
 
   test('email domains get fetches details by id', async () => {
-    setRoute('GET', `/domains/${DOMAIN_ID_2}`, {
+    setRoute('GET', `/v1/domains/${DOMAIN_ID_2}`, {
       status: 200,
       body: buildDomainResponse({ id: DOMAIN_ID_2, domain: 'foo.com' }),
     });
@@ -377,7 +377,7 @@ describe('email commands', () => {
   });
 
   test('email domains delete calls delete endpoint', async () => {
-    setRoute('DELETE', `/domains/${DOMAIN_ID_3}`, {
+    setRoute('DELETE', `/v1/domains/${DOMAIN_ID_3}`, {
       status: 200,
       body: { success: true },
     });
@@ -395,7 +395,7 @@ describe('email commands', () => {
   });
 
   test('email domains dns fetches dns records', async () => {
-    setRoute('GET', `/domains/${DOMAIN_ID_4}/dns-records`, {
+    setRoute('GET', `/v1/domains/${DOMAIN_ID_4}/dns-records`, {
       status: 200,
       body: {
         txt: { name: '_anima-verify.example.com', value: 'anima-verify=tok_abc' },
@@ -431,7 +431,7 @@ describe('email commands', () => {
   });
 
   test('email domains deliverability fetches metrics', async () => {
-    setRoute('GET', `/domains/${DOMAIN_ID_5}/deliverability`, {
+    setRoute('GET', `/v1/domains/${DOMAIN_ID_5}/deliverability`, {
       status: 200,
       body: {
         domain: 'example.com',
@@ -460,7 +460,7 @@ describe('email commands', () => {
   });
 
   test('email send handles api errors with friendly message', async () => {
-    setRoute('POST', '/email/send', {
+    setRoute('POST', '/v1/email/send', {
       status: 400,
       body: {
         error: {
@@ -496,7 +496,7 @@ describe('email commands', () => {
   });
 
   test('email send handles 429 rate limiting', async () => {
-    setRoute('POST', '/email/send', {
+    setRoute('POST', '/v1/email/send', {
       status: 429,
       body: {
         error: {
@@ -532,7 +532,7 @@ describe('email commands', () => {
   });
 
   test('email list handles 503 server unavailable', async () => {
-    setRoute('GET', '/email', {
+    setRoute('GET', '/v1/email', {
       status: 503,
       body: {
         error: {
@@ -561,7 +561,7 @@ describe('email commands', () => {
   });
 
   test('email get handles 404 with friendly message', async () => {
-    setRoute('GET', `/email/${EMAIL_ID_1}`, {
+    setRoute('GET', `/v1/email/${EMAIL_ID_1}`, {
       status: 404,
       body: {
         error: { code: 'NOT_FOUND', message: 'email not found' },

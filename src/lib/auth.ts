@@ -181,7 +181,7 @@ export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
         const refreshClient = new ApiClient({ baseUrl });
         try {
           const result = await refreshClient.post<{ token: string; refreshToken: string; expiresAt: string }>(
-            '/api/v1/auth/refresh',
+            '/v1/auth/refresh',
             { refreshToken: auth.refreshToken }
           );
           await saveAuthConfig({

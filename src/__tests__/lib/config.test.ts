@@ -119,8 +119,9 @@ describe('config', () => {
       expect(onDisk).toContain('api.useanima.sh');
       expect(onDisk).toContain('2026-06-01');
 
-      // And the keychain backend got them.
-      const blob = await memoryStore.getSecret(secureStore.DEFAULT_ACCOUNT);
+      // And the keychain backend got them. Per-host accounts: secrets are
+      // keyed by the apiUrl's host so dev / staging / prod can coexist.
+      const blob = await memoryStore.getSecret('api.useanima.sh');
       expect(blob).not.toBeNull();
       const parsed = JSON.parse(blob ?? '{}');
       expect(parsed.apiKey).toBe('oat_supersecret');
@@ -158,7 +159,7 @@ describe('config', () => {
       expect(afterFile).not.toContain('old@example.com');
       expect(afterFile).toContain('api.useanima.sh');
 
-      const blob = await memoryStore.getSecret(secureStore.DEFAULT_ACCOUNT);
+      const blob = await memoryStore.getSecret('api.useanima.sh');
       const parsed = JSON.parse(blob ?? '{}');
       expect(parsed.apiKey).toBe('oat_legacy');
       expect(parsed.refreshToken).toBe('ort_legacy');
@@ -170,19 +171,73 @@ describe('config', () => {
       expect(auth2.apiKey).toBe('oat_legacy');
     });
 
-    test('saveAuthConfig with no secrets clears the keychain entry', async () => {
+    test('saveAuthConfig with no secrets clears the keychain entry for that host', async () => {
       // Seed a previous login.
       await config.saveAuthConfig({
         apiKey: 'oat_existing',
         apiUrl: 'https://api.useanima.sh',
       });
-      expect(await memoryStore.getSecret(secureStore.DEFAULT_ACCOUNT)).not.toBeNull();
+      expect(await memoryStore.getSecret('api.useanima.sh')).not.toBeNull();
 
       // saveAuthConfig({apiUrl: ...}) is the SESSION_EXPIRED wipe path in
-      // auth.ts — preserves apiUrl, drops creds. The keychain entry must go
-      // along for the ride or we'd leak the dead refresh token.
+      // auth.ts — preserves apiUrl, drops creds. The keychain entry for
+      // THIS host must go along for the ride or we'd leak the dead refresh
+      // token.
       await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh' });
+      expect(await memoryStore.getSecret('api.useanima.sh')).toBeNull();
+    });
+
+    test('two apiUrls coexist as separate keychain entries', async () => {
+      await config.saveAuthConfig({
+        apiKey: 'oat_prod',
+        apiUrl: 'https://api.useanima.sh',
+      });
+      await config.saveAuthConfig({
+        apiKey: 'oat_dev',
+        apiUrl: 'http://localhost:4001',
+      });
+
+      // Both entries should be present — switching between dev and prod
+      // shouldn't lose credentials for the other side.
+      const prodBlob = await memoryStore.getSecret('api.useanima.sh');
+      const devBlob = await memoryStore.getSecret('localhost:4001');
+      expect(prodBlob).not.toBeNull();
+      expect(devBlob).not.toBeNull();
+      expect(JSON.parse(prodBlob ?? '{}').apiKey).toBe('oat_prod');
+      expect(JSON.parse(devBlob ?? '{}').apiKey).toBe('oat_dev');
+    });
+
+    test('legacy DEFAULT_ACCOUNT entries are re-keyed on first read', async () => {
+      // Simulate state created by the FIRST iteration of this module
+      // (before per-host keying landed): a v0.7-era keychain entry under
+      // "default" plus a metadata-only auth.json with the apiUrl.
+      await memoryStore.setSecret(
+        secureStore.DEFAULT_ACCOUNT,
+        JSON.stringify({ apiKey: 'oat_old', email: 'pioneer@example.com' }),
+      );
+      mkdirSync(testConfigDir, { recursive: true });
+      writeFileSync(
+        join(testConfigDir, 'auth.json'),
+        JSON.stringify({ apiUrl: 'https://api.useanima.sh' }),
+      );
+
+      const auth = await config.getAuthConfig();
+      expect(auth.apiKey).toBe('oat_old');
+      expect(auth.email).toBe('pioneer@example.com');
+
+      // Re-keying: the per-host entry now exists; the legacy default is gone.
+      expect(await memoryStore.getSecret('api.useanima.sh')).not.toBeNull();
       expect(await memoryStore.getSecret(secureStore.DEFAULT_ACCOUNT)).toBeNull();
+    });
+
+    test('auth.json is written with mode 0600', async () => {
+      await config.saveAuthConfig({
+        apiKey: 'oat_perm_check',
+        apiUrl: 'https://api.useanima.sh',
+      });
+      const stat = require('node:fs').statSync(join(testConfigDir, 'auth.json'));
+      // Mask off type bits, keep only permission bits.
+      expect(stat.mode & 0o777).toBe(0o600);
     });
   });
 

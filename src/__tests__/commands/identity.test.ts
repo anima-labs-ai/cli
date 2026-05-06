@@ -148,7 +148,7 @@ describe('identity commands', () => {
   });
 
   test('create identity sends required body', async () => {
-    setRoute('POST', '/agents', {
+    setRoute('POST', '/v1/agents', {
       status: 201,
       body: buildAgentResponse({ name: 'Bot One', slug: 'bot-one' }),
       assert: ({ body }) => {
@@ -190,7 +190,7 @@ describe('identity commands', () => {
   });
 
   test('list identities supports filters and pagination options', async () => {
-    setRoute('GET', '/agents', {
+    setRoute('GET', '/v1/agents', {
       status: 200,
       body: {
         items: [buildAgentResponse({ name: 'Bot One', slug: 'bot-one' })],
@@ -231,7 +231,7 @@ describe('identity commands', () => {
   });
 
   test('get identity fetches by id', async () => {
-    setRoute('GET', `/agents/${AGENT_ID_1}`, {
+    setRoute('GET', `/v1/agents/${AGENT_ID_1}`, {
       status: 200,
       body: buildAgentResponse(),
     });
@@ -253,7 +253,7 @@ describe('identity commands', () => {
   });
 
   test('update identity sends patch body', async () => {
-    setRoute('PATCH', `/agents/${AGENT_ID_1}`, {
+    setRoute('PATCH', `/v1/agents/${AGENT_ID_1}`, {
       status: 200,
       body: buildAgentResponse({
         name: 'Bot One Updated',
@@ -299,7 +299,7 @@ describe('identity commands', () => {
   });
 
   test('delete identity calls delete endpoint', async () => {
-    setRoute('DELETE', `/agents/${AGENT_ID_1}`, {
+    setRoute('DELETE', `/v1/agents/${AGENT_ID_1}`, {
       status: 200,
       body: { success: true },
     });
@@ -317,7 +317,7 @@ describe('identity commands', () => {
   });
 
   test('rotate-key rotates API key', async () => {
-    setRoute('POST', `/agents/${AGENT_ID_1}/rotate-key`, {
+    setRoute('POST', `/v1/agents/${AGENT_ID_1}/rotate-key`, {
       status: 200,
       body: {
         apiKey: 'sk_rotated_123',
@@ -342,7 +342,7 @@ describe('identity commands', () => {
   });
 
   test('handles 404 with user-friendly message', async () => {
-    setRoute('GET', `/agents/${MISSING_ID}`, {
+    setRoute('GET', `/v1/agents/${MISSING_ID}`, {
       status: 404,
       body: {
         error: {
@@ -371,7 +371,7 @@ describe('identity commands', () => {
   });
 
   test('create identity handles forbidden access (403)', async () => {
-    setRoute('POST', '/agents', {
+    setRoute('POST', '/v1/agents', {
       status: 403,
       body: {
         error: {
@@ -406,7 +406,7 @@ describe('identity commands', () => {
   });
 
   test('list identities handles rate limiting (429)', async () => {
-    setRoute('GET', '/agents', {
+    setRoute('GET', '/v1/agents', {
       status: 429,
       body: {
         error: {

@@ -262,6 +262,30 @@ function hasAnySecret(secrets: SecretFields): boolean {
   return SECRET_FIELDS.some((k) => secrets[k] !== undefined);
 }
 
+/**
+ * Derive the keychain account name from an apiUrl. Two reasons to do this
+ * instead of always using `DEFAULT_ACCOUNT`:
+ *
+ *   • Two simultaneous sessions (prod + local dev) coexist in the keychain
+ *     instead of overwriting each other on every `am auth login --api-url=...`.
+ *   • Switching back to a previously-used apiUrl restores the previous
+ *     credentials without forcing a re-login (as long as the refresh token
+ *     hasn't expired).
+ *
+ * Account name = the URL's `host` (hostname plus port if non-default),
+ * lowercased. `https://api.useanima.sh` → `api.useanima.sh`,
+ * `http://localhost:4001` → `localhost:4001`. URL parse failures fall
+ * back to `DEFAULT_ACCOUNT` so a malformed config never crashes the CLI.
+ */
+function accountForApiUrl(apiUrl: string | undefined): string {
+  if (!apiUrl) return DEFAULT_ACCOUNT;
+  try {
+    return new URL(apiUrl).host.toLowerCase();
+  } catch {
+    return DEFAULT_ACCOUNT;
+  }
+}
+
 export async function getAuthConfig(): Promise<AuthConfig> {
   let metadata: MetadataFields = {};
   let legacySecrets: SecretFields | null = null;
@@ -271,6 +295,7 @@ export async function getAuthConfig(): Promise<AuthConfig> {
   try {
     const p = authConfigPath();
     if (existsSync(p)) {
+      tightenFileMode(p);
       const raw = JSON.parse(readFileSync(p, 'utf8')) as AuthConfig;
       const { secrets, metadata: meta } = splitConfig(raw);
       metadata = meta;
@@ -281,15 +306,17 @@ export async function getAuthConfig(): Promise<AuthConfig> {
     // Don't throw: callers expect "no auth" not "fatal error on every command".
   }
 
+  const account = accountForApiUrl(metadata.apiUrl);
+
   // 2. If we found legacy plaintext secrets, migrate them into the keychain
   //    and rewrite auth.json without them. Best-effort: if the keychain write
   //    fails (e.g., libsecret missing on Linux), we surface a clean error
   //    rather than silently keep the secrets readable.
   if (legacySecrets) {
     try {
-      await store().setSecret(DEFAULT_ACCOUNT, JSON.stringify(legacySecrets));
+      await store().setSecret(account, JSON.stringify(legacySecrets));
       await ensureConfigDir();
-      writeFileSync(authConfigPath(), JSON.stringify(metadata, null, 2));
+      writeSecureJson(authConfigPath(), metadata);
     } catch (err) {
       // If migration fails the user's plaintext file is still on disk and
       // their CLI still works — they're just no better off than before.
@@ -305,11 +332,30 @@ export async function getAuthConfig(): Promise<AuthConfig> {
     return { ...metadata, ...legacySecrets };
   }
 
-  // 3. Normal path: read secrets from the keychain. A missing keychain entry
-  //    is not an error (user just hasn't logged in); a backend failure is.
+  // 3. Normal path: read secrets from the keychain.
   let secrets: SecretFields = {};
   try {
-    const blob = await store().getSecret(DEFAULT_ACCOUNT);
+    let blob = await store().getSecret(account);
+    // Backwards-compat: pre-v0.7 (the first version with this module) stored
+    // everything under DEFAULT_ACCOUNT regardless of apiUrl. If the per-host
+    // entry is empty and we have a hit on DEFAULT_ACCOUNT, treat it as ours,
+    // re-key it to the right account, and drop the old one. This is a
+    // one-time, transparent upgrade — same pattern as the file-level
+    // migration above.
+    if (blob === null && account !== DEFAULT_ACCOUNT) {
+      const legacyBlob = await store().getSecret(DEFAULT_ACCOUNT);
+      if (legacyBlob !== null) {
+        try {
+          await store().setSecret(account, legacyBlob);
+          await store().deleteSecret(DEFAULT_ACCOUNT);
+          blob = legacyBlob;
+        } catch {
+          // Re-key failed (write or delete). Fall back to using the legacy
+          // blob in-memory; the next save will repair on its own.
+          blob = legacyBlob;
+        }
+      }
+    }
     if (blob !== null) {
       const parsed = JSON.parse(blob) as SecretFields;
       // Defensive: only copy known fields, in case future versions add new
@@ -329,25 +375,47 @@ export async function getAuthConfig(): Promise<AuthConfig> {
 export async function saveAuthConfig(config: AuthConfig): Promise<void> {
   await ensureConfigDir();
   const { secrets, metadata } = splitConfig(config);
+  const account = accountForApiUrl(metadata.apiUrl);
 
   // Write the keychain entry first. If it fails, we want the on-disk state
   // to still reflect the *previous* successful save, not a half-applied one.
   if (hasAnySecret(secrets)) {
-    await store().setSecret(DEFAULT_ACCOUNT, JSON.stringify(secrets));
+    await store().setSecret(account, JSON.stringify(secrets));
   } else {
-    // No secrets in this save → clear any previous keychain entry to keep
-    // the two stores consistent (e.g., logout calls saveAuthConfig({apiUrl})).
-    await store().deleteSecret(DEFAULT_ACCOUNT);
+    // No secrets in this save → clear the keychain entry for THIS apiUrl
+    // to keep the two stores consistent (e.g., logout calls
+    // saveAuthConfig({apiUrl})). Other apiUrls' entries are untouched —
+    // logging out of dev should not nuke your prod session.
+    await store().deleteSecret(account);
   }
 
-  writeFileSync(authConfigPath(), JSON.stringify(metadata, null, 2));
+  writeSecureJson(authConfigPath(), metadata);
 }
 
 export async function clearAuthConfig(): Promise<void> {
   try {
     await ensureConfigDir();
-    await store().deleteSecret(DEFAULT_ACCOUNT);
-    writeFileSync(authConfigPath(), JSON.stringify({}, null, 2));
+    // Need the apiUrl to know which keychain entry corresponds to the active
+    // session. Read the metadata first; if the file is gone or unparseable,
+    // fall through to deleting DEFAULT_ACCOUNT for symmetry with old installs.
+    let account = DEFAULT_ACCOUNT;
+    try {
+      const p = authConfigPath();
+      if (existsSync(p)) {
+        const raw = JSON.parse(readFileSync(p, 'utf8')) as AuthConfig;
+        account = accountForApiUrl(raw.apiUrl);
+      }
+    } catch {
+      // file unreadable — proceed with DEFAULT_ACCOUNT
+    }
+    await store().deleteSecret(account);
+    // Also wipe the legacy DEFAULT_ACCOUNT entry on logout — covers users
+    // who upgraded mid-session and have an old default-keyed blob lying
+    // around alongside the new per-host one.
+    if (account !== DEFAULT_ACCOUNT) {
+      await store().deleteSecret(DEFAULT_ACCOUNT);
+    }
+    writeSecureJson(authConfigPath(), {});
   } catch {
     // Logout must never crash the CLI — at worst the user re-runs and
     // the second call cleans up whatever the first one left.
@@ -358,6 +426,7 @@ export async function getConfig(): Promise<AppConfig> {
   try {
     const p = appConfigPath();
     if (!existsSync(p)) return {};
+    tightenFileMode(p);
     return JSON.parse(readFileSync(p, 'utf8'));
   } catch {
     return {};
@@ -366,7 +435,10 @@ export async function getConfig(): Promise<AppConfig> {
 
 export async function saveConfig(config: AppConfig): Promise<void> {
   await ensureConfigDir();
-  writeFileSync(appConfigPath(), JSON.stringify(config, null, 2));
+  // 0600 here too — config.json holds non-secret prefs today, but the
+  // multi-profile feature stores `apiKey` per-profile in this same file.
+  // Until those move into the keychain too, conservative perms are warranted.
+  writeSecureJson(appConfigPath(), config);
 }
 
 export function getConfigDir(): string {

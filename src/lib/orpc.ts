@@ -27,9 +27,11 @@ export type AnimaClient = ContractRouterClient<typeof contract>;
 
 /**
  * Build a typed oRPC client. URL and headers are resolved per-request:
- *   - `url()` reads the stored auth config so `--api-url` flag, env var,
- *     and persisted `auth.apiUrl` (set during `am auth login`) all flow
- *     into the request, matching legacy `getApiClient` behavior.
+ *   - `url()` reads the stored auth config and appends `/v1` so contract
+ *     paths line up with the server's `prefix: "/v1/"` mount. Phase 2 of
+ *     the prefix standardization moved versioning out of contract paths
+ *     and into a single server-side prefix; the matching client-side
+ *     prefix lives here.
  *   - `headers()` re-runs OAuth token refresh between calls so a long-
  *     running CLI process never falls off the 1h access-token cliff.
  */
@@ -37,7 +39,8 @@ export function createOrpcClient(opts: GlobalOptions): AnimaClient {
   const link = new OpenAPILink(contract, {
     url: async () => {
       const auth = await getAuthConfig();
-      return resolveApiUrl(opts, auth.apiUrl);
+      const base = resolveApiUrl(opts, auth.apiUrl).replace(/\/$/, '');
+      return `${base}/v1`;
     },
     headers: async () => ensureAuthHeaders(opts),
     // The API normalizes errors into {error:{code,message,details}} which

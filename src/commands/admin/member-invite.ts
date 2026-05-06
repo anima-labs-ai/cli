@@ -35,7 +35,7 @@ export function memberInviteCommand(): Command {
         const api = await getApiClient(globals);
         const org = await resolveOrg(opts.org);
 
-        const result = await api.post<MemberInviteResponse>(`/admin/orgs/${encodeURIComponent(org)}/members`, {
+        const result = await api.post<MemberInviteResponse>(`/v1/admin/orgs/${encodeURIComponent(org)}/members`, {
           email: opts.email,
           role: opts.role,
         });

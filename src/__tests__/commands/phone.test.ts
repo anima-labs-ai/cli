@@ -195,7 +195,7 @@ describe('phone commands', () => {
   test('phone search sends expected query params and renders table', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('GET', '/phone/search', {
+    setRoute('GET', '/v1/phone/search', {
       status: 200,
       body: {
         items: [
@@ -236,7 +236,7 @@ describe('phone commands', () => {
   test('phone search supports json mode output', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('GET', '/phone/search', {
+    setRoute('GET', '/v1/phone/search', {
       status: 200,
       body: {
         items: [
@@ -270,7 +270,7 @@ describe('phone commands', () => {
   test('phone provision sends required payload', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('POST', '/phone/provision', {
+    setRoute('POST', '/v1/phone/provision', {
       status: 200,
       body: buildProvisionResponse(),
       assert: ({ body }) => {
@@ -303,7 +303,7 @@ describe('phone commands', () => {
   test('phone list sends agent query param', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('GET', '/phone/numbers', {
+    setRoute('GET', '/v1/phone/numbers', {
       status: 200,
       body: {
         items: [
@@ -341,7 +341,7 @@ describe('phone commands', () => {
   test('phone release sends required payload', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('POST', '/phone/release', {
+    setRoute('POST', '/v1/phone/release', {
       status: 200,
       body: { success: true },
       assert: ({ body }) => {
@@ -372,7 +372,7 @@ describe('phone commands', () => {
   test('phone send-sms sends required payload with media urls', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('POST', '/phone/send-sms', {
+    setRoute('POST', '/v1/phone/send-sms', {
       status: 200,
       body: buildMessageResponse({
         agentId: AGENT_ID_9,
@@ -412,7 +412,7 @@ describe('phone commands', () => {
   test('phone search handles ApiError with user-friendly message', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('GET', '/phone/search', {
+    setRoute('GET', '/v1/phone/search', {
       status: 503,
       body: {
         error: {
@@ -497,7 +497,7 @@ describe('phone commands', () => {
   test('phone search handles 429 rate limiting', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('GET', '/phone/search', {
+    setRoute('GET', '/v1/phone/search', {
       status: 429,
       body: {
         error: { code: 'RATE_LIMITED', message: 'Too many requests' },
@@ -529,7 +529,7 @@ describe('phone commands', () => {
   test('phone list handles 500 server error', async () => {
     setAuthenticatedConfig(serverPort);
 
-    setRoute('GET', '/phone/numbers', {
+    setRoute('GET', '/v1/phone/numbers', {
       status: 500,
       body: { error: { code: 'INTERNAL', message: 'Unexpected failure' } },
     });
