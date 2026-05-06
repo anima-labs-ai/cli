@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createProgram } from '../../cli.js';
-import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
+import { getAuthConfig, resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -84,14 +84,13 @@ describe('auth commands', () => {
       console.log = originalLog;
       process.exit = originalExit;
 
-      const authPath = join(testConfigDir, 'auth.json');
-      if (existsSync(authPath)) {
-        const saved = JSON.parse(readFileSync(authPath, 'utf-8'));
-        expect(saved.apiKey).toBe('sk_test_abc123');
-        // Legacy field name; we now store the org slug (no email available
-        // from `/orgs/me`).
-        expect(saved.email).toBe('test-org');
-      }
+      // Read via the public API: secrets live in the keychain now, not the
+      // file. The merged AuthConfig still exposes them as before.
+      const saved = await getAuthConfig();
+      expect(saved.apiKey).toBe('sk_test_abc123');
+      // Legacy field name; we now store the org slug (no email available
+      // from `/orgs/me`).
+      expect(saved.email).toBe('test-org');
     });
 
     test('login with email/password stores token', async () => {
@@ -132,13 +131,10 @@ describe('auth commands', () => {
       console.log = originalLog;
       process.exit = originalExit;
 
-      const authPath = join(testConfigDir, 'auth.json');
-      if (existsSync(authPath)) {
-        const saved = JSON.parse(readFileSync(authPath, 'utf-8'));
-        expect(saved.token).toBe('jwt-token-123');
-        expect(saved.refreshToken).toBe('refresh-456');
-        expect(saved.email).toBe('user@example.com');
-      }
+      const saved = await getAuthConfig();
+      expect(saved.token).toBe('jwt-token-123');
+      expect(saved.refreshToken).toBe('refresh-456');
+      expect(saved.email).toBe('user@example.com');
     });
 
     test('login without credentials fails', async () => {
