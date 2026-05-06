@@ -1,57 +1,31 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface DeliveriesOptions {
-  limit?: number;
+  limit?: string;
   cursor?: string;
-}
-
-interface Delivery {
-  id: string;
-  event: string;
-  statusCode?: number;
-  success: boolean;
-  timestamp?: string;
-  duration?: number;
-}
-
-interface DeliveriesResponse {
-  data: Delivery[];
-  nextCursor?: string;
-}
-
-function parseLimit(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('Limit must be an integer between 1 and 100');
-  }
-  return parsed;
 }
 
 export function webhookDeliveriesCommand(): Command {
   return new Command('deliveries')
     .description('List webhook delivery history')
     .argument('<id>', 'Webhook ID')
-    .option('--limit <n>', 'Page size (1-100)', parseLimit)
+    .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--cursor <cursor>', 'Pagination cursor')
     .action(async function (this: Command, id: string) {
       const opts = this.opts<DeliveriesOptions>();
-      const globals = this.optsWithGlobals<DeliveriesOptions & GlobalOptions>();
+      const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
-      const query: Record<string, string> = {};
-      if (opts.limit !== undefined) {
-        query.limit = String(opts.limit);
-      }
-      if (opts.cursor !== undefined) {
-        query.cursor = opts.cursor;
-      }
-
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<DeliveriesResponse>(`/webhooks/${id}/deliveries`, query);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.webhook.listDeliveries({
+          webhookId: id,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          cursor: opts.cursor,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -59,27 +33,50 @@ export function webhookDeliveriesCommand(): Command {
         }
 
         output.table(
-          ['ID', 'Event', 'Status Code', 'Success', 'Duration', 'Timestamp'],
-          result.data.map((d) => [
+          ['ID', 'Event', 'Status', 'Status Code', 'Attempts', 'Created At'],
+          result.items.map((d) => [
             d.id,
             d.event,
-            d.statusCode !== undefined ? String(d.statusCode) : '-',
-            d.success ? 'Yes' : 'No',
-            d.duration !== undefined ? `${d.duration}ms` : '-',
-            d.timestamp ?? '-',
+            d.status,
+            d.statusCode !== null ? String(d.statusCode) : '-',
+            `${d.attempts}/${d.maxAttempts}`,
+            d.createdAt,
           ]),
+          {
+            summary: `Returned ${result.items.length} deliveries.`,
+            pagination: {
+              has_more: result.pagination.hasMore,
+              next_cursor: result.pagination.nextCursor,
+            },
+          },
         );
-
-        if (result.nextCursor) {
-          output.info(`Next cursor: ${result.nextCursor}`);
-        }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to list deliveries: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to list deliveries: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to list deliveries');
       }
     });
+}
+
+function validateLimit(value: string): string {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
+  }
+  return value;
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Webhook not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

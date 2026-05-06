@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 export function deleteWebhookCommand(): Command {
   return new Command('delete')
@@ -12,8 +12,8 @@ export function deleteWebhookCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.delete<Record<string, unknown>>(`/webhooks/${id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.webhook.delete({ id });
 
         if (globals.json) {
           output.json(result);
@@ -22,12 +22,24 @@ export function deleteWebhookCommand(): Command {
 
         output.success(`Webhook ${id} deleted`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to delete webhook: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to delete webhook: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to delete webhook');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Webhook not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }
