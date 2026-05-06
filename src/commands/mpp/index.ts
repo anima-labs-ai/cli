@@ -14,30 +14,9 @@
  */
 
 import { Command, InvalidArgumentError } from "commander";
-import { ApiError } from "../../lib/api-client.js";
-import { requireAuth, type GlobalOptions } from "../../lib/auth.js";
+import { type GlobalOptions } from "../../lib/auth.js";
+import { ORPCError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
-
-interface MppPayResponse {
-	paid: boolean;
-	settlement?: {
-		network_id?: string;
-		amount_cents?: number;
-		currency?: string;
-	};
-	response?: {
-		status?: number;
-		body?: unknown;
-	};
-	[k: string]: unknown;
-}
-
-interface MppDecodeResponse {
-	network_id: string;
-	method: string;
-	request: Record<string, unknown>;
-	[k: string]: unknown;
-}
 
 function collectHeader(value: string, previous: Record<string, string> = {}) {
 	const idx = value.indexOf(":");
@@ -78,7 +57,7 @@ function payCmd(): Command {
 			const globals = this.optsWithGlobals<GlobalOptions>();
 			const output = Output.fromGlobals(globals);
 			try {
-				const client = await requireAuth(globals);
+				const orpc = await requireOrpcAuth(globals);
 				let parsedData: unknown;
 				if (opts.data) {
 					try {
@@ -89,7 +68,7 @@ function payCmd(): Command {
 						);
 					}
 				}
-				const result = await client.post<MppPayResponse>("/v1/mpp/pay", {
+				const result = await orpc.mpp.pay({
 					url,
 					spend_request_id: opts.spendRequestId,
 					method: opts.method,
@@ -98,7 +77,7 @@ function payCmd(): Command {
 				});
 				output.payload(result);
 			} catch (error) {
-				if (error instanceof ApiError) {
+				if (error instanceof ORPCError) {
 					output.error(`mpp pay failed: ${error.message}`);
 				} else if (error instanceof Error) {
 					output.error(error.message);
@@ -122,13 +101,13 @@ function decodeCmd(): Command {
 			const globals = this.optsWithGlobals<GlobalOptions>();
 			const output = Output.fromGlobals(globals);
 			try {
-				const client = await requireAuth(globals);
-				const result = await client.post<MppDecodeResponse>("/v1/mpp/decode", {
+				const orpc = await requireOrpcAuth(globals);
+				const result = await orpc.mpp.decode({
 					challenge: opts.challenge,
 				});
 				output.payload(result);
 			} catch (error) {
-				if (error instanceof ApiError) {
+				if (error instanceof ORPCError) {
 					output.error(`mpp decode failed: ${error.message}`);
 				} else if (error instanceof Error) {
 					output.error(error.message);

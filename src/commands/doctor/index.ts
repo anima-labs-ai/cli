@@ -33,9 +33,9 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import pc from 'picocolors';
 
-import { ApiError } from '../../lib/api-client.js';
-import { getApiClient, type GlobalOptions } from '../../lib/auth.js';
+import { type GlobalOptions } from '../../lib/auth.js';
 import { getAuthConfig, getConfig } from '../../lib/config.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import { Output } from '../../lib/output.js';
 
 interface CheckResult {
@@ -86,6 +86,9 @@ async function checkApiDns(apiUrl: string): Promise<CheckResult> {
 }
 
 async function checkApiHealth(apiUrl: string): Promise<CheckResult> {
+  // `/health` is a plain Fastify route, not part of the oRPC contract — so we
+  // keep the raw `fetch()` here. The point of doctor is to triage the network
+  // path before any auth / contract-routed call, so this is the right layer.
   const start = performance.now();
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), DOCTOR_TIMEOUT_MS);
@@ -128,10 +131,10 @@ async function checkAuthConfigured(): Promise<CheckResult> {
 
 async function checkAuthValid(globals: GlobalOptions): Promise<CheckResult> {
   const { check } = await timed('auth:valid', async () => {
-    const client = await getApiClient(globals);
+    const orpc = await requireOrpcAuth(globals);
     // `/orgs/me` is the canonical authenticated probe — `/auth/me` was a
     // historical alias that was never wired up server-side.
-    const me = await client.get<{ id: string; name: string; tier: string }>('/orgs/me');
+    const me = await orpc.org.me({});
     return `org=${me.name} tier=${me.tier}`;
   });
   return check;
@@ -224,7 +227,7 @@ export function doctorCommand(): Command {
           results.push(await checkAuthValid(globals));
         } catch (error) {
           const ms = Math.round(performance.now() - start);
-          if (error instanceof ApiError) {
+          if (error instanceof ORPCError) {
             results.push({
               name: 'auth:valid',
               status: 'FAIL',

@@ -21,23 +21,10 @@
 
 import * as clack from "@clack/prompts";
 import { Command } from "commander";
-import { ApiError } from "../../lib/api-client.js";
-import { getApiClient } from "../../lib/auth.js";
 import type { GlobalOptions } from "../../lib/auth.js";
 import { getAuthConfig } from "../../lib/config.js";
+import { ORPCError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
-
-/**
- * Subset of `/orgs/me` response we consume. The full response includes
- * `masterKey` and other fields we never read (and which a separate
- * server-side redaction task will strip).
- */
-interface OrgMeResponse {
-	id: string;
-	name: string;
-	slug: string;
-	tier: string;
-}
 
 interface OnboardOptions {
 	skipDemo?: boolean;
@@ -96,12 +83,12 @@ export function onboardCommand(): Command {
 			// ── Step 2: Identity ──
 			// Was `/auth/me` — never existed in prod. `/orgs/me` is the working
 			// equivalent. We only consume non-secret fields.
-			let me: OrgMeResponse | null = null;
+			let me: Awaited<ReturnType<Awaited<ReturnType<typeof requireOrpcAuth>>["org"]["me"]>> | null = null;
 			try {
-				const client = await getApiClient(globals);
-				me = await client.get<OrgMeResponse>("/orgs/me");
+				const orpc = await requireOrpcAuth(globals);
+				me = await orpc.org.me({});
 			} catch (error) {
-				if (error instanceof ApiError && error.status === 401) {
+				if (error instanceof ORPCError && error.status === 401) {
 					if (isAgent) {
 						output.payload({
 							status: "session_expired",
