@@ -1,14 +1,14 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface RedactOptions {
   agent?: string;
   patterns?: string[];
 }
 
-interface VaultCredential {
+interface VaultCredentialLike {
   id: string;
   type: string;
   name: string;
@@ -23,7 +23,7 @@ interface VaultCredential {
 /**
  * Collect all sensitive field values from a credential.
  */
-function collectSecrets(credential: VaultCredential): string[] {
+function collectSecrets(credential: VaultCredentialLike): string[] {
   const secrets: string[] = [];
   if (credential.login?.password) secrets.push(credential.login.password);
   if (credential.login?.totp) secrets.push(credential.login.totp);
@@ -63,7 +63,7 @@ export function redactCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
+        const orpc = await requireOrpcAuth(globals);
         const input = await readStdin();
 
         // The list endpoint ALWAYS masks — there is no bulk reveal=true because
@@ -72,21 +72,19 @@ export function redactCommand(): Command {
         // each one with reveal=true. This requires a master key (agent keys
         // get 403) and costs N+1 round-trips, but it's the only correct path
         // and it matches how masking is enforced server-side.
-        const { items: masked } = await client.get<{ items: VaultCredential[] }>(
-          '/vault/credentials',
-          { agentId: opts.agent },
-        );
+        const { items: masked } = await orpc.vault.list({ agentId: opts.agent });
 
         output.debug(`Loaded ${masked.length} credential(s) — fetching plaintext for redaction`);
 
-        const items: VaultCredential[] = [];
+        const items: VaultCredentialLike[] = [];
         for (const stub of masked) {
           try {
-            const full = await client.get<VaultCredential>(`/vault/credentials/${stub.id}`, {
+            const full = await orpc.vault.get({
+              id: stub.id,
               agentId: opts.agent,
-              reveal: 'true',
+              reveal: true,
             });
-            items.push(full);
+            items.push(full as VaultCredentialLike);
           } catch (err) {
             // One broken credential shouldn't poison the whole redaction.
             // Log and continue — we'll miss its secrets in the output, but
@@ -140,7 +138,7 @@ export function redactCommand(): Command {
           process.stdout.write(result);
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Redaction failed: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Redaction failed: ${error.message}`);

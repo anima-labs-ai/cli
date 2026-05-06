@@ -1,71 +1,16 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-type CredentialType = 'login' | 'secure_note' | 'card' | 'identity';
-
-interface CredentialUri {
-  uri: string;
-  match?: 'domain' | 'host' | 'starts_with' | 'regex' | 'never';
-}
-
-interface LoginCredential {
-  username?: string;
-  password?: string;
-  uris?: CredentialUri[];
-  totp?: string;
-}
-
-interface CardCredential {
-  cardholderName?: string;
-  brand?: string;
-  number?: string;
-  expMonth?: string;
-  expYear?: string;
-  code?: string;
-}
-
-interface IdentityCredential {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  address1?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
-  company?: string;
-  ssn?: string;
-}
-
-interface CustomField {
-  name: string;
-  value: string;
-  type: 'text' | 'hidden' | 'boolean';
-}
-
-interface VaultCredential {
-  id: string;
-  type: CredentialType;
-  name: string;
-  notes?: string;
-  login?: LoginCredential;
-  card?: CardCredential;
-  identity?: IdentityCredential;
-  fields?: CustomField[];
-  favorite: boolean;
-  folderId?: string;
-  organizationId?: string;
-  collectionIds?: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface SearchResponse {
-  items: VaultCredential[];
-}
+type CredentialType =
+  | 'login'
+  | 'secure_note'
+  | 'card'
+  | 'identity'
+  | 'oauth_token'
+  | 'api_key'
+  | 'certificate';
 
 interface SearchOptions {
   agent?: string;
@@ -73,28 +18,41 @@ interface SearchOptions {
   type?: CredentialType;
 }
 
+const ALLOWED_TYPES: ReadonlySet<string> = new Set([
+  'login',
+  'secure_note',
+  'card',
+  'identity',
+  'oauth_token',
+  'api_key',
+  'certificate',
+]);
+
+function validateType(value: string): CredentialType {
+  if (ALLOWED_TYPES.has(value)) return value as CredentialType;
+  throw new InvalidArgumentError(
+    `type must be one of ${[...ALLOWED_TYPES].join(', ')}`,
+  );
+}
+
 export function searchCommand(): Command {
   return new Command('search')
     .description('Search credentials')
     .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .requiredOption('--query <search>', 'Search query')
-    .option('--type <type>', 'Credential type filter')
+    .option('--type <type>', 'Credential type filter', validateType)
     .action(async function (this: Command) {
       const opts = this.opts<SearchOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const params: Record<string, string | undefined> = {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.search({
           agentId: opts.agent,
           search: opts.query,
-        };
-        if (opts.type) {
-          params.type = opts.type;
-        }
-
-        const result = await client.get<SearchResponse>('/vault/search', params);
+          type: opts.type,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -113,8 +71,12 @@ export function searchCommand(): Command {
           ]),
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to search credentials: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to search credentials: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to search credentials: ${error.message}`);
         }

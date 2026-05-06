@@ -5,8 +5,8 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface UnlockOptions {
   ttl?: string;
@@ -86,8 +86,8 @@ export function unlockCommand(): Command {
         // Confirm the client has a usable master key on hand. We don't send
         // the key anywhere new — we just verify it works by hitting a
         // master-gated endpoint (the list endpoint already enforces this).
-        const client = await requireAuth(globals);
-        await client.get('/vault/identities', { limit: '1' });
+        const orpc = await requireOrpcAuth(globals);
+        await orpc.vault.listIdentities({ limit: 1 });
 
         output.warn('You are about to start a plaintext-reveal session.');
         output.info('Every reveal within the TTL will be recorded in the audit log.');
@@ -117,9 +117,11 @@ export function unlockCommand(): Command {
         output.info(`Ends: ${new Date(session.expiresAt * 1000).toISOString()}`);
         output.info('Run `am vault unlock --lock` to end early.');
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           if (error.status === 403) {
             output.error('Unlock requires a master key (mk_). Agent keys cannot unlock.');
+          } else if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
           } else {
             output.error(`Unlock failed: ${error.message}`);
           }

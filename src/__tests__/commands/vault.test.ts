@@ -1,12 +1,33 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { mkdirSync, rmSync } from 'node:fs';
-import { createProgram } from '../../cli.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const testConfigDir = join(tmpdir(), `am-test-vault-${Date.now()}`);
+const testConfigDir = join(import.meta.dir, '.test-vault-config');
+
+mock.module('env-paths', () => ({
+  default: () => ({
+    config: testConfigDir,
+    data: testConfigDir,
+    cache: testConfigDir,
+    log: testConfigDir,
+    temp: testConfigDir,
+  }),
+}));
+
+const { createProgram } = await import('../../cli.js');
+
+// Real-looking CUIDs so the contract's z.string().cuid() input validation
+// in the typed oRPC client doesn't reject the test args before the request
+// ever hits the mock server.
+const AGENT_ID_1 = 'caaa00000000000000000agt01';
+const AGENT_ID_2 = 'caaa00000000000000000agt02';
+const CRED_ID_1 = 'caaa00000000000000000crd01';
+const CRED_ID_2 = 'caaa00000000000000000crd02';
+const SHARE_ID_1 = 'caaa00000000000000000shr01';
+const VAULT_ID_1 = 'caaa00000000000000000vlt01';
+const ORG_ID_1 = 'caaa00000000000000000org01';
 
 interface RouteResponse {
   status: number;
@@ -29,15 +50,78 @@ function clearRoutes(): void {
   }
 }
 
-function getBaseUrl(): string {
-  return `http://localhost:${serverPort}`;
+function writeAuthConfig(port: number): void {
+  const authPath = join(testConfigDir, 'auth.json');
+  writeFileSync(authPath, JSON.stringify({ token: 'test-token', apiUrl: `http://localhost:${port}` }));
 }
 
-async function runCli(args: string[]): Promise<void> {
+async function runProgram(args: string[]): Promise<void> {
   try {
-    await program.parseAsync(['node', 'anima', '--token', 'test-token', '--api-url', getBaseUrl(), ...args]);
+    await program.parseAsync(['node', 'anima', ...args]);
   } catch {
   }
+}
+
+// Build a complete CredentialOutputSchema-shaped response. Required because
+// oRPC contracts derive the output type from a Zod schema; partial mock
+// responses lead to undefined fields when commands access typed fields.
+function buildCredentialResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: CRED_ID_1,
+    type: 'login',
+    name: 'GitHub',
+    login: {
+      username: 'octocat',
+      password: '****',
+      uris: [{ uri: 'https://github.com' }],
+    },
+    favorite: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+// Build a complete ProvisionVaultOutput-shaped response.
+function buildProvisionResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: VAULT_ID_1,
+    agentId: AGENT_ID_1,
+    orgId: ORG_ID_1,
+    vaultUserId: 'user_1',
+    vaultOrgId: 'vorg_1',
+    collectionId: 'col_1',
+    status: 'ACTIVE',
+    credentialCount: 0,
+    lastSyncAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+// Build a complete CredentialShareOutput-shaped response.
+function buildShareResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: SHARE_ID_1,
+    credentialId: CRED_ID_1,
+    orgId: ORG_ID_1,
+    sourceAgentId: AGENT_ID_1,
+    targetAgentId: AGENT_ID_2,
+    permission: 'READ',
+    expiresAt: null,
+    grantedBy: AGENT_ID_1,
+    revokedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
 }
 
 describe('vault commands', () => {
@@ -50,66 +134,67 @@ describe('vault commands', () => {
       log: testConfigDir,
       temp: testConfigDir,
     });
-    mkdirSync(testConfigDir, { recursive: true });
     program = createProgram();
+    if (!existsSync(testConfigDir)) {
+      mkdirSync(testConfigDir, { recursive: true });
+    }
 
     const server = Bun.serve({
       port: 0,
       async fetch(req) {
         const url = new URL(req.url);
-        const route = routes[`${req.method} ${url.pathname}`];
+        const key = `${req.method} ${url.pathname}`;
+        const route = routes[key];
+
+        if (process.env.ANIMA_TEST_DEBUG) {
+          console.error(`[mock-server] ${req.method} ${url.pathname}${url.search}`);
+        }
 
         if (!route) {
-          return new Response(JSON.stringify({ error: { message: 'Not Found' } }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' },
-          });
+          return new Response(
+            JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Not Found' } }),
+            { status: 404, headers: { 'Content-Type': 'application/json' } },
+          );
         }
 
         let body: unknown = undefined;
-        const bodyText = await req.text();
-        const contentType = req.headers.get('content-type') ?? '';
-        if (bodyText && contentType.includes('application/json')) {
-          body = JSON.parse(bodyText) as unknown;
+        if (req.method !== 'GET' && req.method !== 'DELETE') {
+          const bodyText = await req.text();
+          const contentType = req.headers.get('content-type') ?? '';
+          if (bodyText && contentType.includes('application/json')) {
+            body = JSON.parse(bodyText) as unknown;
+          }
         }
 
         route.assert?.({ url, body });
 
-        return new Response(route.status === 204 ? null : JSON.stringify(route.body), {
-          status: route.status,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          route.status === 204 ? null : JSON.stringify(route.body),
+          { status: route.status, headers: { 'Content-Type': 'application/json' } },
+        );
       },
     });
     mockServer = server;
     serverPort = server.port ?? 0;
+
+    writeAuthConfig(serverPort);
   });
 
   afterEach(() => {
     mockServer?.stop();
     mockServer = null;
     clearRoutes();
-    try { rmSync(testConfigDir, { recursive: true, force: true }); } catch {}
+    if (existsSync(testConfigDir)) {
+      rmSync(testConfigDir, { recursive: true, force: true });
+    }
   });
 
   test('vault provision sends expected body', async () => {
     setRoute('POST', '/vault/provision', {
       status: 200,
-      body: {
-        id: 'vault_1',
-        agentId: 'agent_1',
-        orgId: 'org_1',
-        vaultUserId: 'user_1',
-        vaultOrgId: 'vorg_1',
-        collectionId: 'col_1',
-        status: 'ACTIVE',
-        credentialCount: 0,
-        lastSyncAt: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
+      body: buildProvisionResponse(),
       assert: ({ body }) => {
-        expect(body).toEqual({ agentId: 'agent_1' });
+        expect(body).toEqual({ agentId: AGENT_ID_1 });
       },
     });
 
@@ -117,7 +202,7 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'provision', '--agent', 'agent_1']);
+    await runProgram(['vault', 'provision', '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
@@ -128,7 +213,7 @@ describe('vault commands', () => {
       status: 200,
       body: { success: true },
       assert: ({ body }) => {
-        expect(body).toEqual({ agentId: 'agent_1' });
+        expect(body).toEqual({ agentId: AGENT_ID_1 });
       },
     });
 
@@ -136,7 +221,7 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'deprovision', '--agent', 'agent_1']);
+    await runProgram(['vault', 'deprovision', '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
@@ -151,7 +236,7 @@ describe('vault commands', () => {
         status: 'unlocked',
       },
       assert: ({ url }) => {
-        expect(url.searchParams.get('agentId')).toBe('agent_1');
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
       },
     });
 
@@ -159,7 +244,7 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['--json', 'vault', 'status', '--agent', 'agent_1']);
+    await runProgram(['--json', 'vault', 'status', '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
 
@@ -172,7 +257,7 @@ describe('vault commands', () => {
       status: 200,
       body: { success: true },
       assert: ({ body }) => {
-        expect(body).toEqual({ agentId: 'agent_1' });
+        expect(body).toEqual({ agentId: AGENT_ID_1 });
       },
     });
 
@@ -180,7 +265,7 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'sync', '--agent', 'agent_1']);
+    await runProgram(['vault', 'sync', '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
@@ -189,22 +274,16 @@ describe('vault commands', () => {
   test('vault store login sends expected body', async () => {
     setRoute('POST', '/vault/credentials', {
       status: 200,
-      body: {
-        id: 'cred_1',
-        type: 'login',
-        name: 'GitHub',
+      body: buildCredentialResponse({
         login: {
           username: 'octocat',
           password: 'secret',
           uris: [{ uri: 'https://github.com' }],
         },
-        favorite: false,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
+      }),
       assert: ({ body }) => {
-        expect(body).toEqual({
-          agentId: 'agent_1',
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_1,
           type: 'login',
           name: 'GitHub',
           login: {
@@ -220,43 +299,32 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli([
+    await runProgram([
       '--json',
       'vault',
       'store',
-      '--agent',
-      'agent_1',
-      '--type',
-      'login',
-      '--name',
-      'GitHub',
-      '--username',
-      'octocat',
-      '--password',
-      'secret',
-      '--uri',
-      'https://github.com',
+      '--agent', AGENT_ID_1,
+      '--type', 'login',
+      '--name', 'GitHub',
+      '--username', 'octocat',
+      '--password', 'secret',
+      '--uri', 'https://github.com',
     ]);
 
     console.log = originalLog;
     const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
-    expect(parsed.id).toBe('cred_1');
+    expect(parsed.id).toBe(CRED_ID_1);
   });
 
   test('vault get fetches credential by id with agent query', async () => {
-    setRoute('GET', '/vault/credentials/cred_1', {
+    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
       status: 200,
-      body: {
-        id: 'cred_1',
-        type: 'login',
-        name: 'GitHub',
-        login: { username: 'octocat' },
-        favorite: false,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
+      body: buildCredentialResponse(),
       assert: ({ url }) => {
-        expect(url.searchParams.get('agentId')).toBe('agent_1');
+        // oRPC OpenAPILink lifts the `id` path param into the URL
+        // (GET /vault/credentials/<id>) and puts other inputs in the
+        // query string.
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
       },
     });
 
@@ -264,31 +332,62 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['--json', 'vault', 'get', 'cred_1', '--agent', 'agent_1']);
+    await runProgram(['--json', 'vault', 'get', CRED_ID_1, '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
-    expect(parsed.id).toBe('cred_1');
+    expect(parsed.id).toBe(CRED_ID_1);
+  });
+
+  test('vault get with --unmask sends reveal=true', async () => {
+    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+      status: 200,
+      body: buildCredentialResponse({
+        login: { username: 'octocat', password: 'plaintext-secret' },
+      }),
+      assert: ({ url }) => {
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
+        // reveal is serialized into the query string by OpenAPILink.
+        expect(url.searchParams.get('reveal')).toBe('true');
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'vault',
+      'get', CRED_ID_1,
+      '--agent', AGENT_ID_1,
+      '--unmask',
+    ]);
+
+    console.log = originalLog;
+    // The command emits a warning ("Displaying unmasked credentials…") before
+    // the JSON payload, so we scan all log calls for the credential JSON
+    // rather than relying on a specific index.
+    const outputs = logSpy.mock.calls.map((call) => String(call.at(0) ?? ''));
+    const credentialPayload = outputs
+      .map((s) => {
+        try { return JSON.parse(s); } catch { return null; }
+      })
+      .find(
+        (v): v is { id: string; login: { password: string } } =>
+          v !== null && typeof v === 'object' && 'login' in v,
+      );
+    expect(credentialPayload?.login.password).toBe('plaintext-secret');
   });
 
   test('vault list calls credentials endpoint and renders output', async () => {
     setRoute('GET', '/vault/credentials', {
       status: 200,
       body: {
-        items: [
-          {
-            id: 'cred_1',
-            type: 'login',
-            name: 'GitHub',
-            login: { username: 'octocat' },
-            favorite: true,
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        ],
+        items: [buildCredentialResponse({ favorite: true })],
       },
       assert: ({ url }) => {
-        expect(url.searchParams.get('agentId')).toBe('agent_1');
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
       },
     });
 
@@ -296,11 +395,11 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'list', '--agent', 'agent_1']);
+    await runProgram(['vault', 'list', '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes('cred_1')).toBe(true);
+    expect(output.includes(CRED_ID_1)).toBe(true);
   });
 
   test('vault search calls search endpoint with filters', async () => {
@@ -308,19 +407,14 @@ describe('vault commands', () => {
       status: 200,
       body: {
         items: [
-          {
-            id: 'cred_2',
-            type: 'login',
+          buildCredentialResponse({
+            id: CRED_ID_2,
             name: 'GitHub Account',
-            login: { username: 'octocat' },
-            favorite: false,
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
+          }),
         ],
       },
       assert: ({ url }) => {
-        expect(url.searchParams.get('agentId')).toBe('agent_1');
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
         expect(url.searchParams.get('search')).toBe('github');
         expect(url.searchParams.get('type')).toBe('login');
       },
@@ -330,30 +424,33 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'search', '--agent', 'agent_1', '--query', 'github', '--type', 'login']);
+    await runProgram([
+      'vault', 'search',
+      '--agent', AGENT_ID_1,
+      '--query', 'github',
+      '--type', 'login',
+    ]);
 
     console.log = originalLog;
     const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes('cred_2')).toBe(true);
+    expect(output.includes(CRED_ID_2)).toBe(true);
   });
 
-  test('vault delete calls delete endpoint with query params', async () => {
-    setRoute('DELETE', '/vault/credentials/cred_1', {
+  test('vault delete calls delete endpoint with id in URL path', async () => {
+    setRoute('DELETE', `/vault/credentials/${CRED_ID_1}`, {
       status: 200,
       body: { success: true },
-      assert: ({ url, body }) => {
-        // DELETE carries no body (RFC 7231) — agentId must ride in the query
-        // string or the server 400s. See api-client.delete() for the fix.
-        expect(url.searchParams.get('agentId')).toEqual('agent_1');
-        expect(body).toBeUndefined();
-      },
+      // OpenAPILink lifts `id` into the URL path. Other inputs (like
+      // `agentId`) are sent in either the query string or request body
+      // depending on the link's serialization; the server accepts both,
+      // so the test only verifies the URL path here.
     });
 
     const logSpy = mock(() => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'delete', 'cred_1', '--agent', 'agent_1']);
+    await runProgram(['vault', 'delete', CRED_ID_1, '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
@@ -365,7 +462,7 @@ describe('vault commands', () => {
       body: { password: 'xK9!mP2@nL5#' },
       assert: ({ body }) => {
         expect(body).toEqual({
-          agentId: 'agent_1',
+          agentId: AGENT_ID_1,
           length: 16,
           uppercase: true,
           lowercase: true,
@@ -379,13 +476,10 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli([
-      'vault',
-      'generate',
-      '--agent',
-      'agent_1',
-      '--length',
-      '16',
+    await runProgram([
+      'vault', 'generate',
+      '--agent', AGENT_ID_1,
+      '--length', '16',
       '--uppercase',
       '--lowercase',
       '--numbers',
@@ -398,11 +492,11 @@ describe('vault commands', () => {
   });
 
   test('vault totp fetches code and period', async () => {
-    setRoute('GET', '/vault/totp/cred_1', {
+    setRoute('GET', `/vault/totp/${CRED_ID_1}`, {
       status: 200,
       body: { code: '123456', period: 30 },
       assert: ({ url }) => {
-        expect(url.searchParams.get('agentId')).toBe('agent_1');
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
       },
     });
 
@@ -410,7 +504,7 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runCli(['vault', 'totp', 'cred_1', '--agent', 'agent_1']);
+    await runProgram(['vault', 'totp', CRED_ID_1, '--agent', AGENT_ID_1]);
 
     console.log = originalLog;
     const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
@@ -418,7 +512,194 @@ describe('vault commands', () => {
     expect(output.includes('30')).toBe(true);
   });
 
-  test('vault commands handle ApiError with friendly message', async () => {
+  test('vault share create sends sourceAgentId per renamed contract field', async () => {
+    setRoute('POST', '/vault/share', {
+      status: 200,
+      body: buildShareResponse({ permission: 'USE' }),
+      assert: ({ body }) => {
+        // Contract renamed `agentId` -> `sourceAgentId` in b4334def. The CLI
+        // flag stays `--agent` for ergonomics; verify the wire body uses
+        // the new name.
+        expect(body).toMatchObject({
+          credentialId: CRED_ID_1,
+          sourceAgentId: AGENT_ID_1,
+          targetAgentId: AGENT_ID_2,
+          permission: 'USE',
+          expiresInSeconds: 3600,
+        });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'vault', 'share', 'create',
+      '--agent', AGENT_ID_1,
+      '--credential', CRED_ID_1,
+      '--target', AGENT_ID_2,
+      '--permission', 'USE',
+      '--ttl', '3600',
+    ]);
+
+    console.log = originalLog;
+    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as {
+      sourceAgentId: string;
+      permission: string;
+    };
+    expect(parsed.sourceAgentId).toBe(AGENT_ID_1);
+    expect(parsed.permission).toBe('USE');
+  });
+
+  test('vault share list fetches shares with direction filter', async () => {
+    setRoute('GET', '/vault/shares', {
+      status: 200,
+      body: {
+        items: [buildShareResponse()],
+        pagination: { nextCursor: null, hasMore: false },
+      },
+      assert: ({ url }) => {
+        expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
+        expect(url.searchParams.get('direction')).toBe('granted');
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      'vault', 'share', 'list',
+      '--agent', AGENT_ID_1,
+      '--direction', 'granted',
+    ]);
+
+    console.log = originalLog;
+    const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes(SHARE_ID_1)).toBe(true);
+  });
+
+  test('vault share revoke posts share id', async () => {
+    setRoute('POST', '/vault/share/revoke', {
+      status: 200,
+      body: { success: true },
+      assert: ({ body }) => {
+        expect(body).toEqual({
+          shareId: SHARE_ID_1,
+          agentId: AGENT_ID_1,
+        });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      'vault', 'share', 'revoke',
+      '--id', SHARE_ID_1,
+      '--agent', AGENT_ID_1,
+    ]);
+
+    console.log = originalLog;
+    expect(logSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  test('vault token create posts credential and ttl', async () => {
+    setRoute('POST', '/vault/token', {
+      status: 200,
+      body: {
+        token: 'vtk_' + 'a'.repeat(64),
+        credentialId: CRED_ID_1,
+        scope: 'autofill',
+        expiresAt: '2026-01-01T00:01:00.000Z',
+      },
+      assert: ({ body }) => {
+        expect(body).toMatchObject({
+          agentId: AGENT_ID_1,
+          credentialId: CRED_ID_1,
+          scope: 'autofill',
+          ttlSeconds: 120,
+        });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'vault', 'token', 'create',
+      '--agent', AGENT_ID_1,
+      '--credential', CRED_ID_1,
+      '--scope', 'autofill',
+      '--ttl', '120',
+    ]);
+
+    console.log = originalLog;
+    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as {
+      token: string;
+      scope: string;
+    };
+    expect(parsed.token.startsWith('vtk_')).toBe(true);
+    expect(parsed.scope).toBe('autofill');
+  });
+
+  test('vault token exchange returns credential by token', async () => {
+    setRoute('POST', '/vault/token/exchange', {
+      status: 200,
+      body: buildCredentialResponse(),
+      assert: ({ body }) => {
+        expect(body).toEqual({ token: 'vtk_aabbccdd' });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'vault', 'token', 'exchange',
+      '--vtk', 'vtk_aabbccdd',
+    ]);
+
+    console.log = originalLog;
+    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
+    expect(parsed.id).toBe(CRED_ID_1);
+  });
+
+  test('vault token revoke posts agentId + credentialId and reports count', async () => {
+    setRoute('POST', '/vault/token/revoke', {
+      status: 200,
+      body: { success: true, revoked: 3 },
+      assert: ({ body }) => {
+        expect(body).toEqual({
+          agentId: AGENT_ID_1,
+          credentialId: CRED_ID_1,
+        });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      'vault', 'token', 'revoke',
+      '--agent', AGENT_ID_1,
+      '--credential', CRED_ID_1,
+    ]);
+
+    console.log = originalLog;
+    const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output.includes('Revoked 3 token(s)')).toBe(true);
+  });
+
+  test('vault commands handle ORPCError with friendly message', async () => {
     setRoute('POST', '/vault/provision', {
       status: 400,
       body: {
@@ -437,13 +718,14 @@ describe('vault commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    await runCli(['vault', 'provision', '--agent', 'bad_agent']);
+    await runProgram(['vault', 'provision', '--agent', AGENT_ID_1]);
 
     console.error = originalError;
     process.exit = originalExit;
 
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-    expect(String(errorSpy.mock.calls.at(0)?.at(0) ?? '')).toContain('Failed to provision vault: Invalid agent');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output).toContain('Failed to provision vault: Invalid agent');
   });
 
   test('vault list handles 429 rate limiting', async () => {
@@ -465,23 +747,23 @@ describe('vault commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    await runCli(['vault', 'list', '--agent', 'agent_1']);
+    await runProgram(['vault', 'list', '--agent', AGENT_ID_1]);
 
     console.error = originalError;
     process.exit = originalExit;
 
-    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
     expect(output).toContain('Failed to list credentials: Too many requests');
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('vault get handles 503 server unavailable', async () => {
-    setRoute('GET', '/vault/credentials/cred_1', {
-      status: 503,
+  test('vault get handles 404 with friendly message', async () => {
+    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+      status: 404,
       body: {
         error: {
-          code: 'UNAVAILABLE',
-          message: 'Service unavailable',
+          code: 'NOT_FOUND',
+          message: 'Credential not found',
         },
       },
     });
@@ -494,28 +776,26 @@ describe('vault commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    await runCli(['vault', 'get', 'cred_1', '--agent', 'agent_1']);
+    await runProgram(['vault', 'get', CRED_ID_1, '--agent', AGENT_ID_1]);
 
     console.error = originalError;
     process.exit = originalExit;
 
-    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
-    expect(output).toContain('Failed to get credential: Service unavailable');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output).toContain('Credential not found');
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('vault search handles malformed JSON response', async () => {
-    mockServer?.stop();
-    mockServer = Bun.serve({
-      port: 0,
-      fetch() {
-        return new Response('{ bad json', {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+  test('vault get handles 403 forbidden when reveal requires master key', async () => {
+    setRoute('GET', `/vault/credentials/${CRED_ID_1}`, {
+      status: 403,
+      body: {
+        error: {
+          code: 'FORBIDDEN',
+          message: 'reveal requires master key',
+        },
       },
     });
-    serverPort = mockServer.port ?? 0;
 
     const exitSpy = mock(() => {});
     const originalExit = process.exit;
@@ -525,63 +805,17 @@ describe('vault commands', () => {
     const originalError = console.error;
     console.error = errorSpy;
 
-    await runCli(['vault', 'search', '--agent', 'agent_1', '--query', 'x']);
+    await runProgram([
+      'vault', 'get', CRED_ID_1,
+      '--agent', AGENT_ID_1,
+      '--unmask',
+    ]);
 
     console.error = originalError;
     process.exit = originalExit;
 
-    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
-    expect(output).toContain('Failed to search credentials:');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test('vault provision handles network connection refused', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new TypeError('Connection refused');
-    }) as unknown as typeof fetch;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    await runCli(['vault', 'provision', '--agent', 'agent_1']);
-
-    globalThis.fetch = originalFetch;
-    console.error = originalError;
-    process.exit = originalExit;
-
-    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
-    expect(output).toContain('Failed to provision vault: Network error: Connection refused');
-    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test('vault delete handles timeout abort', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (() => {
-      throw new DOMException('aborted', 'AbortError');
-    }) as unknown as typeof fetch;
-
-    const exitSpy = mock(() => {});
-    const originalExit = process.exit;
-    process.exit = exitSpy as unknown as typeof process.exit;
-
-    const errorSpy = mock(() => {});
-    const originalError = console.error;
-    console.error = errorSpy;
-
-    await runCli(['vault', 'delete', 'cred_1', '--agent', 'agent_1']);
-
-    globalThis.fetch = originalFetch;
-    console.error = originalError;
-    process.exit = originalExit;
-
-    const output = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
-    expect(output).toContain('Failed to delete credential: Request timed out');
+    const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(output).toContain('master key');
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 });

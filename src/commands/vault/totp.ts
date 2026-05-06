@@ -1,15 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface TotpOptions {
   agent?: string;
-}
-
-interface TotpResponse {
-  code: string;
-  period: number;
 }
 
 export function totpCommand(): Command {
@@ -23,10 +18,8 @@ export function totpCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<TotpResponse>(`/vault/totp/${credentialId}`, {
-          agentId: opts.agent,
-        });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.getTotp({ id: credentialId, agentId: opts.agent });
 
         if (globals.json) {
           output.json(result);
@@ -39,8 +32,14 @@ export function totpCommand(): Command {
           ['Seconds Remaining', String(result.period)],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get TOTP: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else if (error.status === 404) {
+            output.error('Credential not found or has no TOTP secret.');
+          } else {
+            output.error(`Failed to get TOTP: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to get TOTP: ${error.message}`);
         }

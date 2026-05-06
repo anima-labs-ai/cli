@@ -1,67 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-
-type CredentialType = 'login' | 'secure_note' | 'card' | 'identity';
-
-interface CredentialUri {
-  uri: string;
-  match?: 'domain' | 'host' | 'starts_with' | 'regex' | 'never';
-}
-
-interface LoginCredential {
-  username?: string;
-  password?: string;
-  uris?: CredentialUri[];
-  totp?: string;
-}
-
-interface CardCredential {
-  cardholderName?: string;
-  brand?: string;
-  number?: string;
-  expMonth?: string;
-  expYear?: string;
-  code?: string;
-}
-
-interface IdentityCredential {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  address1?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
-  company?: string;
-  ssn?: string;
-}
-
-interface CustomField {
-  name: string;
-  value: string;
-  type: 'text' | 'hidden' | 'boolean';
-}
-
-interface VaultCredential {
-  id: string;
-  type: CredentialType;
-  name: string;
-  notes?: string;
-  login?: LoginCredential;
-  card?: CardCredential;
-  identity?: IdentityCredential;
-  fields?: CustomField[];
-  favorite: boolean;
-  folderId?: string;
-  organizationId?: string;
-  collectionIds?: string[];
-  createdAt: string;
-  updatedAt: string;
-}
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface GetOptions {
   agent?: string;
@@ -91,19 +31,20 @@ export function getCommand(): Command {
       const mask = !opts.unmask;
 
       if (opts.unmask) {
-        output.warn('⚠ Displaying unmasked credentials. Do not share this output.');
+        output.warn('Displaying unmasked credentials. Do not share this output.');
       }
 
       try {
-        const client = await requireAuth(globals);
         // The server masks by default. Pass reveal=true to get plaintext,
         // which requires a master key (mk_) — agent keys will get a 403.
         // This enforces defense-in-depth: the CLI is no longer the only
         // layer of protection. If someone hacks the CLI, they still can't
         // exfiltrate passwords without master-key auth.
-        const result = await client.get<VaultCredential>(`/vault/credentials/${credentialId}`, {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.get({
+          id: credentialId,
           agentId: opts.agent,
-          ...(opts.unmask ? { reveal: 'true' } : {}),
+          reveal: opts.unmask ?? false,
         });
 
         if (globals.json) {
@@ -154,8 +95,16 @@ export function getCommand(): Command {
           output.info('Sensitive fields masked. Use --unmask to reveal.');
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get credential: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else if (error.status === 403) {
+            output.error('Forbidden: --unmask requires a master key. Agent keys cannot reveal plaintext.');
+          } else if (error.status === 404) {
+            output.error('Credential not found.');
+          } else {
+            output.error(`Failed to get credential: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to get credential: ${error.message}`);
         }

@@ -1,14 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface DeleteOptions {
   agent?: string;
-}
-
-interface DeleteResponse {
-  success: true;
 }
 
 export function deleteCommand(): Command {
@@ -22,11 +18,8 @@ export function deleteCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.delete<DeleteResponse>(
-          `/vault/credentials/${credentialId}`,
-          { agentId: opts.agent },
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.delete({ id: credentialId, agentId: opts.agent });
 
         if (globals.json) {
           output.json(result);
@@ -35,8 +28,14 @@ export function deleteCommand(): Command {
 
         output.success(`Deleted credential ${credentialId}`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to delete credential: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else if (error.status === 404) {
+            output.error('Credential not found.');
+          } else {
+            output.error(`Failed to delete credential: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to delete credential: ${error.message}`);
         }

@@ -1,24 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ProvisionOptions {
   agent: string;
-}
-
-interface VaultProvisionResponse {
-  id: string;
-  agentId: string;
-  orgId: string;
-  vaultUserId: string | null;
-  vaultOrgId: string | null;
-  collectionId: string | null;
-  status: 'ACTIVE' | 'LOCKED' | 'ERROR';
-  credentialCount: number;
-  lastSyncAt: string | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export function provisionCommand(): Command {
@@ -31,10 +17,8 @@ export function provisionCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<VaultProvisionResponse>('/vault/provision', {
-          agentId: opts.agent,
-        });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.provision({ agentId: opts.agent });
 
         if (globals.json) {
           output.json(result);
@@ -51,8 +35,12 @@ export function provisionCommand(): Command {
           ['Last Sync', result.lastSyncAt ?? 'Never'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to provision vault: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to provision vault: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to provision vault: ${error.message}`);
         }

@@ -1,20 +1,20 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface InjectOptions {
   agent?: string;
 }
 
-interface VaultCredential {
+interface VaultCredentialLike {
   id: string;
   type: string;
   name: string;
   notes?: string;
   login?: { username?: string; password?: string; uris?: Array<{ uri: string }>; totp?: string };
   card?: { number?: string; cardholderName?: string; brand?: string; expMonth?: string; expYear?: string; code?: string };
-  identity?: Record<string, string>;
+  identity?: Record<string, string | undefined>;
   apiKey?: { key?: string };
   oauthToken?: { accessToken?: string };
   certificate?: { privateKey?: string };
@@ -29,7 +29,7 @@ const TEMPLATE_PATTERN = /\{\{vault:([^:}]+):([^}]+)\}\}/g;
 /**
  * Get the "primary" secret value for a credential based on its type.
  */
-function getPrimarySecret(credential: VaultCredential): string | undefined {
+function getPrimarySecret(credential: VaultCredentialLike): string | undefined {
   switch (credential.type) {
     case 'login':
       return credential.login?.password;
@@ -51,7 +51,7 @@ function getPrimarySecret(credential: VaultCredential): string | undefined {
 /**
  * Extract a specific field from a credential using a dotted path.
  */
-function extractField(credential: VaultCredential, field: string): string | undefined {
+function extractField(credential: VaultCredentialLike, field: string): string | undefined {
   const parts = field.split('.');
   if (parts.length === 1) {
     if (field === 'name') return credential.name;
@@ -60,7 +60,7 @@ function extractField(credential: VaultCredential, field: string): string | unde
   }
   if (parts.length === 2) {
     const [section, key] = parts;
-    const obj = credential[section as keyof VaultCredential];
+    const obj = credential[section as keyof VaultCredentialLike];
     if (typeof obj === 'object' && obj !== null) {
       const val = (obj as Record<string, unknown>)[key];
       return typeof val === 'string' ? val : undefined;
@@ -92,7 +92,7 @@ export function injectCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
+        const orpc = await requireOrpcAuth(globals);
         const input = await readStdin();
 
         // Step 1: Detect vtk_ tokens
@@ -126,8 +126,8 @@ export function injectCommand(): Command {
         // Step 3: Exchange tokens and substitute
         for (const token of tokens) {
           try {
-            const credential = await client.post<VaultCredential>('/vault/token/exchange', { token });
-            const secret = getPrimarySecret(credential);
+            const credential = await orpc.vault.exchangeToken({ token });
+            const secret = getPrimarySecret(credential as VaultCredentialLike);
             if (secret) {
               result = result.replaceAll(token, secret);
               output.debug(`Exchanged token ${token.substring(0, 12)}... -> ${credential.name}`);
@@ -144,15 +144,17 @@ export function injectCommand(): Command {
         // inject explicitly needs plaintext to substitute into the template,
         // so we pass reveal=true. This requires a master key (mk_) — agent
         // keys cannot reveal plaintext and must use the vtk_ token flow.
-        const credentialCache = new Map<string, VaultCredential>();
+        const credentialCache = new Map<string, VaultCredentialLike>();
         for (const tmpl of templates) {
           try {
             let credential = credentialCache.get(tmpl.credentialId);
             if (!credential) {
-              credential = await client.get<VaultCredential>(
-                `/vault/credentials/${tmpl.credentialId}`,
-                { agentId: opts.agent, reveal: 'true' },
-              );
+              const fetched = await orpc.vault.get({
+                id: tmpl.credentialId,
+                agentId: opts.agent,
+                reveal: true,
+              });
+              credential = fetched as VaultCredentialLike;
               credentialCache.set(tmpl.credentialId, credential);
             }
             const value = extractField(credential, tmpl.field);
@@ -177,7 +179,7 @@ export function injectCommand(): Command {
           process.stdout.write(result);
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Injection failed: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Injection failed: ${error.message}`);

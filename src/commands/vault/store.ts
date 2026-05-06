@@ -1,67 +1,16 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
-type CredentialType = 'login' | 'secure_note' | 'card' | 'identity';
-
-interface CredentialUri {
-  uri: string;
-  match?: 'domain' | 'host' | 'starts_with' | 'regex' | 'never';
-}
-
-interface LoginCredential {
-  username?: string;
-  password?: string;
-  uris?: CredentialUri[];
-  totp?: string;
-}
-
-interface CardCredential {
-  cardholderName?: string;
-  brand?: string;
-  number?: string;
-  expMonth?: string;
-  expYear?: string;
-  code?: string;
-}
-
-interface IdentityCredential {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  address1?: string;
-  city?: string;
-  state?: string;
-  postalCode?: string;
-  country?: string;
-  company?: string;
-  ssn?: string;
-}
-
-interface CustomField {
-  name: string;
-  value: string;
-  type: 'text' | 'hidden' | 'boolean';
-}
-
-interface VaultCredential {
-  id: string;
-  type: CredentialType;
-  name: string;
-  notes?: string;
-  login?: LoginCredential;
-  card?: CardCredential;
-  identity?: IdentityCredential;
-  fields?: CustomField[];
-  favorite: boolean;
-  folderId?: string;
-  organizationId?: string;
-  collectionIds?: string[];
-  createdAt: string;
-  updatedAt: string;
-}
+type CredentialType =
+  | 'login'
+  | 'secure_note'
+  | 'card'
+  | 'identity'
+  | 'oauth_token'
+  | 'api_key'
+  | 'certificate';
 
 interface StoreOptions {
   agent?: string;
@@ -72,24 +21,34 @@ interface StoreOptions {
   uri?: string;
 }
 
-interface CreateCredentialInput {
-  agentId?: string;
-  type: CredentialType;
-  name: string;
-  notes?: string;
-  login?: LoginCredential;
-  card?: CardCredential;
-  identity?: IdentityCredential;
-  fields?: CustomField[];
-  favorite?: boolean;
-  folderId?: string;
+const ALLOWED_TYPES: ReadonlySet<string> = new Set([
+  'login',
+  'secure_note',
+  'card',
+  'identity',
+  'oauth_token',
+  'api_key',
+  'certificate',
+]);
+
+function validateType(value: string): CredentialType {
+  if (ALLOWED_TYPES.has(value)) return value as CredentialType;
+  throw new InvalidArgumentError(
+    `type must be one of ${[...ALLOWED_TYPES].join(', ')}`,
+  );
+}
+
+interface LoginCredentialPayload {
+  username?: string;
+  password?: string;
+  uris?: { uri: string }[];
 }
 
 export function storeCommand(): Command {
   return new Command('store')
     .description('Store/create a vault credential')
     .option('--agent <id>', 'Agent ID (optional with agent API key)')
-    .option('--type <type>', 'Credential type', 'login')
+    .option('--type <type>', 'Credential type', validateType, 'login' as CredentialType)
     .requiredOption('--name <name>', 'Credential name')
     .option('--username <user>', 'Login username')
     .option('--password <pass>', 'Login password')
@@ -100,9 +59,21 @@ export function storeCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const requestBody = buildCreateCredentialInput(opts);
-        const client = await requireAuth(globals);
-        const result = await client.post<VaultCredential>('/vault/credentials', requestBody);
+        let login: LoginCredentialPayload | undefined;
+        if (opts.type === 'login') {
+          login = {};
+          if (opts.username) login.username = opts.username;
+          if (opts.password) login.password = opts.password;
+          if (opts.uri) login.uris = [{ uri: opts.uri }];
+        }
+
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.create({
+          agentId: opts.agent,
+          type: opts.type,
+          name: opts.name,
+          login,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -118,40 +89,16 @@ export function storeCommand(): Command {
           ['URI', result.login?.uris?.[0]?.uri],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to store credential: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to store credential: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to store credential: ${error.message}`);
         }
         process.exit(1);
       }
     });
-}
-
-function buildCreateCredentialInput(options: StoreOptions): CreateCredentialInput {
-  const input: CreateCredentialInput = {
-    agentId: options.agent,
-    type: options.type,
-    name: options.name,
-  };
-
-  if (options.type === 'login') {
-    const login: LoginCredential = {};
-
-    if (options.username) {
-      login.username = options.username;
-    }
-
-    if (options.password) {
-      login.password = options.password;
-    }
-
-    if (options.uri) {
-      login.uris = [{ uri: options.uri }];
-    }
-
-    input.login = login;
-  }
-
-  return input;
 }

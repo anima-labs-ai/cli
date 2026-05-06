@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface GenerateOptions {
   agent?: string;
@@ -10,19 +10,6 @@ interface GenerateOptions {
   lowercase?: boolean;
   numbers?: boolean;
   special?: boolean;
-}
-
-interface GeneratePasswordInput {
-  agentId?: string;
-  length?: number;
-  uppercase?: boolean;
-  lowercase?: boolean;
-  number?: boolean;
-  special?: boolean;
-}
-
-interface GeneratePasswordResponse {
-  password: string;
 }
 
 export function generateCommand(): Command {
@@ -40,28 +27,17 @@ export function generateCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const body: GeneratePasswordInput = {
+        // The contract field is `number` (singular) — the CLI flag stays
+        // `--numbers` (plural) for ergonomics, but we map to the contract name.
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.vault.generatePassword({
           agentId: opts.agent,
-        };
-
-        if (opts.length !== undefined) {
-          body.length = opts.length;
-        }
-        if (opts.uppercase !== undefined) {
-          body.uppercase = opts.uppercase;
-        }
-        if (opts.lowercase !== undefined) {
-          body.lowercase = opts.lowercase;
-        }
-        if (opts.numbers !== undefined) {
-          body.number = opts.numbers;
-        }
-        if (opts.special !== undefined) {
-          body.special = opts.special;
-        }
-
-        const client = await requireAuth(globals);
-        const result = await client.post<GeneratePasswordResponse>('/vault/generate-password', body);
+          length: opts.length,
+          uppercase: opts.uppercase,
+          lowercase: opts.lowercase,
+          number: opts.numbers,
+          special: opts.special,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -71,8 +47,12 @@ export function generateCommand(): Command {
         output.success('Generated password');
         output.details([['Password', result.password]]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to generate password: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 401) {
+            output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else {
+            output.error(`Failed to generate password: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(`Failed to generate password: ${error.message}`);
         }
