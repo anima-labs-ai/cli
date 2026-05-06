@@ -1,3 +1,4 @@
+import * as clack from '@clack/prompts';
 import { Command } from 'commander';
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -59,7 +60,7 @@ function getServerMap(config: Record<string, unknown>, key: string): Record<stri
   return value as Record<string, unknown>;
 }
 
-function resolveTargets(opts: UninstallOptions): McpClientDefinition[] {
+async function resolveTargets(opts: UninstallOptions): Promise<McpClientDefinition[]> {
   if (opts.client) {
     const client = findClientByName(opts.client);
     if (!client) {
@@ -77,8 +78,15 @@ function resolveTargets(opts: UninstallOptions): McpClientDefinition[] {
     return detected;
   }
 
-  const promptText = `Detected clients: ${detected.map((client) => client.name).join(', ')}\nChoose clients (comma-separated) or type "all": `;
-  const selectedRaw = prompt(promptText)?.trim() ?? '';
+  // `prompt()` was a Bun-only global. The CLI ships as a Node bin, so
+  // referencing it threw "prompt is not defined" at runtime. Use clack
+  // (already a dependency) for portable interactive input.
+  const promptText = `Detected clients: ${detected.map((client) => client.name).join(', ')}\nChoose clients (comma-separated) or type "all":`;
+  const response = await clack.text({ message: promptText });
+  if (clack.isCancel(response)) {
+    throw new Error('Cancelled.');
+  }
+  const selectedRaw = response.trim();
   if (!selectedRaw) {
     throw new Error('No client selected. Re-run with --all or --client <name>.');
   }
@@ -145,7 +153,7 @@ export function uninstallMcpCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const targets = resolveTargets(globals);
+        const targets = await resolveTargets(globals);
         const removed = targets.filter((client) => uninstallFromClient(client));
 
         if (globals.json) {
