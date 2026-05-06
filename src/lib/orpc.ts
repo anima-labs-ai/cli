@@ -1,0 +1,71 @@
+// Typed oRPC client for the Anima CLI. Wraps `@orpc/openapi-client`'s
+// OpenAPILink with the CLI's existing OAuth refresh + test-mode + error
+// handling so commands get compile-time-checked inputs/outputs derived
+// straight from the @anima/contracts package — no more hardcoded path
+// strings drifting from the server's contract.
+//
+// Usage from a command:
+//
+//     import { requireOrpcAuth, ORPCError } from '../../lib/orpc.js';
+//     ...
+//     const orpc = await requireOrpcAuth(globals);
+//     const result = await orpc.identity.getAgentDid({ agentId: opts.agent });
+//
+// The result is typed as the contract's output schema.
+
+import { contract } from '@anima/contracts';
+import { ORPCError, createORPCClient } from '@orpc/client';
+import type { ContractRouterClient } from '@orpc/contract';
+import { OpenAPILink } from '@orpc/openapi-client/fetch';
+
+import { type GlobalOptions, ensureAuthHeaders } from './auth.js';
+
+export { ORPCError };
+
+export type AnimaClient = ContractRouterClient<typeof contract>;
+
+/**
+ * Build a typed oRPC client. Headers are resolved per-request so OAuth
+ * tokens can refresh transparently between calls.
+ */
+export function createOrpcClient(opts: GlobalOptions): AnimaClient {
+  const link = new OpenAPILink(contract, {
+    url: () => resolveBaseUrl(opts),
+    headers: async () => ensureAuthHeaders(opts),
+    // The API normalizes errors into {error:{code,message,details}} which
+    // doesn't match oRPC's default {defined,code,status,message} shape.
+    // Decode the wrapped form back into a proper ORPCError so command
+    // catch-blocks see real codes/messages instead of "INTERNAL_SERVER_ERROR".
+    customErrorResponseBodyDecoder: (body, response) => {
+      const wrapper = body as Record<string, unknown> | null | undefined;
+      const err = wrapper?.error as Record<string, unknown> | undefined;
+      if (err && typeof err.code === 'string' && typeof err.message === 'string') {
+        return new ORPCError(err.code, {
+          status: response.status,
+          message: err.message,
+          data: err.details,
+        });
+      }
+      return undefined;
+    },
+  });
+
+  return createORPCClient(link);
+}
+
+/**
+ * Like `requireAuth` but returns the typed oRPC client. Throws if there's
+ * no usable credential — matches the existing `requireAuth` contract so
+ * callers can swap in place.
+ */
+export async function requireOrpcAuth(opts: GlobalOptions): Promise<AnimaClient> {
+  // Force a header check now so missing-auth errors surface before the
+  // first network call (matches requireAuth's eager behavior).
+  await ensureAuthHeaders(opts, { requireToken: true });
+  return createOrpcClient(opts);
+}
+
+function resolveBaseUrl(opts: GlobalOptions): string {
+  // Lazy import to avoid a circular dep with auth.ts.
+  return opts.apiUrl ?? process.env.ANIMA_API_URL ?? 'https://api.useanima.sh';
+}

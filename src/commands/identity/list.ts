@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type IdentityStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 
@@ -13,24 +13,6 @@ interface ListIdentitiesOptions {
   query?: string;
 }
 
-interface Identity {
-  id: string;
-  orgId: string;
-  name: string;
-  slug: string;
-  email?: string;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-interface ListIdentitiesResponse {
-  items: Identity[];
-  nextCursor?: string;
-  hasMore?: boolean;
-  total?: number;
-}
-
 export function listIdentitiesCommand(): Command {
   return new Command('list')
     .description('List identities')
@@ -38,62 +20,47 @@ export function listIdentitiesCommand(): Command {
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--cursor <cursor>', 'Pagination cursor')
     .option('--status <status>', 'Filter by status (ACTIVE|SUSPENDED|DELETED)', validateStatus)
-    .option('--query <query>', 'Search query for name/slug/email')
+    .option('--query <query>', 'Search query for name/slug')
     .action(async function (this: Command) {
       const opts = this.opts<ListIdentitiesOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const params: Record<string, string> = { orgId: opts.org };
-
-        if (opts.limit) {
-          params.limit = opts.limit;
-        }
-
-        if (opts.cursor) {
-          params.cursor = opts.cursor;
-        }
-
-        if (opts.status) {
-          params.status = opts.status;
-        }
-
-        if (opts.query) {
-          params.query = opts.query;
-        }
-
-        const result = await client.get<ListIdentitiesResponse>('/agents', params);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.agent.list({
+          orgId: opts.org,
+          limit: opts.limit ? Number(opts.limit) : undefined,
+          cursor: opts.cursor,
+          status: opts.status,
+          query: opts.query,
+        });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        const pageSize = result.items.length;
         output.table(
-          ['ID', 'Name', 'Slug', 'Email', 'Status', 'Org ID', 'Created At'],
+          ['ID', 'Name', 'Slug', 'Status', 'Org ID', 'Created At'],
           result.items.map((item) => [
             item.id,
             item.name,
             item.slug,
-            item.email ?? '',
-            item.status ?? '',
+            item.status,
             item.orgId,
-            item.createdAt ?? '',
+            item.createdAt,
           ]),
           {
-            summary: `Returned ${pageSize} identities${result.total !== undefined ? ` (total: ${result.total})` : ''}.`,
+            summary: `Returned ${result.items.length} identities.`,
             pagination: {
-              has_more: result.hasMore ?? false,
-              next_cursor: result.nextCursor ?? null,
-              total: result.total,
+              has_more: result.pagination.hasMore,
+              next_cursor: result.pagination.nextCursor,
             },
           },
         );
       } catch (error: unknown) {
-        handleApiError(error, output, 'Failed to list identities');
+        handleOrpcError(error, output, 'Failed to list identities');
       }
     });
 }
@@ -113,8 +80,8 @@ function validateLimit(value: string): string {
   return value;
 }
 
-function handleApiError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ApiError) {
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
     if (error.status === 401) {
       output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 403) {

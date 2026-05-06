@@ -37,12 +37,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anima/contracts": "file:../anima/packages/contracts",
     "@clack/prompts": "^1.2.0",
+    "@orpc/client": "1.13.7",
+    "@orpc/contract": "1.13.7",
+    "@orpc/openapi-client": "1.13.7",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.0",
     "env-paths": "^3.0.0",
     "ora": "^8.2.0",
-    "picocolors": "^1.1.0"
+    "picocolors": "^1.1.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface CreateIdentityOptions {
   org: string;
@@ -10,28 +10,6 @@ interface CreateIdentityOptions {
   email?: string;
   provisionPhone?: boolean;
   metadata?: string;
-}
-
-interface Identity {
-  id: string;
-  orgId: string;
-  name: string;
-  slug: string;
-  email?: string;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  apiKey?: string;
-  metadata?: unknown;
-}
-
-interface CreateIdentityRequest {
-  orgId: string;
-  name: string;
-  slug: string;
-  email?: string;
-  provisionPhone?: boolean;
-  metadata?: Record<string, unknown>;
 }
 
 export function createIdentityCommand(): Command {
@@ -49,47 +27,39 @@ export function createIdentityCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const body: CreateIdentityRequest = {
+        const orpc = await requireOrpcAuth(globals);
+        const agent = await orpc.agent.create({
           orgId: opts.org,
           name: opts.name,
           slug: opts.slug,
-        };
-
-        if (opts.email) {
-          body.email = opts.email;
-        }
-
-        if (opts.provisionPhone) {
-          body.provisionPhone = true;
-        }
-
-        if (opts.metadata) {
-          body.metadata = parseMetadata(opts.metadata);
-        }
-
-        const result = await client.post<Identity>('/agents', body);
+          email: opts.email,
+          provisionPhone: opts.provisionPhone,
+          metadata: opts.metadata ? parseMetadata(opts.metadata) : {},
+        });
 
         if (globals.json) {
-          output.json(result);
+          output.json(agent);
           return;
         }
 
+        const primaryEmail = agent.emailIdentities.find((e) => e.isPrimary)?.email;
+        const primaryPhone = agent.phoneIdentities.find((p) => p.isPrimary)?.phoneNumber;
+
         output.details([
-          ['ID', result.id],
-          ['Organization ID', result.orgId],
-          ['Name', result.name],
-          ['Slug', result.slug],
-          ['Email', result.email],
-          ['Status', result.status],
-          ['Created At', result.createdAt],
-          ['Updated At', result.updatedAt],
-          ['API Key', result.apiKey],
-          ['Metadata', result.metadata ? JSON.stringify(result.metadata) : undefined],
+          ['ID', agent.id],
+          ['Organization ID', agent.orgId],
+          ['Name', agent.name],
+          ['Slug', agent.slug],
+          ['Status', agent.status],
+          ['API Key Prefix', agent.apiKeyPrefix ?? '-'],
+          ['Primary Email', primaryEmail ?? '-'],
+          ['Primary Phone', primaryPhone ?? '-'],
+          ['Created At', agent.createdAt],
+          ['Metadata', Object.keys(agent.metadata).length > 0 ? JSON.stringify(agent.metadata) : '-'],
         ]);
-        output.success(`Identity created: ${result.id}`);
+        output.success(`Identity created: ${agent.id}`);
       } catch (error: unknown) {
-        handleApiError(error, output, 'Failed to create identity');
+        handleOrpcError(error, output, 'Failed to create identity');
       }
     });
 }
@@ -99,24 +69,26 @@ function parseMetadata(raw: string): Record<string, unknown> {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new ApiError(400, 'INVALID_METADATA', 'Metadata must be valid JSON object');
+    throw new Error('Metadata must be valid JSON');
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new ApiError(400, 'INVALID_METADATA', 'Metadata must be a JSON object');
+    throw new Error('Metadata must be a JSON object');
   }
 
   return parsed as Record<string, unknown>;
 }
 
-function handleApiError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ApiError) {
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
     if (error.status === 401) {
       output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 403) {
       output.error('Forbidden: you do not have access to this organization.');
     } else if (error.status === 404) {
       output.error('Organization not found.');
+    } else if (error.status === 409) {
+      output.error(`${context}: ${error.message}`);
     } else {
       output.error(`${context}: ${error.message}`);
     }

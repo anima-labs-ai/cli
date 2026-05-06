@@ -1,37 +1,22 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface CardOptions {
   agent: string;
 }
 
-interface AgentCard {
-  name: string;
-  description?: string;
-  url: string;
-  did: string;
-  capabilities: {
-    email: boolean;
-    phone: boolean;
-    cards: boolean;
-    vault: boolean;
-    address: boolean;
-    protocols: string[];
-  };
-  verification: {
-    level: 'basic' | 'standard' | 'premium';
-    credentials: string[];
-  };
-  trustScore: number;
-  contact: {
-    email?: string;
-    phone?: string;
-  };
+interface AgentCardCapabilities {
+  email: boolean;
+  phone: boolean;
+  cards: boolean;
+  vault: boolean;
+  address: boolean;
+  protocols: string[];
 }
 
-function formatCapabilities(caps: AgentCard['capabilities']): string {
+function formatCapabilities(caps: AgentCardCapabilities): string {
   const enabled: string[] = [];
   if (caps.email) enabled.push('email');
   if (caps.phone) enabled.push('phone');
@@ -52,29 +37,33 @@ export function getAgentCardCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<AgentCard>(`/v1/agents/${opts.agent}/card`);
+        const orpc = await requireOrpcAuth(globals);
+        const card = await orpc.identity.getAgentCard({ agentId: opts.agent });
 
         if (globals.json) {
-          output.json(result);
+          output.json(card);
           return;
         }
 
         output.details([
-          ['Name', result.name],
-          ['DID', result.did],
-          ['URL', result.url],
-          ['Description', result.description ?? '-'],
-          ['Capabilities', formatCapabilities(result.capabilities)],
-          ['Verification', result.verification.level],
-          ['Credentials', result.verification.credentials.join(', ') || '-'],
-          ['Trust score', String(result.trustScore)],
-          ['Contact email', result.contact.email ?? '-'],
-          ['Contact phone', result.contact.phone ?? '-'],
+          ['Name', card.name],
+          ['DID', card.did],
+          ['URL', card.url],
+          ['Description', card.description ?? '-'],
+          ['Capabilities', formatCapabilities(card.capabilities)],
+          ['Verification', card.verification.level],
+          ['Credentials', card.verification.credentials.join(', ') || '-'],
+          ['Trust score', String(card.trustScore)],
+          ['Contact email', card.contact.email ?? '-'],
+          ['Contact phone', card.contact.phone ?? '-'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get agent card: ${error.message}`);
+        if (error instanceof ORPCError) {
+          if (error.status === 404) {
+            output.error('Agent card not found.');
+          } else {
+            output.error(`Failed to get agent card: ${error.message}`);
+          }
         } else if (error instanceof Error) {
           output.error(error.message);
         }

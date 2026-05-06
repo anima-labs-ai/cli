@@ -1,28 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface CredentialsOptions {
   agent: string;
-}
-
-interface VerifiableCredential {
-  id: string;
-  agentId: string;
-  orgId: string;
-  type: string;
-  jwtVc: string;
-  issuerDid: string;
-  subjectDid: string;
-  issuedAt: string;
-  expiresAt: string | null;
-  revoked: boolean;
-  revokedAt: string | null;
-  revocationIndex: number | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export function listCredentialsCommand(): Command {
@@ -35,10 +17,8 @@ export function listCredentialsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const credentials = await client.get<VerifiableCredential[]>(
-          `/v1/agents/${opts.agent}/credentials`,
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const credentials = await orpc.identity.listCredentials({ agentId: opts.agent });
 
         if (globals.json) {
           output.json(credentials);
@@ -63,7 +43,7 @@ export function listCredentialsCommand(): Command {
           ]),
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list credentials: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

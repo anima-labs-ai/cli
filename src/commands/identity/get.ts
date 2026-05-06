@@ -1,22 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface GetIdentityOptions {
   id: string;
-}
-
-interface Identity {
-  id: string;
-  orgId: string;
-  name: string;
-  slug: string;
-  email?: string;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  metadata?: unknown;
 }
 
 export function getIdentityCommand(): Command {
@@ -29,33 +17,39 @@ export function getIdentityCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<Identity>(`/agents/${opts.id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const agent = await orpc.agent.get({ id: opts.id });
 
         if (globals.json) {
-          output.json(result);
+          output.json(agent);
           return;
         }
 
+        const primaryEmail = agent.emailIdentities.find((e) => e.isPrimary)?.email;
+        const primaryPhone = agent.phoneIdentities.find((p) => p.isPrimary)?.phoneNumber;
+
         output.details([
-          ['ID', result.id],
-          ['Organization ID', result.orgId],
-          ['Name', result.name],
-          ['Slug', result.slug],
-          ['Email', result.email],
-          ['Status', result.status],
-          ['Created At', result.createdAt],
-          ['Updated At', result.updatedAt],
-          ['Metadata', result.metadata ? JSON.stringify(result.metadata) : undefined],
+          ['ID', agent.id],
+          ['Organization ID', agent.orgId],
+          ['Name', agent.name],
+          ['Slug', agent.slug],
+          ['Status', agent.status],
+          ['API Key Prefix', agent.apiKeyPrefix ?? '-'],
+          ['Key Rotated At', agent.keyRotatedAt ?? 'Never'],
+          ['Primary Email', primaryEmail ?? '-'],
+          ['Primary Phone', primaryPhone ?? '-'],
+          ['Created At', agent.createdAt],
+          ['Updated At', agent.updatedAt],
+          ['Metadata', Object.keys(agent.metadata).length > 0 ? JSON.stringify(agent.metadata) : '-'],
         ]);
       } catch (error: unknown) {
-        handleApiError(error, output, 'Failed to get identity');
+        handleOrpcError(error, output, 'Failed to get identity');
       }
     });
 }
 
-function handleApiError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ApiError) {
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
     if (error.status === 401) {
       output.error('Not authenticated. Run `anima auth login` to authenticate.');
     } else if (error.status === 404) {
