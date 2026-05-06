@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type AddressType = 'BILLING' | 'SHIPPING' | 'MAILING' | 'REGISTERED';
 
@@ -17,23 +17,16 @@ interface CreateOptions {
   country: string;
 }
 
-interface AddressResponse {
-  id: string;
-  agentId: string;
-  type: AddressType;
-  label: string | null;
-  street1: string;
-  street2: string | null;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  validated: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+const VALID_TYPES: ReadonlySet<AddressType> = new Set<AddressType>([
+  'BILLING',
+  'SHIPPING',
+  'MAILING',
+  'REGISTERED',
+]);
 
-const VALID_TYPES: ReadonlySet<string> = new Set(['BILLING', 'SHIPPING', 'MAILING', 'REGISTERED']);
+function isAddressType(value: string): value is AddressType {
+  return (VALID_TYPES as ReadonlySet<string>).has(value);
+}
 
 export function createAddressCommand(): Command {
   return new Command('create')
@@ -54,29 +47,24 @@ export function createAddressCommand(): Command {
 
       try {
         const addressType = opts.type.toUpperCase();
-        if (!VALID_TYPES.has(addressType)) {
-          throw new Error(`Invalid address type: ${opts.type}. Allowed values: BILLING, SHIPPING, MAILING, REGISTERED`);
+        if (!isAddressType(addressType)) {
+          throw new Error(
+            `Invalid address type: ${opts.type}. Allowed values: BILLING, SHIPPING, MAILING, REGISTERED`,
+          );
         }
 
-        const body: Record<string, string> = {
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.address.create({
           agentId: opts.agent,
           type: addressType,
+          label: opts.label,
           street1: opts.street1,
+          street2: opts.street2,
           city: opts.city,
           state: opts.state,
           postalCode: opts.postalCode,
           country: opts.country.toUpperCase(),
-        };
-
-        if (opts.label) {
-          body.label = opts.label;
-        }
-        if (opts.street2) {
-          body.street2 = opts.street2;
-        }
-
-        const client = await requireAuth(globals);
-        const response = await client.post<AddressResponse>('/addresses', body);
+        });
 
         if (globals.json) {
           output.json(response);
@@ -96,7 +84,7 @@ export function createAddressCommand(): Command {
         ]);
         output.success('Address created');
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to create address: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);

@@ -1,16 +1,10 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ValidateOptions {
   agent: string;
-}
-
-interface ValidateResponse {
-  valid: boolean;
-  normalizedAddress: Record<string, unknown> | null;
-  errors: string[];
 }
 
 export function validateAddressCommand(): Command {
@@ -24,11 +18,11 @@ export function validateAddressCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const response = await client.post<ValidateResponse>(
-          `/addresses/${addressId}/validate`,
-          { agentId: opts.agent },
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.address.validate({
+          id: addressId,
+          agentId: opts.agent,
+        });
 
         if (globals.json) {
           output.json(response);
@@ -39,14 +33,19 @@ export function validateAddressCommand(): Command {
           output.success('Address is valid');
         } else {
           output.error('Address validation failed');
-          if (response.errors.length > 0) {
-            for (const err of response.errors) {
-              output.info(`  - ${err}`);
+          if (response.suggestions.length > 0) {
+            for (const suggestion of response.suggestions) {
+              const street = suggestion.street2
+                ? `${suggestion.street1}, ${suggestion.street2}`
+                : suggestion.street1;
+              output.info(
+                `  - ${street}, ${suggestion.city}, ${suggestion.state} ${suggestion.postalCode} ${suggestion.country}`,
+              );
             }
           }
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to validate address: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);
