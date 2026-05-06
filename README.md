@@ -166,7 +166,6 @@ anima setup-mcp verify    # Verify MCP server connectivity
 ### `extension` — Manage Anima Chrome extension
 
 ```bash
-anima extension install   # Install the Chrome extension
 anima extension status    # Check extension status
 ```
 
