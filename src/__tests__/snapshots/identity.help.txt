@@ -7,7 +7,9 @@ Options:
 
 Commands:
   create [options]       Create an identity
-  list [options]         List identities
+  list [options]         List identities. Defaults to all orgs you belong to;
+                         pass --org or set a default with `am org switch` to
+                         filter.
   get [options]          Get an identity by ID
   update [options]       Update an identity
   delete [options]       Delete an identity

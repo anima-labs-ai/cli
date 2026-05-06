@@ -275,4 +275,131 @@ describe('config', () => {
       expect(cfg.defaultOrg).toBe('org-second');
     });
   });
+
+  describe('profile secrets', () => {
+    test('profile apiKey is written to keychain, never to config.json', async () => {
+      await config.saveConfig({
+        activeProfile: 'prod',
+        profiles: {
+          prod: {
+            apiUrl: 'https://api.useanima.sh',
+            apiKey: 'ak_prod_live_xyz',
+            defaultOrg: 'acme',
+          },
+        },
+      });
+
+      const onDisk = readFileSync(join(testConfigDir, 'config.json'), 'utf8');
+      expect(onDisk).not.toContain('ak_prod_live_xyz');
+      // Non-secret profile metadata is fine on disk.
+      expect(onDisk).toContain('api.useanima.sh');
+      expect(onDisk).toContain('acme');
+
+      // The profile apiKey lives under a `profile:` namespace so it can't
+      // collide with auth.json's host-keyed accounts.
+      const blob = await memoryStore.getSecret('profile:prod');
+      expect(blob).not.toBeNull();
+      const parsed = JSON.parse(blob ?? '{}');
+      expect(parsed.apiKey).toBe('ak_prod_live_xyz');
+
+      // getConfig merges them back so resolveConfigValue / getActiveProfile
+      // continue to see the full ProfileConfig.
+      const cfg = await config.getConfig();
+      expect(cfg.profiles?.prod.apiKey).toBe('ak_prod_live_xyz');
+      expect(cfg.profiles?.prod.apiUrl).toBe('https://api.useanima.sh');
+      expect(cfg.profiles?.prod.defaultOrg).toBe('acme');
+    });
+
+    test('multiple profiles get distinct keychain entries', async () => {
+      await config.saveConfig({
+        profiles: {
+          prod: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_prod' },
+          dev: { apiUrl: 'http://localhost:4001', apiKey: 'ak_dev' },
+        },
+      });
+
+      expect(JSON.parse((await memoryStore.getSecret('profile:prod')) ?? '{}').apiKey).toBe('ak_prod');
+      expect(JSON.parse((await memoryStore.getSecret('profile:dev')) ?? '{}').apiKey).toBe('ak_dev');
+
+      const onDisk = readFileSync(join(testConfigDir, 'config.json'), 'utf8');
+      expect(onDisk).not.toContain('ak_prod');
+      expect(onDisk).not.toContain('ak_dev');
+    });
+
+    test('migrates legacy plaintext profile apiKey on first read', async () => {
+      // Simulate a config.json written by the pre-secure-storage CLI: profile
+      // apiKey sitting plaintext in the file.
+      mkdirSync(testConfigDir, { recursive: true });
+      writeFileSync(
+        join(testConfigDir, 'config.json'),
+        JSON.stringify({
+          activeProfile: 'staging',
+          profiles: {
+            staging: {
+              apiUrl: 'https://staging.useanima.sh',
+              apiKey: 'ak_legacy_plaintext',
+              defaultOrg: 'beta-co',
+            },
+          },
+        }),
+      );
+
+      // First read returns the merged view AND quietly migrates.
+      const cfg = await config.getConfig();
+      expect(cfg.profiles?.staging.apiKey).toBe('ak_legacy_plaintext');
+      expect(cfg.profiles?.staging.defaultOrg).toBe('beta-co');
+
+      // Post-migration: keychain has it, file does not.
+      const onDisk = readFileSync(join(testConfigDir, 'config.json'), 'utf8');
+      expect(onDisk).not.toContain('ak_legacy_plaintext');
+      expect(onDisk).toContain('beta-co');
+
+      const blob = await memoryStore.getSecret('profile:staging');
+      expect(JSON.parse(blob ?? '{}').apiKey).toBe('ak_legacy_plaintext');
+    });
+
+    test('deleteProfile removes the keychain entry too', async () => {
+      await config.saveConfig({
+        profiles: {
+          prod: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_to_delete' },
+          dev: { apiUrl: 'http://localhost:4001', apiKey: 'ak_keep' },
+        },
+      });
+      expect(await memoryStore.getSecret('profile:prod')).not.toBeNull();
+      expect(await memoryStore.getSecret('profile:dev')).not.toBeNull();
+
+      await config.deleteProfile('prod');
+
+      // prod gone from both stores; dev untouched (deletion is per-profile,
+      // not blast-radius across the whole config).
+      expect(await memoryStore.getSecret('profile:prod')).toBeNull();
+      expect(await memoryStore.getSecret('profile:dev')).not.toBeNull();
+      const cfg = await config.getConfig();
+      expect(cfg.profiles?.prod).toBeUndefined();
+      expect(cfg.profiles?.dev?.apiKey).toBe('ak_keep');
+    });
+
+    test('saving a profile without apiKey clears any prior keychain entry', async () => {
+      // Seed: profile with a key.
+      await config.saveConfig({
+        profiles: { prod: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_seed' } },
+      });
+      expect(await memoryStore.getSecret('profile:prod')).not.toBeNull();
+
+      // User explicitly clears the apiKey (e.g., `am config unset --profile prod apiKey`):
+      // saveConfig is called with the profile present but no apiKey.
+      await config.saveConfig({
+        profiles: { prod: { apiUrl: 'https://api.useanima.sh' } },
+      });
+      expect(await memoryStore.getSecret('profile:prod')).toBeNull();
+    });
+
+    test('config.json is written with mode 0600 even when only metadata is in it', async () => {
+      await config.saveConfig({
+        profiles: { prod: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_perm' } },
+      });
+      const stat = require('node:fs').statSync(join(testConfigDir, 'config.json'));
+      expect(stat.mode & 0o777).toBe(0o600);
+    });
+  });
 });
