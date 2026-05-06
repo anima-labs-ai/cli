@@ -99,9 +99,21 @@ export function createProgram(): Command {
 	program.addCommand(completionCommand());
 	program.addCommand(generateCommand());
 
-	program.exitOverride();
+	// `exitOverride()` only takes effect on the command it's called on —
+	// it does NOT cascade to subcommands. Without applying it recursively,
+	// errors from `am address create ...` (a subcommand) would bypass the
+	// top-level catch block, so customizations like the
+	// "commander.excessArguments" hint below would never fire.
+	applyExitOverrideRecursive(program);
 
 	return program;
+}
+
+function applyExitOverrideRecursive(cmd: Command): void {
+	cmd.exitOverride();
+	for (const sub of cmd.commands) {
+		applyExitOverrideRecursive(sub);
+	}
 }
 
 const arg1 = process.argv[1] ?? "";
@@ -149,11 +161,18 @@ if (isDirectExecution) {
 				// raw message ("too many arguments... got 1") doesn't tell
 				// the user what actually went wrong — append a concrete hint.
 				if (commanderError.code === "commander.excessArguments") {
-					console.error(`Error: ${commanderError.message}`);
 					console.error(
 						'Hint: option values with spaces must be quoted. ' +
 							'Example: --street1 "123 Main St" (not --street1 123 Main St).',
 					);
+					process.exit(1);
+				}
+				// Any other `commander.*` error (missing required option,
+				// invalid argument, unknown option, etc.) — commander has
+				// already printed its own `error: ...` line via writeErr.
+				// Re-printing as `Error: error: ...` produced an ugly
+				// double-stamp. Just exit.
+				if (commanderError.code.startsWith("commander.")) {
 					process.exit(1);
 				}
 			}
