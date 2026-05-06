@@ -97,37 +97,71 @@ export function whoamiCommand(): Command {
       }
 
       const result = accountResult.data;
-      const isHumanFormat = (globals.format ?? (globals.human ? 'human' : null)) === 'human';
 
-      if (isHumanFormat || (!globals.json && !globals.format && !globals.human)) {
-        // Human-readable path: pairs in details(), banner for update.
-        if (isHumanFormat || globals.human) {
-          output.details([
-            ['Organization', result.name],
-            ['Org ID', result.id],
-            ['Slug', result.slug],
-            ['Tier', result.tier],
-            ['Auth Method', auth.apiKey ? 'API Key' : 'Token'],
-            ['API URL', auth.apiUrl ?? 'http://localhost:4001'],
-            ['CLI Version', pkg.version],
-          ]);
-          if (update) {
-            output.warn(
-              `Update available: ${update.current_version} → ${update.latest_version}. Run: ${update.update_command}`,
-            );
-          }
-          return;
+      // Detect the auth credential type by token prefix. Stored in the
+      // `apiKey` field for back-compat with older config files (the field
+      // is a misnomer at this point — it actually holds whatever Bearer
+      // credential the user authenticated with).
+      const credential = auth.apiKey ?? '';
+      const authMethod = credential.startsWith('oat_')
+        ? 'OAuth (Anima Connect)'
+        : credential.startsWith('mk_')
+          ? 'Master key'
+          : credential.startsWith('ak_')
+            ? 'Agent key'
+            : credential.startsWith('sk_')
+              ? 'Scoped key'
+              : credential.startsWith('stk_')
+                ? 'Scoped token'
+                : auth.token
+                  ? 'Session token'
+                  : 'API Key';
+
+      // Human format includes the TTY-auto-detected case — `output.format`
+      // is the canonical resolved value. Don't gate on `globals.human`
+      // alone; that misses the auto-detection branch.
+      if (output.format === 'human') {
+        output.details([
+          ['Organization', result.name],
+          ['Org ID', result.id],
+          ['Slug', result.slug],
+          ['Tier', result.tier],
+          ['Auth Method', authMethod],
+          ['API URL', auth.apiUrl ?? 'http://localhost:4001'],
+          ['CLI Version', pkg.version],
+        ]);
+        if (update) {
+          output.warn(
+            `Update available: ${update.current_version} → ${update.latest_version}. Run: ${update.update_command}`,
+          );
         }
+        return;
       }
 
       // Agent / json / yaml / md / jsonl path: structured payload, embedded
       // update field so agents can act on it without parsing decoration.
+      // Machine-readable auth_method codes: agents branch on these to
+      // decide whether to refresh tokens, prompt for re-login, etc.
+      const authMethodCode = credential.startsWith('oat_')
+        ? 'oauth'
+        : credential.startsWith('mk_')
+          ? 'master_key'
+          : credential.startsWith('ak_')
+            ? 'agent_key'
+            : credential.startsWith('sk_')
+              ? 'scoped_key'
+              : credential.startsWith('stk_')
+                ? 'scoped_token'
+                : auth.token
+                  ? 'session_token'
+                  : 'api_key';
+
       const payload = {
         org_id: result.id,
         org_name: result.name,
         org_slug: result.slug,
         tier: result.tier,
-        auth_method: auth.apiKey ? 'api_key' : 'token',
+        auth_method: authMethodCode,
         api_url: auth.apiUrl ?? 'http://localhost:4001',
         cli_version: pkg.version,
         ...(update ? { update } : {}),

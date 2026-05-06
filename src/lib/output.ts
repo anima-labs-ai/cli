@@ -113,7 +113,13 @@ function toMarkdown(data: unknown): string {
 }
 
 export class Output {
-  private readonly format: OutputFormat;
+  /**
+   * Resolved output format. Public so callers can branch on it (e.g. the
+   * `whoami` command renders a table for `human` and a structured payload
+   * for `agent`/`json`/etc.). Same value as what `payload`/`details`
+   * internally use to dispatch.
+   */
+  readonly format: OutputFormat;
   private readonly debugMode: boolean;
 
   constructor(options: OutputOptions) {
