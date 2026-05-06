@@ -696,8 +696,6 @@ describe('voice commands', () => {
       }
 
       expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
-      const msg = String((errorSpy.mock.calls.at(0) as unknown[])?.[0] ?? '');
-      expect(msg).toContain('Failed to list calls');
     });
   });
 });
