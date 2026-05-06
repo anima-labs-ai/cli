@@ -140,6 +140,16 @@ export async function deleteProfile(name: string): Promise<void> {
   if (config.activeProfile === name) {
     config.activeProfile = undefined;
   }
+  // Remove the keychain entry too — saveConfig only manages entries for
+  // profiles that still exist in the AppConfig, so a deleted profile would
+  // otherwise leave an orphaned credential behind. Idempotent on a missing
+  // entry, so safe even when the profile predates secure storage.
+  try {
+    await store().deleteSecret(accountForProfile(name));
+  } catch {
+    // Backend unavailable — let the file write proceed; the next time the
+    // keychain is reachable the orphan can be cleaned up manually.
+  }
   await saveConfig(config);
 }
 
@@ -286,6 +296,42 @@ function accountForApiUrl(apiUrl: string | undefined): string {
   }
 }
 
+// ── Named profiles (config.json) ────────────────────────────────────────────
+//
+// `AppConfig.profiles[name]` mirrors `AuthConfig`'s split: the apiKey is
+// secret, everything else (apiUrl, defaultOrg, defaultIdentity, outputFormat)
+// is non-sensitive metadata. Same store, same kind of encoding — but a
+// separate account namespace (`profile:<name>`) so profile credentials don't
+// collide with the active-session entry keyed by host.
+
+const PROFILE_SECRET_FIELDS = ['apiKey'] as const;
+type ProfileSecretFields = Pick<ProfileConfig, (typeof PROFILE_SECRET_FIELDS)[number]>;
+type ProfileMetadataFields = Omit<ProfileConfig, (typeof PROFILE_SECRET_FIELDS)[number]>;
+
+function splitProfile(profile: ProfileConfig): {
+  secrets: ProfileSecretFields;
+  metadata: ProfileMetadataFields;
+} {
+  const { apiKey, ...metadata } = profile;
+  const secrets: ProfileSecretFields = {};
+  if (apiKey !== undefined) secrets.apiKey = apiKey;
+  return { secrets, metadata };
+}
+
+function hasAnyProfileSecret(secrets: ProfileSecretFields): boolean {
+  return PROFILE_SECRET_FIELDS.some((k) => secrets[k] !== undefined);
+}
+
+/**
+ * Account name for a named profile's keychain entry. Prefixed with
+ * `profile:` so it can't collide with auth.json's host-keyed accounts —
+ * a user with a profile literally named `api.useanima.sh` won't blow
+ * away their active session.
+ */
+function accountForProfile(name: string): string {
+  return `profile:${name}`;
+}
+
 export async function getAuthConfig(): Promise<AuthConfig> {
   let metadata: MetadataFields = {};
   let legacySecrets: SecretFields | null = null;
@@ -423,22 +469,115 @@ export async function clearAuthConfig(): Promise<void> {
 }
 
 export async function getConfig(): Promise<AppConfig> {
+  let raw: AppConfig = {};
   try {
     const p = appConfigPath();
     if (!existsSync(p)) return {};
     tightenFileMode(p);
-    return JSON.parse(readFileSync(p, 'utf8'));
+    raw = JSON.parse(readFileSync(p, 'utf8')) as AppConfig;
   } catch {
     return {};
   }
+
+  // No profiles → nothing to merge from the keychain. Return as-is to keep
+  // the no-profiles fast-path zero-cost.
+  if (!raw.profiles || Object.keys(raw.profiles).length === 0) return raw;
+
+  // Walk each profile: detect legacy plaintext apiKeys, migrate them, and
+  // pull keychain-resident apiKeys back into the in-memory config so
+  // resolveConfigValue / getActiveProfile see the merged view.
+  let mutatedProfiles = false;
+  const merged: Record<string, ProfileConfig> = {};
+
+  for (const [name, profile] of Object.entries(raw.profiles)) {
+    const { secrets, metadata } = splitProfile(profile);
+
+    if (hasAnyProfileSecret(secrets)) {
+      // Legacy: apiKey is sitting in config.json. Move it.
+      try {
+        await store().setSecret(accountForProfile(name), JSON.stringify(secrets));
+        mutatedProfiles = true;
+        merged[name] = { ...metadata, ...secrets };
+      } catch (err) {
+        // Keychain unavailable — leave the profile as-is and warn once. Same
+        // failure mode as the auth.json migration.
+        const message = err instanceof Error ? err.message : String(err);
+        process.stderr.write(
+          `[anima] warning: failed to migrate profile "${name}" credentials ` +
+            `to secure storage (${message}). config.json still contains them.\n`,
+        );
+        merged[name] = profile;
+      }
+      continue;
+    }
+
+    // Normal path: pull the keychain entry, if any, and merge.
+    try {
+      const blob = await store().getSecret(accountForProfile(name));
+      if (blob !== null) {
+        const parsed = JSON.parse(blob) as ProfileSecretFields;
+        const fromKeychain: ProfileSecretFields = {};
+        for (const k of PROFILE_SECRET_FIELDS) {
+          if (typeof parsed[k] === 'string') fromKeychain[k] = parsed[k];
+        }
+        merged[name] = { ...metadata, ...fromKeychain };
+        continue;
+      }
+    } catch {
+      // Backend unavailable — surface metadata-only profile, same posture
+      // as auth.json's miss path.
+    }
+    merged[name] = metadata;
+  }
+
+  // If we migrated any profile from plaintext, persist the cleaned-up file
+  // so the leak window closes immediately rather than waiting for the next
+  // saveConfig call.
+  if (mutatedProfiles) {
+    const cleaned: AppConfig = { ...raw };
+    cleaned.profiles = Object.fromEntries(
+      Object.entries(merged).map(([n, p]) => [n, splitProfile(p).metadata]),
+    );
+    try {
+      writeSecureJson(appConfigPath(), cleaned);
+    } catch {
+      // Best-effort: the next saveConfig will retry. Returning the merged
+      // view is still correct.
+    }
+  }
+
+  return { ...raw, profiles: merged };
 }
 
 export async function saveConfig(config: AppConfig): Promise<void> {
   await ensureConfigDir();
-  // 0600 here too — config.json holds non-secret prefs today, but the
-  // multi-profile feature stores `apiKey` per-profile in this same file.
-  // Until those move into the keychain too, conservative perms are warranted.
-  writeSecureJson(appConfigPath(), config);
+
+  // Strip profile apiKeys into the keychain before writing the file. We
+  // mutate a clone so callers' references aren't affected — saveConfig has
+  // historically been called with `{...await getConfig(), ...patch}` where
+  // both shapes coexist briefly.
+  const onDisk: AppConfig = { ...config };
+  if (config.profiles) {
+    const profilesForFile: Record<string, ProfileConfig> = {};
+    for (const [name, profile] of Object.entries(config.profiles)) {
+      const { secrets, metadata } = splitProfile(profile);
+      const account = accountForProfile(name);
+      if (hasAnyProfileSecret(secrets)) {
+        await store().setSecret(account, JSON.stringify(secrets));
+      } else {
+        // Profile exists but has no apiKey in this save → ensure no stale
+        // keychain entry hangs around (e.g., user explicitly cleared it).
+        await store().deleteSecret(account);
+      }
+      profilesForFile[name] = metadata;
+    }
+    onDisk.profiles = profilesForFile;
+  }
+
+  // 0600 because even the metadata (apiUrl, defaultOrg, defaultIdentity,
+  // active profile name) reveals enough about the user's setup to inform
+  // a phishing or credential-stuffing attempt. Same posture as auth.json.
+  writeSecureJson(appConfigPath(), onDisk);
 }
 
 export function getConfigDir(): string {
