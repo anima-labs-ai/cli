@@ -1,20 +1,13 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface SendOptions {
   agent: string;
   type: string;
   input: string;
   fromDid?: string;
-}
-
-interface A2ATaskResponse {
-  id: string;
-  status: string;
-  type: string;
-  [key: string]: unknown;
 }
 
 export function sendTaskCommand(): Command {
@@ -38,19 +31,13 @@ export function sendTaskCommand(): Command {
           process.exit(1);
         }
 
-        const client = await requireAuth(globals);
-        const body: Record<string, unknown> = {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.a2a.submitTask({
+          agentId: opts.agent,
           type: opts.type,
           input: parsedInput,
-        };
-        if (opts.fromDid) {
-          body.fromDid = opts.fromDid;
-        }
-
-        const result = await client.post<A2ATaskResponse>(
-          `/agents/${opts.agent}/a2a/tasks`,
-          body,
-        );
+          from: opts.fromDid ?? '',
+        });
 
         if (globals.json) {
           output.json(result);
@@ -59,7 +46,7 @@ export function sendTaskCommand(): Command {
 
         output.success(`Task submitted: ${result.id} (status: ${result.status})`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to submit task: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to submit task: ${error.message}`);

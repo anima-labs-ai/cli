@@ -1,29 +1,21 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+
+type A2ATaskStatus =
+  | 'submitted'
+  | 'working'
+  | 'input_required'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
 
 interface TasksOptions {
   agent: string;
   status?: string;
   cursor?: string;
   limit?: string;
-}
-
-interface A2ATask {
-  id: string;
-  type: string;
-  status: string;
-  fromDid?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-interface ListTasksResponse {
-  items: A2ATask[];
-  pagination?: {
-    nextCursor?: string | null;
-  };
 }
 
 export function listTasksCommand(): Command {
@@ -39,27 +31,23 @@ export function listTasksCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const params: Record<string, string> = {};
-        if (opts.status) {
-          params.status = opts.status;
-        }
-        if (opts.cursor) {
-          params.cursor = opts.cursor;
-        }
+        let limit: number | undefined;
         if (opts.limit) {
           const parsedLimit = Number.parseInt(opts.limit, 10);
           if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
             output.error('Limit must be an integer between 1 and 100.');
             process.exit(1);
           }
-          params.limit = String(parsedLimit);
+          limit = parsedLimit;
         }
 
-        const client = await requireAuth(globals);
-        const result = await client.get<ListTasksResponse>(
-          `/agents/${opts.agent}/a2a/tasks`,
-          params,
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.a2a.listTasks({
+          agentId: opts.agent,
+          status: opts.status as A2ATaskStatus | undefined,
+          cursor: opts.cursor,
+          limit: limit ?? 20,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -77,11 +65,11 @@ export function listTasksCommand(): Command {
           ]),
         );
 
-        if (result.pagination?.nextCursor) {
-          output.info(`Next cursor: ${result.pagination.nextCursor}`);
+        if (result.nextCursor) {
+          output.info(`Next cursor: ${result.nextCursor}`);
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list tasks: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(`Failed to list tasks: ${error.message}`);
