@@ -211,12 +211,22 @@ async function loginWithBrowser(globals: GlobalOptions, output: Output): Promise
   // Persist. The access token goes into `apiKey` so the existing API
   // middleware picks it up via the same Bearer auth path; `oat_*` prefix
   // is recognised by the API's auth resolver as an OAuth access token.
-  const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000).toISOString();
+  //
+  // Both expiry timestamps are stored so the CLI can:
+  //   • Proactively refresh `oat_*` before each request (`expiresAt`)
+  //   • Detect a dead RT without a network round-trip
+  //     (`refreshTokenExpiresAt`)
+  const now = Date.now();
+  const expiresAt = new Date(now + tokens.expiresIn * 1000).toISOString();
+  const refreshTokenExpiresAt = tokens.refreshTokenExpiresIn
+    ? new Date(now + tokens.refreshTokenExpiresIn * 1000).toISOString()
+    : undefined;
   await saveAuthConfig({
     apiKey: tokens.accessToken,
     apiUrl,
     refreshToken: tokens.refreshToken,
     expiresAt,
+    refreshTokenExpiresAt,
     email: 'oauth-user', // userinfo will overwrite this
   });
 

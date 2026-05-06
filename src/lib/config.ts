@@ -26,7 +26,19 @@ export function setPathsOverride(paths: ReturnType<typeof envPaths>): void {
 export interface AuthConfig {
   token?: string;
   refreshToken?: string;
+  /**
+   * ISO-8601 expiry of `token` (session-token flow) OR `apiKey` when the
+   * apiKey field holds an OAuth access token (`oat_*` prefix). Used for
+   * proactive auto-refresh — see `ensureFreshOAuthToken` in `auth.ts`.
+   */
   expiresAt?: string;
+  /**
+   * ISO-8601 expiry of `refreshToken`. Set on OAuth login; lets the CLI
+   * give a clean "your session expired, please log in again" message
+   * without needing a network round-trip when the RT itself is dead.
+   * Optional for back-compat with auth.json files written by older CLIs.
+   */
+  refreshTokenExpiresAt?: string;
   apiKey?: string;
   apiUrl?: string;
   email?: string;
