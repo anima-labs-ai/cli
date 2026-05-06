@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface SendEmailOptions {
   agent: string;
@@ -11,21 +11,6 @@ interface SendEmailOptions {
   subject: string;
   body: string;
   html?: string;
-}
-
-interface SendEmailBody {
-  agentId: string;
-  to: string[];
-  cc?: string[];
-  bcc?: string[];
-  subject: string;
-  body: string;
-  bodyHtml?: string;
-}
-
-interface SendEmailResponse {
-  id: string;
-  [key: string]: unknown;
 }
 
 function collect(value: string, previous: string[]): string[] {
@@ -54,25 +39,16 @@ export function sendEmailCommand(): Command {
           process.exit(1);
         }
 
-        const client = await requireAuth(globals);
-        const payload: SendEmailBody = {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.email.send({
           agentId: opts.agent,
           to: opts.to,
+          cc: opts.cc.length > 0 ? opts.cc : undefined,
+          bcc: opts.bcc.length > 0 ? opts.bcc : undefined,
           subject: opts.subject,
           body: opts.body,
-        };
-
-        if (opts.cc.length > 0) {
-          payload.cc = opts.cc;
-        }
-        if (opts.bcc.length > 0) {
-          payload.bcc = opts.bcc;
-        }
-        if (opts.html) {
-          payload.bodyHtml = opts.html;
-        }
-
-        const result = await client.post<SendEmailResponse>('/email/send', payload);
+          bodyHtml: opts.html,
+        });
 
         if (globals.json) {
           output.json(result);
@@ -81,12 +57,22 @@ export function sendEmailCommand(): Command {
 
         output.success(`Email sent (${result.id})`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to send email: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to send email: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to send email');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

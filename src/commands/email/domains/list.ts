@@ -1,20 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../../lib/auth.js';
-import { ApiError } from '../../../lib/api-client.js';
-
-interface DomainListItem {
-  id: string;
-  domain: string;
-  status?: string;
-  verified?: boolean;
-  createdAt?: string;
-}
-
-interface ListDomainsResponse {
-  items: DomainListItem[];
-  pagination?: { nextCursor?: string | null; hasMore?: boolean };
-}
+import { type GlobalOptions } from '../../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 
 export function listDomainsCommand(): Command {
   return new Command('list')
@@ -24,8 +11,8 @@ export function listDomainsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<ListDomainsResponse>('/domains');
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.domain.list({});
 
         if (globals.json) {
           output.json(result);
@@ -43,18 +30,28 @@ export function listDomainsCommand(): Command {
           items.map((domain) => [
             domain.id,
             domain.domain,
-            domain.status ?? '-',
-            domain.verified === undefined ? '-' : String(domain.verified),
-            domain.createdAt ?? '-',
+            domain.status,
+            domain.verified ? 'Yes' : 'No',
+            domain.createdAt,
           ]),
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to list domains: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to list domains: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to list domains');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

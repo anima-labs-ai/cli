@@ -1,15 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../../lib/auth.js';
-import { ApiError } from '../../../lib/api-client.js';
-
-interface AddDomainResponse {
-  id: string;
-  domain: string;
-  status?: string;
-  createdAt?: string;
-  [key: string]: unknown;
-}
+import { type GlobalOptions } from '../../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 
 export function addDomainCommand(): Command {
   return new Command('add')
@@ -20,8 +12,8 @@ export function addDomainCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.post<AddDomainResponse>('/domains', {
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.domain.add({
           domain: domain.toLowerCase(),
         });
 
@@ -34,15 +26,26 @@ export function addDomainCommand(): Command {
           ['ID', result.id],
           ['Domain', result.domain],
           ['Status', result.status],
+          ['Verified', result.verified ? 'Yes' : 'No'],
           ['Created At', result.createdAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to add domain: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to add domain: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to add domain');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

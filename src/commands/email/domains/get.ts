@@ -1,17 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../../lib/auth.js';
-import { ApiError } from '../../../lib/api-client.js';
-
-interface DomainDetailsResponse {
-  id: string;
-  domain: string;
-  status?: string;
-  verified?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
-}
+import { type GlobalOptions } from '../../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 
 export function getDomainCommand(): Command {
   return new Command('get')
@@ -22,8 +12,8 @@ export function getDomainCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<DomainDetailsResponse>(`/domains/${id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.domain.get({ id });
 
         if (globals.json) {
           output.json(result);
@@ -34,17 +24,33 @@ export function getDomainCommand(): Command {
           ['ID', result.id],
           ['Domain', result.domain],
           ['Status', result.status],
-          ['Verified', result.verified === undefined ? undefined : String(result.verified)],
+          ['Verified', result.verified ? 'Yes' : 'No'],
+          ['SPF Configured', result.spfConfigured ? 'Yes' : 'No'],
+          ['DKIM Selector', result.dkimSelector ?? '-'],
+          ['DMARC Configured', result.dmarcConfigured ? 'Yes' : 'No'],
+          ['MX Configured', result.mxConfigured ? 'Yes' : 'No'],
+          ['Feedback Enabled', result.feedbackEnabled ? 'Yes' : 'No'],
           ['Created At', result.createdAt],
-          ['Updated At', result.updatedAt],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get domain: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to get domain: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to get domain');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Domain not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }

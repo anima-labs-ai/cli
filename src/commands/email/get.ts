@@ -1,22 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-
-interface GetEmailResponse {
-  id: string;
-  agentId: string;
-  subject?: string;
-  body?: string;
-  bodyHtml?: string;
-  status?: string;
-  to?: string[];
-  cc?: string[];
-  bcc?: string[];
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
-}
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 export function getEmailCommand(): Command {
   return new Command('get')
@@ -27,34 +12,50 @@ export function getEmailCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const result = await client.get<GetEmailResponse>(`/email/${id}`);
+        const orpc = await requireOrpcAuth(globals);
+        const message = await orpc.email.get({ id });
 
         if (globals.json) {
-          output.json(result);
+          output.json(message);
           return;
         }
 
         output.details([
-          ['ID', result.id],
-          ['Agent ID', result.agentId],
-          ['Subject', result.subject],
-          ['Status', result.status],
-          ['To', result.to?.join(', ')],
-          ['CC', result.cc?.join(', ')],
-          ['BCC', result.bcc?.join(', ')],
-          ['Created At', result.createdAt],
-          ['Updated At', result.updatedAt],
-          ['Body', result.body],
-          ['HTML Body', result.bodyHtml],
+          ['ID', message.id],
+          ['Agent ID', message.agentId],
+          ['Channel', message.channel],
+          ['Direction', message.direction],
+          ['Status', message.status],
+          ['From', message.fromAddress],
+          ['To', message.toAddress],
+          ['Subject', message.subject ?? '-'],
+          ['Thread ID', message.threadId ?? '-'],
+          ['External ID', message.externalId ?? '-'],
+          ['Sent At', message.sentAt ?? '-'],
+          ['Received At', message.receivedAt ?? '-'],
+          ['Created At', message.createdAt],
+          ['Body', message.body],
+          ['HTML Body', message.bodyHtml ?? '-'],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
-          output.error(`Failed to get email: ${error.message}`);
-        } else if (error instanceof Error) {
-          output.error(`Failed to get email: ${error.message}`);
-        }
-        process.exit(1);
+        handleOrpcError(error, output, 'Failed to get email');
       }
     });
+}
+
+function handleOrpcError(error: unknown, output: Output, context: string): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.error('Not authenticated. Run `anima auth login` to authenticate.');
+    } else if (error.status === 404) {
+      output.error('Email not found.');
+    } else {
+      output.error(`${context}: ${error.message}`);
+    }
+  } else if (error instanceof Error) {
+    output.error(`${context}: ${error.message}`);
+  } else {
+    output.error(context);
+  }
+  process.exit(1);
 }
