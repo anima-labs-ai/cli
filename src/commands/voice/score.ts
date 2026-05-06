@@ -1,32 +1,8 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import pc from 'picocolors';
-
-interface CallScoreResponse {
-  callId: string;
-  overallScore: number;
-  subscores: {
-    resolution: number;
-    sentiment: number;
-    efficiency: number;
-    engagement: number;
-    latency: number;
-    compliance: number;
-  };
-  metrics: {
-    durationSeconds: number;
-    agentSpeakingSeconds: number;
-    callerSpeakingSeconds: number;
-    talkToListenRatio: number;
-    longestMonologueSeconds: number;
-    deadAirCount: number;
-    deadAirSeconds: number;
-    averageResponseLatencySeconds: number;
-  };
-  scoredAt: string;
-}
 
 function scoreColor(score: number): (text: string) => string {
   if (score >= 80) return pc.green;
@@ -50,44 +26,40 @@ export function scoreCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-        const score = await client.get<CallScoreResponse>(
-          `/voice/calls/${callId}/score`,
-        );
+        const orpc = await requireOrpcAuth(globals);
+        const score = await orpc.voice.getScore({ callId });
 
         if (globals.json) {
           output.json(score);
           return;
         }
 
-        const overallColor = scoreColor(score.overallScore);
+        const overallColor = scoreColor(score.compositeScore);
         console.log(pc.bold(pc.cyan('Call Score')));
         console.log();
-        console.log(`  ${pc.bold('Overall:')}  ${scoreBar(score.overallScore)}  ${overallColor(String(score.overallScore))}/100`);
+        console.log(`  ${pc.bold('Overall:')}  ${scoreBar(score.compositeScore)}  ${overallColor(String(score.compositeScore))}/100`);
         console.log();
 
         console.log(pc.bold('  Subscores:'));
-        printSubscore('Resolution', score.subscores.resolution);
-        printSubscore('Sentiment', score.subscores.sentiment);
-        printSubscore('Efficiency', score.subscores.efficiency);
-        printSubscore('Engagement', score.subscores.engagement);
-        printSubscore('Latency', score.subscores.latency);
-        printSubscore('Compliance', score.subscores.compliance);
+        printSubscore('Resolution', score.resolutionScore);
+        printSubscore('Sentiment', score.sentimentScore);
+        printSubscore('Efficiency', score.efficiencyScore);
+        printSubscore('Engagement', score.engagementScore);
+        printSubscore('Latency', score.latencyScore);
+        printSubscore('Compliance', score.complianceScore);
 
-        console.log();
-        console.log(pc.bold('  Metrics:'));
-        printMetric('Duration', `${score.metrics.durationSeconds}s`);
-        printMetric('Agent speaking', `${score.metrics.agentSpeakingSeconds}s`);
-        printMetric('Caller speaking', `${score.metrics.callerSpeakingSeconds}s`);
-        printMetric('Talk/listen ratio', score.metrics.talkToListenRatio.toFixed(2));
-        printMetric('Longest monologue', `${score.metrics.longestMonologueSeconds}s`);
-        printMetric('Dead air', `${score.metrics.deadAirCount}x (${score.metrics.deadAirSeconds}s)`);
-        printMetric('Avg response latency', `${score.metrics.averageResponseLatencySeconds.toFixed(1)}s`);
+        if (Object.keys(score.metrics).length > 0) {
+          console.log();
+          console.log(pc.bold('  Metrics:'));
+          for (const [label, value] of Object.entries(score.metrics)) {
+            printMetric(label, formatMetric(value));
+          }
+        }
 
         console.log();
         output.info(`Scored at ${new Date(score.scoredAt).toLocaleString()}`);
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to get score: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);
@@ -104,4 +76,11 @@ function printSubscore(label: string, value: number): void {
 
 function printMetric(label: string, value: string): void {
   console.log(`    ${pc.dim(label.padEnd(22))} ${value}`);
+}
+
+function formatMetric(value: unknown): string {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  if (typeof value === 'string' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
 }

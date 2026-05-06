@@ -1,8 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-import pc from 'picocolors';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth, type AnimaClient } from '../../lib/orpc.js';
 
 interface SearchOptions {
   agent?: string;
@@ -11,35 +10,6 @@ interface SearchOptions {
   from?: string;
   to?: string;
   crossChannel?: boolean;
-}
-
-interface CallSearchResult {
-  callId: string;
-  speaker: string;
-  text: string;
-  similarity: number;
-  startTime: number;
-  agentId: string;
-}
-
-interface CallSearchResponse {
-  results: CallSearchResult[];
-}
-
-interface CrossChannelResult {
-  id: string;
-  channel: string;
-  content: string;
-  similarity: number;
-  createdAt: string;
-  agentId: string;
-  callId?: string;
-  speaker?: string;
-  startTime?: number;
-}
-
-interface CrossChannelResponse {
-  results: CrossChannelResult[];
 }
 
 export function searchCommand(): Command {
@@ -58,15 +28,15 @@ export function searchCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
+        const orpc = await requireOrpcAuth(globals);
 
         if (opts.crossChannel) {
-          await handleCrossChannel(client, query, opts, globals, output);
+          await handleCrossChannel(orpc, query, opts, globals, output);
         } else {
-          await handleVoiceSearch(client, query, opts, globals, output);
+          await handleVoiceSearch(orpc, query, opts, globals, output);
         }
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Search failed: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);
@@ -77,27 +47,27 @@ export function searchCommand(): Command {
 }
 
 async function handleVoiceSearch(
-  client: { post: <T>(path: string, body?: unknown) => Promise<T> },
+  orpc: AnimaClient,
   query: string,
   opts: SearchOptions,
   globals: GlobalOptions,
   output: Output,
 ): Promise<void> {
-  const body: Record<string, unknown> = { query };
-  if (opts.agent) body.agentId = opts.agent;
-  if (opts.limit) body.limit = Number(opts.limit);
-  if (opts.threshold) body.threshold = Number(opts.threshold);
-  if (opts.from) body.dateFrom = opts.from;
-  if (opts.to) body.dateTo = opts.to;
-
-  const response = await client.post<CallSearchResponse>('/voice/search', body);
+  const response = await orpc.voice.search({
+    query,
+    agentId: opts.agent,
+    limit: opts.limit ? Number(opts.limit) : 10,
+    threshold: opts.threshold ? Number(opts.threshold) : 0.3,
+    dateFrom: opts.from,
+    dateTo: opts.to,
+  });
 
   if (globals.json) {
     output.json(response);
     return;
   }
 
-  const results = response.results ?? [];
+  const results = response.results;
   const summary = results.length === 0 ? 'No results found' : `${results.length} result(s)`;
   output.table(
     ['Score', 'Call', 'Speaker', 'Text'],
@@ -105,38 +75,33 @@ async function handleVoiceSearch(
       `${(r.similarity * 100).toFixed(1)}%`,
       r.callId.slice(0, 8),
       r.speaker,
-      r.text,
+      r.matchedText,
     ]),
     { summary },
   );
 }
 
 async function handleCrossChannel(
-  client: { post: <T>(path: string, body?: unknown) => Promise<T> },
+  orpc: AnimaClient,
   query: string,
   opts: SearchOptions,
   globals: GlobalOptions,
   output: Output,
 ): Promise<void> {
-  const body: Record<string, unknown> = {
+  const response = await orpc.voice.crossChannelSearch({
     query,
     channels: ['email', 'sms', 'voice'],
-  };
-  if (opts.agent) body.agentId = opts.agent;
-  if (opts.limit) body.limit = Number(opts.limit);
-  if (opts.threshold) body.threshold = Number(opts.threshold);
-
-  const response = await client.post<CrossChannelResponse>(
-    '/voice/search/cross-channel',
-    body,
-  );
+    agentId: opts.agent,
+    limit: opts.limit ? Number(opts.limit) : 10,
+    threshold: opts.threshold ? Number(opts.threshold) : 0.3,
+  });
 
   if (globals.json) {
     output.json(response);
     return;
   }
 
-  const results = response.results ?? [];
+  const results = response.results;
   const summary = results.length === 0 ? 'No results found' : `${results.length} result(s)`;
   output.table(
     ['Score', 'Channel', 'Preview'],
@@ -148,4 +113,3 @@ async function handleCrossChannel(
     { summary },
   );
 }
-

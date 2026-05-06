@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { type GlobalOptions } from '../../lib/auth.js';
+import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ListCallsOptions {
   agent?: string;
@@ -10,25 +10,7 @@ interface ListCallsOptions {
   offset?: string;
 }
 
-interface CallListItem {
-  id: string;
-  agentId: string;
-  direction: string;
-  state: string;
-  from: string;
-  to: string;
-  tier: string;
-  durationSeconds?: number | null;
-  startedAt: string;
-  endedAt?: string | null;
-}
-
-interface ListCallsResponse {
-  calls: CallListItem[];
-  total: number;
-}
-
-function formatDuration(seconds?: number): string {
+function formatDuration(seconds?: number | null): string {
   if (seconds === undefined || seconds === null) return '-';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -52,22 +34,20 @@ export function listCallsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const client = await requireAuth(globals);
-
-        const params: Record<string, string> = {};
-        if (opts.agent) params.agentId = opts.agent;
-        if (opts.state) params.state = opts.state;
-        if (opts.limit) params.limit = opts.limit;
-        if (opts.offset) params.offset = opts.offset;
-
-        const response = await client.get<ListCallsResponse>('/voice/calls', params);
+        const orpc = await requireOrpcAuth(globals);
+        const response = await orpc.voice.listCalls({
+          agentId: opts.agent,
+          state: opts.state,
+          limit: opts.limit ? Number(opts.limit) : 20,
+          offset: opts.offset ? Number(opts.offset) : 0,
+        });
 
         if (globals.json) {
           output.json(response);
           return;
         }
 
-        const calls = response.calls ?? [];
+        const calls = response.calls;
         const summary = calls.length === 0
           ? 'No calls found'
           : `${calls.length} of ${response.total} call(s)`;
@@ -80,13 +60,13 @@ export function listCallsCommand(): Command {
             c.from,
             c.to,
             c.tier,
-            formatDuration(c.durationSeconds ?? undefined),
+            formatDuration(c.durationSeconds),
             formatDate(c.startedAt),
           ]),
-          { summary, pagination: { total: response.total ?? calls.length } },
+          { summary, pagination: { total: response.total } },
         );
       } catch (error: unknown) {
-        if (error instanceof ApiError) {
+        if (error instanceof ORPCError) {
           output.error(`Failed to list calls: ${error.message}`);
         } else if (error instanceof Error) {
           output.error(error.message);
