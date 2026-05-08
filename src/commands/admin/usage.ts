@@ -11,7 +11,6 @@ interface UsageOptions {
 interface UsageResponse {
   identities?: number;
   emails?: number;
-  cards?: number;
   storage?: string;
 }
 
@@ -38,7 +37,6 @@ export function usageCommand(): Command {
           ['Org', opts.org],
           ['Identities', result.identities === undefined ? '-' : String(result.identities)],
           ['Emails', result.emails === undefined ? '-' : String(result.emails)],
-          ['Cards', result.cards === undefined ? '-' : String(result.cards)],
           ['Storage', result.storage],
         ]);
       } catch (err: unknown) {

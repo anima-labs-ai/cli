@@ -17,8 +17,8 @@ export interface ApiClientOptions {
   debug?: boolean;
   timeout?: number;
   // Test mode — server-side flag that switches mutating commands to test
-  // fixtures (Lithic test BIN for cards, no real outbound email/SMS, x402
-  // sandbox settlement). Honored as `X-Anima-Test-Mode: 1` request header.
+  // fixtures (no real outbound email/SMS, x402 sandbox settlement).
+  // Honored as `X-Anima-Test-Mode: 1` request header.
   testMode?: boolean;
 }
 

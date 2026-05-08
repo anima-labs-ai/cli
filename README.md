@@ -1,6 +1,6 @@
 # @anima-labs/cli
 
-Official command-line interface for [Anima](https://useanima.sh) — identity infrastructure for AI agents. Email, phone, voice, virtual cards, vault, addresses, and a unified policy engine — one CLI, one identity per agent.
+Official command-line interface for [Anima](https://useanima.sh) — identity infrastructure for AI agents. Email, phone, voice, vault, addresses, and a unified policy engine — one CLI, one identity per agent.
 
 ## Install
 
@@ -50,10 +50,10 @@ npx @anima-labs/cli init             # try without installing
 By default every command prints **agent format** — compact single-line JSON, ~30-40% smaller than pretty JSON, machine-parseable. Pass `--human` for a pretty terminal view.
 
 ```bash
-anima card list                  # agent default: {"cards":[…]}
-anima card list --human          # ┌── card box-drawn table
-anima card list --format yaml    # explicit yaml
-anima card list --format jsonl   # one record per line
+anima email list                 # agent default: {"emails":[…]}
+anima email list --human         # ┌── box-drawn table
+anima email list --format yaml   # explicit yaml
+anima email list --format jsonl  # one record per line
 ```
 
 Primary binary: **`anima`**. Short alias: **`am`**.
@@ -117,18 +117,6 @@ anima message get <id>    # Get message details
 anima message search <q>  # Full-text search messages
 ```
 
-### `card` — Manage virtual payment cards
-
-```bash
-anima card create         # Create a virtual card
-anima card list           # List all cards
-anima card get <id>       # Get card details
-anima card update         # Update card settings
-anima card delete         # Delete a card
-anima card transactions   # List card transactions
-anima card kill-switch    # Emergency disable all cards
-```
-
 ### `vault` — Manage password vault credentials
 
 ```bash
@@ -177,7 +165,6 @@ anima admin member invite     # Invite a team member
 anima admin member role       # Update member role
 anima admin key rotate        # Rotate org API key
 anima admin key revoke        # Revoke an API key
-anima admin kyb status        # Check KYB verification status
 anima admin usage             # View usage statistics
 ```
 

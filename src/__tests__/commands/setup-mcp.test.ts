@@ -132,7 +132,6 @@ describe('setup-mcp commands', () => {
     expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
     expect(saved.mcpServers['anima-email']).toBeDefined();
     expect(saved.mcpServers['anima-phone']).toBeDefined();
-    expect(saved.mcpServers['anima-cards']).toBeDefined();
     expect(saved.mcpServers['anima-vault']).toBeDefined();
     expect(saved.mcpServers['anima-platform']).toBeDefined();
   });
@@ -509,8 +508,8 @@ describe('setup-mcp commands', () => {
       urls: string[];
     };
     expect(payload.mode).toBe('remote');
-    expect(payload.servers).toEqual(['agent', 'email', 'phone', 'cards', 'vault', 'platform']);
-    expect(payload.urls.length).toBe(6);
+    expect(payload.servers).toEqual(['agent', 'email', 'phone', 'vault', 'platform']);
+    expect(payload.urls.length).toBe(5);
     expect(payload.urls[0]).toBe('https://mcp-agent-829045119779.us-central1.run.app/mcp');
     expect(payload.count).toBe(1);
   });

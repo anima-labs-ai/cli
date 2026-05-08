@@ -29,7 +29,6 @@ export function podUsageCommand(): Command {
           ['Agents', String(usage.agentCount)],
           ['Emails', String(usage.emailCount)],
           ['Phones', String(usage.smsCount)],
-          ['Cards', String(usage.cardCount)],
           ['Vault Items', String(usage.vaultCount)],
           ['Addresses', String(usage.addressCount)],
         ]);

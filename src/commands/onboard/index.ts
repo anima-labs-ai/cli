@@ -2,7 +2,7 @@
  * `anima onboard` — guided post-signup tour of agentic-commerce capabilities.
  *
  * Designed to mirror `link-cli onboard` from Stripe, but for Anima's multi-
- * channel surface (cards + email + phone + voice + vault). Targets the
+ * channel surface (email + phone + voice + vault). Targets the
  * developer who has just installed the CLI and wants to understand what
  * Anima can do.
  *
@@ -10,13 +10,13 @@
  *   1. Verify authentication (offer `anima auth login` or `anima init` if not)
  *   2. Greet + show identity (whoami)
  *   3. Show capability matrix at the user's plan tier
- *   4. Offer to run quick demos in test mode (test card issue, test email send,
- *      x402 sandbox fetch). User opts in/out per demo.
+ *   4. Offer to run quick demos in test mode (test email send, x402 sandbox
+ *      fetch). User opts in/out per demo.
  *   5. MCP install status — offer to wire Claude Code / Cursor / etc.
  *   6. Print summary with next-step commands.
  *
- * Test mode: every demo uses `--test` flag (Wave 2C) so no real charges, no
- * real emails sent, no real numbers provisioned.
+ * Test mode: every demo uses `--test` flag (Wave 2C) so no real emails sent,
+ * no real numbers provisioned.
  */
 
 import * as clack from "@clack/prompts";
@@ -126,11 +126,6 @@ export function onboardCommand(): Command {
 					},
 					next_steps: [
 						{
-							command: "anima demo --only-card",
-							description:
-								"Test-mode card issue + browser checkout flow (no real charges)",
-						},
-						{
 							command: "anima demo --only-email",
 							description: "Test-mode email send + receive (no real emails)",
 						},
@@ -161,7 +156,6 @@ export function onboardCommand(): Command {
 				[
 					"Email      send + receive, custom domains, DKIM/SPF/DMARC",
 					"Phone      US numbers, SMS, voice (Telnyx/Deepgram/ElevenLabs)",
-					"Cards      Lithic-issued virtual cards, real-time ASA, MCC controls",
 					"Vault      Bitwarden-backed secrets, egress-time injection, TOTP",
 					"Addresses  USPS-validated billing/shipping",
 					"x402/MPP   HTTP 402 settlement, machine payments protocol",
@@ -183,11 +177,6 @@ export function onboardCommand(): Command {
 					const which = await clack.select({
 						message: "Which flow?",
 						options: [
-							{
-								value: "card",
-								label:
-									"Card issue (test mode) — see how a virtual card is provisioned",
-							},
 							{
 								value: "email",
 								label: "Email send (test mode) — see the agent inbox in action",

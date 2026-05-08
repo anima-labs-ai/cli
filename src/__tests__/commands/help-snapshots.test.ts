@@ -10,7 +10,6 @@ const commandGroups = [
   'identity',
   'email',
   'phone',
-  'card',
   'vault',
   'config',
   'setup-mcp',

@@ -34,13 +34,10 @@ const LOOPBACK_REDIRECT_URI = `http://localhost:${LOOPBACK_PORT}/callback`;
 // Definitive list: apps/web/src/lib/oauth/scopes.ts (ANIMA_SCOPES).
 //
 // Conservative defaults — read across the main domains, send for
-// channels the CLI typically operates on (email + SMS), spend approval
-// for cards (per-request — auto-approve is opt-in via a future flag).
-// Users can refine via `am auth login --scopes=cards:read,email:read`
+// channels the CLI typically operates on (email + SMS).
+// Users can refine via `am auth login --scopes=email:read,phone:read_sms`
 // (when that lands).
 const DEFAULT_CLI_SCOPES = [
-  'cards:read',
-  'cards:spend',
   'email:read',
   'email:send_as',
   'phone:read_sms',

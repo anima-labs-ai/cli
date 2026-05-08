@@ -4,7 +4,6 @@ import { memberInviteCommand } from './member-invite.js';
 import { memberRoleCommand } from './member-role.js';
 import { keyRotateCommand } from './key-rotate.js';
 import { keyRevokeCommand } from './key-revoke.js';
-import { kybStatusCommand } from './kyb-status.js';
 import { usageCommand } from './usage.js';
 
 export function adminCommands(): Command {
@@ -21,13 +20,9 @@ export function adminCommands(): Command {
   key.addCommand(keyRotateCommand());
   key.addCommand(keyRevokeCommand());
 
-  const kyb = new Command('kyb').description('Know-Your-Business verification');
-  kyb.addCommand(kybStatusCommand());
-
   cmd.addCommand(org);
   cmd.addCommand(member);
   cmd.addCommand(key);
-  cmd.addCommand(kyb);
   cmd.addCommand(usageCommand());
 
   return cmd;

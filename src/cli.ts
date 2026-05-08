@@ -5,7 +5,6 @@ import { a2aCommands } from "./commands/a2a/index.js";
 import { addressCommands } from "./commands/address/index.js";
 import { adminCommands } from "./commands/admin/index.js";
 import { authCommands } from "./commands/auth/index.js";
-import { cardCommands } from "./commands/card/index.js";
 import { completionCommand } from "./commands/completion/index.js";
 import { configCommands } from "./commands/config/index.js";
 import { doctorCommand } from "./commands/doctor/index.js";
@@ -15,7 +14,6 @@ import { generateCommand } from "./commands/generate/index.js";
 import { identityCommands } from "./commands/identity/index.js";
 import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
-import { mppCommands } from "./commands/mpp/index.js";
 import { onboardCommand } from "./commands/onboard/index.js";
 import { orgCommands } from "./commands/org/index.js";
 import { demoCommand } from "./commands/demo/index.js";
@@ -27,7 +25,6 @@ import { setupMcpCommands } from "./commands/setup-mcp/index.js";
 import { tailCommand } from "./commands/tail/index.js";
 import { vaultCommands } from "./commands/vault/index.js";
 import { voiceCommands } from "./commands/voice/index.js";
-import { walletCommands } from "./commands/wallet/index.js";
 import { webhookCommands } from "./commands/webhook/index.js";
 
 export function createProgram(): Command {
@@ -66,7 +63,7 @@ export function createProgram(): Command {
 		.option("--debug", "Enable debug output", false)
 		.option(
 			"--test",
-			"Test mode — server uses test fixtures (Lithic test BIN for cards, no real outbound email/SMS, x402 sandbox settlement). Sent as X-Anima-Test-Mode: 1.",
+			"Test mode — server uses test fixtures (no real outbound email/SMS, x402 sandbox settlement). Sent as X-Anima-Test-Mode: 1.",
 			false,
 		)
 		.option("--token <token>", "API token (overrides stored auth)")
@@ -77,11 +74,9 @@ export function createProgram(): Command {
 	program.addCommand(identityCommands());
 	program.addCommand(emailCommands());
 	program.addCommand(phoneCommands());
-	program.addCommand(cardCommands());
 	program.addCommand(podCommands());
 	program.addCommand(registryCommands());
 	program.addCommand(vaultCommands());
-	program.addCommand(walletCommands());
 	program.addCommand(configCommands());
 	program.addCommand(setupMcpCommands());
 	program.addCommand(extensionCommands());
@@ -92,7 +87,6 @@ export function createProgram(): Command {
 	program.addCommand(onboardCommand());
 	program.addCommand(orgCommands());
 	program.addCommand(demoCommand());
-	program.addCommand(mppCommands());
 	program.addCommand(a2aCommands());
 	program.addCommand(messageCommand());
 	program.addCommand(voiceCommands());

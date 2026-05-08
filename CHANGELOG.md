@@ -9,7 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Added
 
 - Initial public release of `@anima-labs/cli` as a standalone package.
-- Command groups: auth, identity, email, phone, card, vault, config, setup-mcp, extension, admin, and init.
+- Command groups: auth, identity, email, phone, vault, config, setup-mcp, extension, admin, and init.
 - npm package metadata, changelog tracking, and smoke-test support for installation verification.
 
 [0.1.0]: https://github.com/anima-labs-ai/cli/releases/tag/v0.1.0

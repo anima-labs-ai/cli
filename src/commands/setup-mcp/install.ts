@@ -16,9 +16,9 @@ import {
 type McpInstallMode = 'stdio' | 'remote';
 
 /** Domain MCP servers available for installation */
-type McpServerDomain = 'agent' | 'email' | 'phone' | 'cards' | 'vault' | 'platform';
+type McpServerDomain = 'agent' | 'email' | 'phone' | 'vault' | 'platform';
 
-const MCP_SERVER_DOMAINS: McpServerDomain[] = ['agent', 'email', 'phone', 'cards', 'vault', 'platform'];
+const MCP_SERVER_DOMAINS: McpServerDomain[] = ['agent', 'email', 'phone', 'vault', 'platform'];
 
 const REMOTE_URL_BASE = 'https://mcp-{server}-829045119779.us-central1.run.app/mcp';
 

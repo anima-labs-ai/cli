@@ -90,7 +90,7 @@ describe('refreshOAuthToken', () => {
         tokenType: 'Bearer',
         expiresIn: 3600,
         refreshTokenExpiresIn: 30 * 24 * 3600,
-        scope: 'cards:read email:read',
+        scope: 'vault:read email:read',
       },
     });
 
@@ -100,7 +100,7 @@ describe('refreshOAuthToken', () => {
 
     expect(result.accessToken).toBe('oat_new_access');
     expect(result.refreshToken).toBe('ort_new_refresh');
-    expect(result.scope).toBe('cards:read email:read');
+    expect(result.scope).toBe('vault:read email:read');
 
     const accessExpiry = Date.parse(result.expiresAt);
     expect(accessExpiry).toBeGreaterThanOrEqual(before + 3600 * 1000);
@@ -218,7 +218,7 @@ describe('refreshOAuthToken', () => {
     clearRoutes();
     setRoute('POST /v1/oauth/token', {
       status: 200,
-      body: { scope: 'cards:read', expiresIn: 60, refreshTokenExpiresIn: 60 },
+      body: { scope: 'vault:read', expiresIn: 60, refreshTokenExpiresIn: 60 },
     });
 
     try {

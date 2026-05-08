@@ -9,6 +9,5 @@ Commands:
   org              Organization management
   member           Team member management
   key              Organization API key management
-  kyb              Know-Your-Business verification
   usage [options]  Show usage summary
   help [command]   display help for command

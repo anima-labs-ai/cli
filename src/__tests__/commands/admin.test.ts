@@ -248,32 +248,12 @@ describe('admin commands', () => {
     expect(printed.includes('Revoked API key key_1')).toBe(true);
   });
 
-  test('kyb status displays verification info', async () => {
-    startMockServer();
-    setupAuthConfig();
-    setRoute('GET', '/v1/admin/orgs/org_1/kyb', {
-      status: 200,
-      body: { status: 'pending', documentsNeeded: ['articles_of_incorporation', 'tax_id'] },
-    });
-
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runProgram(['admin', 'kyb', 'status', '--org', 'org_1']);
-
-    console.log = originalLog;
-    const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(printed.includes('pending')).toBe(true);
-    expect(printed.includes('articles_of_incorporation')).toBe(true);
-  });
-
   test('usage displays summary', async () => {
     startMockServer();
     setupAuthConfig();
     setRoute('GET', '/v1/admin/orgs/org_1/usage', {
       status: 200,
-      body: { identities: 8, emails: 121, cards: 3, storage: '2.1 GB' },
+      body: { identities: 8, emails: 121, storage: '2.1 GB' },
     });
 
     const logSpy = mock(() => {});

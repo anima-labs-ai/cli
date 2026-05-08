@@ -23,7 +23,6 @@ const ANIMA_SERVER_NAMES = [
   'anima-agent',
   'anima-email',
   'anima-phone',
-  'anima-cards',
   'anima-vault',
   'anima-platform',
 ];

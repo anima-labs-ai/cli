@@ -10,7 +10,6 @@ interface CardOptions {
 interface AgentCardCapabilities {
   email: boolean;
   phone: boolean;
-  cards: boolean;
   vault: boolean;
   address: boolean;
   protocols: string[];
@@ -20,7 +19,6 @@ function formatCapabilities(caps: AgentCardCapabilities): string {
   const enabled: string[] = [];
   if (caps.email) enabled.push('email');
   if (caps.phone) enabled.push('phone');
-  if (caps.cards) enabled.push('cards');
   if (caps.vault) enabled.push('vault');
   if (caps.address) enabled.push('address');
   enabled.push(...caps.protocols);
