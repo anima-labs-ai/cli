@@ -142,8 +142,9 @@ async function runInteractiveNew(
 	const apiUrl = globals.apiUrl?.trim() || DEFAULT_API_URL;
 
 	const humanEmail = await clack.text({
-		message: "Your email (where Anima will send the agent's verification OTP):",
-		placeholder: "you@example.com",
+		message:
+			"Agent owner's email (the human who owns this agent — they'll receive the verification code):",
+		placeholder: "owner@example.com",
 		validate: (value) => {
 			if (!value || !value.includes("@")) return "Enter a valid email address.";
 		},
@@ -267,8 +268,33 @@ async function runInteractiveNew(
 
 	clack.note(lines.join("\n"), "Your new agent identity");
 
+	// Verification is the next required step: until the owner submits the
+	// OTP the agent is `agent_unverified` and may only email its own owner.
+	// The CLI exposes the claim via `am verify <code>` (was previously a
+	// dead-end — the OTP was sent with no command to submit it).
+	clack.note(
+		[
+			`We emailed a 6-digit code to ${humanEmail} (the agent's owner).`,
+			`Until it's verified this agent can only email its owner. To unlock`,
+			`full sending, get the code from the owner and run:`,
+			``,
+			`  am verify <code>`,
+		].join("\n"),
+		"1. Verify to unlock sending",
+	);
+
+	// Vault is upgrade-gated (FREE sign-up can't provision one). Surface it
+	// the same way phone is, so the capability is discoverable from init.
+	clack.note(
+		[
+			`Vault (encrypted secrets + TOTP) and extra phone numbers unlock on`,
+			`Starter+. Upgrade anytime at https://console.useanima.sh/settings.`,
+		].join("\n"),
+		"2. More capabilities",
+	);
+
 	clack.outro(
-		`✓ Done. Verify your email at ${humanEmail} (we sent an OTP), then try:\n  am email send --to friend@example.com --subject "Hi" --body "I am alive"\n  am tail   (live event stream)\n  Dashboard: https://console.useanima.sh`,
+		`Welcome aboard. ✸  Try:\n  am email send --to friend@example.com --subject "Hi" --body "I am alive"\n  am tail   (live event stream)\n  Dashboard: https://console.useanima.sh`,
 	);
 }
 
@@ -421,6 +447,40 @@ async function runNonInteractive(
 	]);
 }
 
+/**
+ * The interactive `init` wizard: pick new-agent vs existing-key, then run
+ * the matching flow. Exported so `onboard` can launch setup directly when an
+ * unauthenticated human runs it, instead of just printing "run anima init".
+ */
+export async function runInteractiveInit(
+	globals: GlobalOptions,
+	output: Output,
+): Promise<void> {
+	const mode = await clack.select({
+		message: "How would you like to set up?",
+		initialValue: "new" as "new" | "existing",
+		options: [
+			{
+				value: "new",
+				label: "Create a fresh agent identity (recommended)",
+				hint: "Provisions org + agent + email inbox in one flow",
+			},
+			{
+				value: "existing",
+				label: "Configure with an existing API key",
+				hint: "For teams with an Anima org already provisioned",
+			},
+		],
+	});
+	if (isCancel(mode)) bail();
+
+	if (mode === "new") {
+		await runInteractiveNew(globals, output);
+	} else {
+		await runInteractiveExisting(globals, output);
+	}
+}
+
 export function initCommand(): Command {
 	return new Command("init")
 		.description(
@@ -445,28 +505,6 @@ export function initCommand(): Command {
 				return;
 			}
 
-			const mode = await clack.select({
-				message: "How would you like to set up?",
-				initialValue: "new" as "new" | "existing",
-				options: [
-					{
-						value: "new",
-						label: "Create a fresh agent identity (recommended)",
-						hint: "Provisions org + agent + email inbox in one flow",
-					},
-					{
-						value: "existing",
-						label: "Configure with an existing API key",
-						hint: "For teams with an Anima org already provisioned",
-					},
-				],
-			});
-			if (isCancel(mode)) bail();
-
-			if (mode === "new") {
-				await runInteractiveNew(globals, output);
-			} else {
-				await runInteractiveExisting(globals, output);
-			}
+			await runInteractiveInit(globals, output);
 		});
 }

@@ -23,6 +23,7 @@ import * as clack from "@clack/prompts";
 import { Command } from "commander";
 import type { GlobalOptions } from "../../lib/auth.js";
 import { getAuthConfig } from "../../lib/config.js";
+import { runInteractiveInit } from "../init/index.js";
 import { ORPCError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
 
@@ -50,33 +51,27 @@ export function onboardCommand(): Command {
 			// ── Step 1: Auth check ──
 			const auth = await getAuthConfig();
 			if (!auth.token && !auth.apiKey) {
-				if (isAgent) {
+				// Non-interactive callers (agents, pipes, explicit machine
+				// formats) can't be dropped into the interactive sign-up wizard
+				// — hand back a structured next-step instead. `output.format` is
+				// TTY-aware, so a human running `anima onboard` in a terminal
+				// (even without --human) takes the interactive branch below and
+				// goes straight into setup.
+				if (output.format !== "human") {
 					output.payload({
 						status: "needs_auth",
-						next_command: "anima auth login",
-						hint: "Run `anima init` for a guided sign-up if you don't have an Anima account yet.",
+						next_command: "anima init",
+						hint: "No credential found. Run `anima init` to create an agent (or `anima auth login` if you already have an account).",
 					});
 					process.exit(1);
 				}
-				clack.intro("Anima onboarding");
-				clack.log.error("You're not authenticated yet.");
-				const choice = await clack.select({
-					message: "How would you like to start?",
-					options: [
-						{ value: "login", label: "Log in (I have an Anima account)" },
-						{ value: "init", label: "Sign up with anima init (new account)" },
-						{ value: "quit", label: "Quit" },
-					],
-				});
-				if (clack.isCancel(choice) || choice === "quit") {
-					clack.outro("See you later.");
-					return;
-				}
-				clack.outro(
-					choice === "login"
-						? "Run: anima auth login\nThen run: anima onboard"
-						: "Run: anima init\n(this also offers to run onboard at the end)",
+				// Interactive human: start `anima init` right here instead of
+				// telling them to run another command. init's own mode-select
+				// covers both new sign-up and existing-key configuration.
+				clack.log.warn(
+					"You're not signed in yet — starting setup with `anima init`.",
 				);
+				await runInteractiveInit(globals, output);
 				return;
 			}
 
@@ -98,6 +93,28 @@ export function onboardCommand(): Command {
 					}
 					clack.log.error(
 						"Your session expired. Run `anima auth login` and try again.",
+					);
+					return;
+				}
+				if (error instanceof ORPCError && error.status === 404) {
+					// Route skew: the CLI is calling an endpoint this API doesn't
+					// serve — almost always a published CLI running ahead of (or
+					// behind) the deployed server. The bare oRPC message here is
+					// "Route not found", which is opaque; translate it into the
+					// actual fix. (This is exactly the 0.6.x `/auth/me` → `/orgs/me`
+					// migration footgun.)
+					if (isAgent) {
+						output.payload({
+							status: "cli_outdated",
+							message: "Anima API endpoint not found — your CLI is out of date.",
+							next_command: "brew upgrade anima",
+							hint: "Or: npm install -g @anima-labs/cli@latest",
+						});
+						process.exit(1);
+					}
+					clack.log.error(
+						"Anima API endpoint not found — your CLI is out of date.\n" +
+							"Fix: brew upgrade anima  (or: npm install -g @anima-labs/cli@latest)",
 					);
 					return;
 				}
