@@ -132,6 +132,33 @@ export function onboardCommand(): Command {
 				return;
 			}
 
+			// ── Verification status (non-fatal, agent keys only) ──
+			// `auth_type` is the typed source of truth from /v1/agent/status,
+			// not org.me's settings blob. We surface it only for agent keys
+			// (`ak_`), where the human-claim OTP flow applies — a master /
+			// OAuth / session credential isn't an "unverified agent", so the
+			// nudge would mislead. A failure here (older API, scope, network)
+			// just omits the field rather than breaking the tour.
+			const credential = auth.apiKey ?? auth.token ?? "";
+			let verified: boolean | null = null;
+			let authType: string | null = null;
+			if (credential.startsWith("ak_")) {
+				try {
+					const statusOrpc = await requireOrpcAuth(globals);
+					const status = await statusOrpc.agentSelfService.status({});
+					authType = status.auth_type;
+					verified = authType === "agent_verified" || authType === "claimed";
+				} catch {
+					// Verification status unavailable — leave it unknown.
+				}
+			}
+
+			const verifyStep = {
+				command: "anima verify <code>",
+				description:
+					"Verify with the OTP emailed to the agent's owner — unlocks full send capability",
+			};
+
 			if (isAgent) {
 				output.payload({
 					status: "ready",
@@ -140,8 +167,12 @@ export function onboardCommand(): Command {
 						org_name: me.name,
 						org_slug: me.slug,
 						tier: me.tier,
+						// Only present for agent keys where verification applies.
+						...(verified !== null ? { verified, auth_type: authType } : {}),
 					},
 					next_steps: [
+						// Lead with verification when the agent is still unverified.
+						...(verified === false ? [verifyStep] : []),
 						{
 							command: "anima demo --only-email",
 							description: "Test-mode email send + receive (no real emails)",
@@ -167,6 +198,13 @@ export function onboardCommand(): Command {
 			clack.log.success(`Authenticated for ${me.name}`);
 			clack.log.info(`Organization: ${me.name} (${me.id})`);
 			clack.log.info(`Tier: ${me.tier}`);
+			if (verified === true) {
+				clack.log.success("Verified — full send capability unlocked.");
+			} else if (verified === false) {
+				clack.log.warn(
+					"Not verified yet — run `anima verify <code>` (the code was emailed to the agent's owner).",
+				);
+			}
 
 			// ── Step 3: Capability matrix ──
 			clack.note(

@@ -162,11 +162,16 @@ describe("onboard command", () => {
 		expect(printed.next_command).toContain("upgrade");
 	});
 
-	// Happy path: a working org.me yields the ready plan with next steps.
-	test("emits a ready plan when authenticated and org.me resolves", async () => {
+	// Happy path: a working org.me + a verified agent yields the ready plan
+	// with the verification status surfaced on `identity`.
+	test("emits a ready plan and reports identity verified", async () => {
 		setRoute("GET", "/v1/orgs/me", {
 			status: 200,
 			body: { id: "cm_org_1", name: "Test Org", slug: "test-org", tier: "FREE" },
+		});
+		setRoute("GET", "/v1/agent/status", {
+			status: 200,
+			body: { auth_type: "agent_verified" },
 		});
 
 		const cap = captureLogs();
@@ -176,7 +181,56 @@ describe("onboard command", () => {
 		expect(code).toBeUndefined(); // ready path returns, no exit
 		const printed = JSON.parse(cap.logs.at(-1) ?? "{}");
 		expect(printed.status).toBe("ready");
-		expect(printed.identity).toMatchObject({ org_id: "cm_org_1", tier: "FREE" });
-		expect(Array.isArray(printed.next_steps)).toBe(true);
+		expect(printed.identity).toMatchObject({
+			org_id: "cm_org_1",
+			tier: "FREE",
+			verified: true,
+			auth_type: "agent_verified",
+		});
+		// A verified agent should NOT be nudged to verify.
+		expect(printed.next_steps.some((s: { command: string }) => s.command.startsWith("anima verify"))).toBe(
+			false,
+		);
+	});
+
+	// An unverified agent: identity.verified=false and the verify step leads
+	// the next-steps so the agent is told exactly how to unlock sending.
+	test("flags an unverified agent and leads with the verify step", async () => {
+		setRoute("GET", "/v1/orgs/me", {
+			status: 200,
+			body: { id: "cm_org_1", name: "Test Org", slug: "test-org", tier: "FREE" },
+		});
+		setRoute("GET", "/v1/agent/status", {
+			status: 200,
+			body: { auth_type: "agent_unverified" },
+		});
+
+		const cap = captureLogs();
+		await runProgram(["--format", "agent", "onboard"]);
+		cap.restore();
+
+		const printed = JSON.parse(cap.logs.at(-1) ?? "{}");
+		expect(printed.identity).toMatchObject({ verified: false, auth_type: "agent_unverified" });
+		expect(printed.next_steps[0].command).toContain("anima verify");
+	});
+
+	// Verification is best-effort: if /v1/agent/status is unavailable, the
+	// ready plan still renders, just without the verification fields.
+	test("still emits a ready plan when status is unavailable", async () => {
+		setRoute("GET", "/v1/orgs/me", {
+			status: 200,
+			body: { id: "cm_org_1", name: "Test Org", slug: "test-org", tier: "FREE" },
+		});
+		// No /v1/agent/status route → 404 → non-fatal.
+
+		const cap = captureLogs();
+		const code = await runProgram(["--format", "agent", "onboard"]);
+		cap.restore();
+
+		expect(code).toBeUndefined();
+		const printed = JSON.parse(cap.logs.at(-1) ?? "{}");
+		expect(printed.status).toBe("ready");
+		expect(printed.identity.verified).toBeUndefined();
+		expect(printed.identity).toMatchObject({ org_id: "cm_org_1" });
 	});
 });
