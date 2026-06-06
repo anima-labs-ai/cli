@@ -21,8 +21,7 @@
 
 import * as clack from "@clack/prompts";
 import { Command } from "commander";
-import type { GlobalOptions } from "../../lib/auth.js";
-import { getAuthConfig } from "../../lib/config.js";
+import { getResolvedAuthCredential, type GlobalOptions } from "../../lib/auth.js";
 import { runInteractiveInit } from "../init/index.js";
 import { ORPCError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
@@ -46,11 +45,11 @@ export function onboardCommand(): Command {
 
 			// Agent format: pure JSON status. No interactive prompts — agents
 			// running this in a pipe get a structured plan instead of a UI.
-			const isAgent = !globals.human && globals.format !== "human";
+			const isAgent = output.format !== "human";
 
 			// ── Step 1: Auth check ──
-			const auth = await getAuthConfig();
-			if (!auth.token && !auth.apiKey) {
+			const { credential } = await getResolvedAuthCredential(globals);
+			if (!credential) {
 				// Non-interactive callers (agents, pipes, explicit machine
 				// formats) can't be dropped into the interactive sign-up wizard
 				// — hand back a structured next-step instead. `output.format` is
@@ -139,7 +138,6 @@ export function onboardCommand(): Command {
 			// OAuth / session credential isn't an "unverified agent", so the
 			// nudge would mislead. A failure here (older API, scope, network)
 			// just omits the field rather than breaking the tour.
-			const credential = auth.apiKey ?? auth.token ?? "";
 			let verified: boolean | null = null;
 			let authType: string | null = null;
 			if (credential.startsWith("ak_")) {

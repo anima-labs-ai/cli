@@ -233,4 +233,34 @@ describe("onboard command", () => {
 		expect(printed.identity.verified).toBeUndefined();
 		expect(printed.identity).toMatchObject({ org_id: "cm_org_1" });
 	});
+
+	test("uses ANIMA_API_KEY as an agent credential for auth and verification status", async () => {
+		writeAuthConfig({});
+		process.env.ANIMA_API_KEY = "ak_env_onboard_key";
+		try {
+			setRoute("GET", "/v1/orgs/me", {
+				status: 200,
+				body: { id: "cm_org_env", name: "Env Org", slug: "env-org", tier: "FREE" },
+			});
+			setRoute("GET", "/v1/agent/status", {
+				status: 200,
+				body: { auth_type: "agent_verified" },
+			});
+
+			const cap = captureLogs();
+			const code = await runProgram(["--format", "agent", "onboard"]);
+			cap.restore();
+
+			expect(code).toBeUndefined();
+			const printed = JSON.parse(cap.logs.at(-1) ?? "{}");
+			expect(printed.status).toBe("ready");
+			expect(printed.identity).toMatchObject({
+				org_id: "cm_org_env",
+				verified: true,
+				auth_type: "agent_verified",
+			});
+		} finally {
+			delete process.env.ANIMA_API_KEY;
+		}
+	});
 });

@@ -20,8 +20,7 @@
 
 import * as clack from "@clack/prompts";
 import { Command } from "commander";
-import type { GlobalOptions } from "../../lib/auth.js";
-import { getAuthConfig } from "../../lib/config.js";
+import { getResolvedAuthCredential, type GlobalOptions } from "../../lib/auth.js";
 import { ORPCError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
 
@@ -70,8 +69,8 @@ export function verifyCommand(): Command {
 			// The agent key from `anima init` (or `auth login`) authenticates
 			// the verify call — the server derives which org/agent to claim
 			// from the credential, not from the request body.
-			const auth = await getAuthConfig();
-			if (!auth.token && !auth.apiKey) {
+			const { credential } = await getResolvedAuthCredential(globals);
+			if (!credential) {
 				output.error(
 					"Not authenticated. Run `anima init` to create an agent (or `anima auth login`), then verify.",
 				);

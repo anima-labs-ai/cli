@@ -227,4 +227,32 @@ describe("verify command", () => {
 		expect(code).toBe(1);
 		expect(JSON.parse(cap.errs.at(-1) ?? "{}").message).toContain("out of date");
 	});
+
+	test("uses ANIMA_API_KEY when no credential is stored", async () => {
+		writeAuthConfig(mockServer?.port ?? 0, {});
+		process.env.ANIMA_API_KEY = "ak_env_verify_key";
+		try {
+			let sentBody: unknown;
+			setRoute("POST", "/v1/agent/verify", {
+				status: 200,
+				body: { verified: true, auth_type: "agent_verified" },
+				assert: ({ body }) => {
+					sentBody = body;
+				},
+			});
+
+			const cap = captureLogs();
+			const code = await runProgram(["--format", "agent", "verify", "654321"]);
+			cap.restore();
+
+			expect(sentBody).toEqual({ otp_code: "654321" });
+			expect(code).toBeUndefined();
+			expect(JSON.parse(cap.logs.at(-1) ?? "{}")).toMatchObject({
+				status: "verified",
+				auth_type: "agent_verified",
+			});
+		} finally {
+			delete process.env.ANIMA_API_KEY;
+		}
+	});
 });
