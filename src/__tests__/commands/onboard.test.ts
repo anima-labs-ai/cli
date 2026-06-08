@@ -65,16 +65,23 @@ async function runProgram(args: string[]): Promise<number | undefined> {
 	return exitCode;
 }
 
-function captureLogs(): { logs: string[]; restore: () => void } {
+function captureLogs(): { logs: string[]; errs: string[]; restore: () => void } {
 	const logs: string[] = [];
+	const errs: string[] = [];
 	const origLog = console.log;
+	const origErr = console.error;
 	console.log = ((...a: unknown[]) => {
 		logs.push(a.map(String).join(" "));
 	}) as typeof console.log;
+	console.error = ((...a: unknown[]) => {
+		errs.push(a.map(String).join(" "));
+	}) as typeof console.error;
 	return {
 		logs,
+		errs,
 		restore: () => {
 			console.log = origLog;
+			console.error = origErr;
 		},
 	};
 }

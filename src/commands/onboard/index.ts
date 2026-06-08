@@ -78,8 +78,9 @@ export function onboardCommand(): Command {
 			// Was `/auth/me` — never existed in prod. `/orgs/me` is the working
 			// equivalent. We only consume non-secret fields.
 			let me: Awaited<ReturnType<Awaited<ReturnType<typeof requireOrpcAuth>>["org"]["me"]>> | null = null;
+			let orpc: Awaited<ReturnType<typeof requireOrpcAuth>> | null = null;
 			try {
-				const orpc = await requireOrpcAuth(globals);
+				orpc = await requireOrpcAuth(globals);
 				me = await orpc.org.me({});
 			} catch (error) {
 				if (error instanceof ORPCError && error.status === 401) {
@@ -140,10 +141,9 @@ export function onboardCommand(): Command {
 			// just omits the field rather than breaking the tour.
 			let verified: boolean | null = null;
 			let authType: string | null = null;
-			if (credential.startsWith("ak_")) {
+			if (credential.startsWith("ak_") && orpc) {
 				try {
-					const statusOrpc = await requireOrpcAuth(globals);
-					const status = await statusOrpc.agentSelfService.status({});
+					const status = await orpc.agentSelfService.status({});
 					authType = status.auth_type;
 					verified = authType === "agent_verified" || authType === "claimed";
 				} catch {
@@ -151,13 +151,12 @@ export function onboardCommand(): Command {
 				}
 			}
 
-			const verifyStep = {
-				command: "anima verify <code>",
-				description:
-					"Verify with the OTP emailed to the agent's owner — unlocks full send capability",
-			};
-
 			if (isAgent) {
+				const verifyStep = {
+					command: "anima verify <code>",
+					description:
+						"Verify with the OTP emailed to the agent's owner — unlocks full send capability",
+				};
 				output.payload({
 					status: "ready",
 					identity: {
