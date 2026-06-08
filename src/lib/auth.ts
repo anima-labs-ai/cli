@@ -31,6 +31,26 @@ export function resolveApiUrl(opts: GlobalOptions, authApiUrl?: string): string 
   return opts.apiUrl ?? process.env.ANIMA_API_URL ?? authApiUrl ?? DEFAULT_API_URL;
 }
 
+export async function getResolvedAuthCredential(opts: GlobalOptions): Promise<{
+  auth: AuthConfig;
+  token?: string;
+  apiKey?: string;
+  credential?: string;
+}> {
+  const auth = await getAuthConfig();
+  const explicitApiKey = process.env.ANIMA_API_KEY;
+  const explicitToken = opts.token ?? process.env.ANIMA_TOKEN;
+  const token = explicitApiKey ? undefined : (explicitToken ?? auth.token);
+  const apiKey = explicitApiKey ?? auth.apiKey;
+
+  return {
+    auth,
+    token,
+    apiKey,
+    credential: token ?? apiKey,
+  };
+}
+
 // ── OAuth access-token auto-refresh ─────────────────────────────────────────
 //
 // The CLI's OAuth flow (`am auth login --web`) stores an `oat_*` access

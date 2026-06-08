@@ -24,6 +24,7 @@ import { securityCommands } from "./commands/security/index.js";
 import { setupMcpCommands } from "./commands/setup-mcp/index.js";
 import { tailCommand } from "./commands/tail/index.js";
 import { vaultCommands } from "./commands/vault/index.js";
+import { verifyCommand } from "./commands/verify/index.js";
 import { voiceCommands } from "./commands/voice/index.js";
 import { webhookCommands } from "./commands/webhook/index.js";
 
@@ -85,6 +86,7 @@ export function createProgram(): Command {
 	program.addCommand(securityCommands());
 	program.addCommand(initCommand());
 	program.addCommand(onboardCommand());
+	program.addCommand(verifyCommand());
 	program.addCommand(orgCommands());
 	program.addCommand(demoCommand());
 	program.addCommand(a2aCommands());
