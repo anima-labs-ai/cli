@@ -179,6 +179,17 @@ anima webhook test <id>   # Send a test event to a webhook
 anima webhook deliveries <id>  # List webhook delivery history
 ```
 
+`webhook create` also takes advanced settings — endpoint auth (in addition to the `X-Anima-Signature` HMAC) and a delivery throttle:
+
+```bash
+anima webhook create \
+  --url https://example.com/hooks/anima \
+  --events message.received,message.sent \
+  --auth-config '{"type":"bearer","token":"whsec_..."}' \
+  --rate-limit-per-minute 120 \
+  --max-attempts 5
+```
+
 ### `security` — Security monitoring and scanning
 
 ```bash
