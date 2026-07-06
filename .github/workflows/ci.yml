@@ -16,6 +16,21 @@ jobs:
       # `GITHUB_TOKEN` of this workflow cannot read it. A repo secret
       # `ANIMA_REPO_TOKEN` (a fine-grained PAT with `Contents: Read` on
       # anima-labs-ai/anima) is required.
+      #
+      # The monorepo is checked out at the commit pinned in `.anima-ref`, NOT
+      # at HEAD — anima merges must not be able to break CLI PRs
+      # asynchronously (a contracts change did exactly that on 2026-07-06),
+      # and releases must be reproducible: release.yml bundles the contracts
+      # into dist/cli.js, so the pin decides what ships. To adopt newer
+      # contracts, bump the pin deliberately:
+      #
+      #   git ls-remote https://github.com/anima-labs-ai/anima main   # new SHA
+      #   → put it in .anima-ref, fix any typecheck fallout, open a PR.
+      #
+      # The anima-drift-canary workflow typechecks against anima HEAD daily
+      # and files an issue when the pin has drifted into breakage, so bumps
+      # don't turn into pre-release ambushes. Local dev still uses whatever
+      # ../anima checkout you have — CI is the arbiter.
       - name: Verify ANIMA_REPO_TOKEN secret is configured
         env:
           ANIMA_REPO_TOKEN: ${{ secrets.ANIMA_REPO_TOKEN }}
@@ -35,11 +50,24 @@ jobs:
         with:
           path: cli
 
+      # Strict 40-hex validation: the value feeds actions/checkout `ref:`,
+      # so reject anything that isn't a plain commit SHA.
+      - name: Read pinned anima ref
+        id: anima_ref
+        run: |
+          sha="$(tr -d '[:space:]' < cli/.anima-ref)"
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::.anima-ref must contain a full 40-char lowercase commit SHA, got: '$sha'"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Checkout anima monorepo (for @anima/contracts)
         uses: actions/checkout@v4
         with:
           repository: anima-labs-ai/anima
           path: anima
+          ref: ${{ steps.anima_ref.outputs.sha }}
           token: ${{ secrets.ANIMA_REPO_TOKEN }}
           fetch-depth: 1
 
