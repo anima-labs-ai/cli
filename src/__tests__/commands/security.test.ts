@@ -178,6 +178,32 @@ describe('security commands', () => {
     expect(parsed.aiScanner.active).toBe(true);
   });
 
+  test('scan honors the ANIMA_DEFAULT_ORG env var over an absent flag/config', async () => {
+    // No --org and no config.json defaultOrg — only the env var. Proves the
+    // full resolution ladder (flag → env → active profile → top-level), which
+    // getConfig().defaultOrg alone did not cover.
+    process.env.ANIMA_DEFAULT_ORG = ORG_ID_ME;
+    setRoute('GET', `/v1/orgs/${ORG_ID_ME}/security/scanner-status`, {
+      status: 200,
+      body: SCANNER_STATUS_BODY,
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    try {
+      const code = await runProgram(['--json', 'security', 'scan']);
+      expect(code).toBeUndefined();
+      const printed = logSpy.mock.calls.at(-1)?.at(0);
+      const parsed = JSON.parse(String(printed)) as typeof SCANNER_STATUS_BODY;
+      expect(parsed.aiScanner.active).toBe(true);
+    } finally {
+      console.log = originalLog;
+      delete process.env.ANIMA_DEFAULT_ORG;
+    }
+  });
+
   test('events uses the configured default org when --org is omitted', async () => {
     writeFileSync(join(testConfigDir, 'config.json'), JSON.stringify({ defaultOrg: ORG_ID_ME }));
     setRoute('GET', `/v1/orgs/${ORG_ID_ME}/security/events`, {
