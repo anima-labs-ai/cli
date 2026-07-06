@@ -20,11 +20,11 @@ type McpServerDomain = 'agent' | 'email' | 'phone' | 'vault' | 'platform';
 
 const MCP_SERVER_DOMAINS: McpServerDomain[] = ['agent', 'email', 'phone', 'vault', 'platform'];
 
-const REMOTE_URL_BASE = 'https://mcp-{server}-829045119779.us-central1.run.app/mcp';
+/** Hosted MCP gateway — one Bearer-authenticated endpoint serving every domain */
+const REMOTE_GATEWAY_URL = 'https://mcp.useanima.sh/mcp';
 
-function getRemoteUrl(server: McpServerDomain): string {
-  return REMOTE_URL_BASE.replace('{server}', server);
-}
+/** Entry name for the unified gateway; verify/status/uninstall already recognize it */
+const REMOTE_ENTRY_NAME = 'anima';
 
 function getPackageName(server: McpServerDomain): string {
   return `@anima-labs/mcp-${server}`;
@@ -228,18 +228,7 @@ async function resolveApiKey(override?: string): Promise<string> {
   return input;
 }
 
-function buildMcpServerEntry(
-  apiKey: string,
-  server: McpServerDomain,
-  mode: McpInstallMode = 'stdio',
-  url?: string,
-  clientName?: McpClientName,
-): McpServerConfig {
-  if (mode === 'remote') {
-    const endpoint = url ?? getRemoteUrl(server);
-    return buildRemoteEntry(apiKey, endpoint, clientName);
-  }
-
+function buildStdioEntry(apiKey: string, server: McpServerDomain): McpServerConfigStdio {
   return {
     command: 'npx',
     args: ['-y', getPackageName(server)],
@@ -309,9 +298,13 @@ function installForClient(
   const config = readJsonFile(client.configPath);
   const serverMap = getServerMap(config, client.serverKey);
 
-  for (const server of servers) {
-    const entryName = getServerEntryName(server);
-    serverMap[entryName] = buildMcpServerEntry(apiKey, server, mode, url, client.name);
+  if (mode === 'remote') {
+    // The gateway serves every domain at one endpoint — a single unified entry.
+    serverMap[REMOTE_ENTRY_NAME] = buildRemoteEntry(apiKey, url ?? REMOTE_GATEWAY_URL, client.name);
+  } else {
+    for (const server of servers) {
+      serverMap[getServerEntryName(server)] = buildStdioEntry(apiKey, server);
+    }
   }
 
   config[client.serverKey] = serverMap;
@@ -348,7 +341,7 @@ export function installMcpCommand(): Command {
     .option('--url <endpoint>', 'Remote endpoint URL override')
     .option(
       '--server <name>',
-      `Domain server(s) to install: ${MCP_SERVER_DOMAINS.join(', ')}, all (default: all)`,
+      `Domain server(s) to install, stdio mode only: ${MCP_SERVER_DOMAINS.join(', ')}, all (default: all)`,
       'all',
     )
     .action(async function (this: Command) {
@@ -362,6 +355,12 @@ export function installMcpCommand(): Command {
           throw new Error('--url can only be used with --mode remote');
         }
 
+        if (mode === 'remote' && globals.server && globals.server !== 'all') {
+          throw new Error(
+            '--server applies to stdio mode only — the hosted gateway serves all domains at a single endpoint.',
+          );
+        }
+
         const targets = await resolveInstallTargets(globals);
         const servers = resolveServerDomains(globals.server);
         const apiKey = await resolveApiKey(globals.apiKey);
@@ -370,28 +369,32 @@ export function installMcpCommand(): Command {
           installForClient(client, apiKey, servers, mode, globals.url);
         }
 
+        const endpoint = globals.url ?? REMOTE_GATEWAY_URL;
+        const entryNames =
+          mode === 'remote' ? [REMOTE_ENTRY_NAME] : servers.map(getServerEntryName);
+
         if (globals.json) {
           output.json({
             configured: targets.map((client) => client.name as McpClientName),
             count: targets.length,
             mode,
-            servers,
-            ...(mode === 'remote' ? { urls: servers.map(getRemoteUrl) } : {}),
+            servers: mode === 'remote' ? [REMOTE_ENTRY_NAME] : servers,
+            ...(mode === 'remote' ? { urls: [endpoint] } : {}),
           });
           return;
         }
 
         output.success(
-          `Configured ${servers.length} MCP server${servers.length === 1 ? '' : 's'} for ${targets.length} client${targets.length === 1 ? '' : 's'} (${mode} mode).`,
+          `Configured ${entryNames.length} MCP server${entryNames.length === 1 ? '' : 's'} for ${targets.length} client${targets.length === 1 ? '' : 's'} (${mode} mode).`,
         );
         output.table(
           ['Client', 'Config Path'],
           targets.map((client) => [client.label, client.configPath]),
         );
-        output.info(`Servers: ${servers.map((s) => `anima-${s}`).join(', ')}`);
+        output.info(`Servers: ${entryNames.join(', ')}`);
 
         if (mode === 'remote') {
-          output.info(`Remote endpoints: ${servers.map(getRemoteUrl).join(', ')}`);
+          output.info(`Remote endpoint: ${endpoint}`);
         }
       } catch (error: unknown) {
         if (error instanceof Error) {
