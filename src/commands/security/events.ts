@@ -1,6 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
+import { getConfig } from '../../lib/config.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -57,7 +58,7 @@ function parseLimit(value: string): number {
 export function securityEventsCommand(): Command {
   return new Command('events')
     .description('List security events')
-    .option('--org <orgId>', 'Organization ID (derived from auth if omitted)')
+    .option('--org <orgId>', 'Organization ID (defaults to configured default org)')
     .option('--agent <agentId>', 'Filter events by agent')
     .option(
       '--type <type>',
@@ -74,8 +75,14 @@ export function securityEventsCommand(): Command {
 
       try {
         const orpc = await requireOrpcAuth(globals);
-        // The contract requires orgId — derive it from auth when --org is omitted.
-        const orgId = opts.org ?? (await orpc.org.me({})).id;
+        // orgId is a path parameter on the contract, so it must be resolved
+        // client-side: explicit --org flag, then the configured default org.
+        const orgId = opts.org ?? (await getConfig()).defaultOrg;
+        if (!orgId) {
+          throw new Error(
+            "No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'",
+          );
+        }
         const result = await orpc.security.listEvents({
           orgId,
           agentId: opts.agent,

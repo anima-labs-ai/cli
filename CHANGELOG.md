@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed
+
+- The published npm package no longer declares `@anima/contracts` (a monorepo-local `file:` path) in `dependencies` — that entry made `npm install @anima-labs/cli` fail on any machine without the monorepo checked out next to it. The contracts are now bundled into `dist/cli.js` at build time; registry dependencies are unchanged.
+- `anima security events` / `anima security scan` resolve the organization client-side (`--org` flag, falling back to the configured default org) to match the API contract's required `orgId` path parameter.
+
 ### Added
 
 - `anima verify <code>` — submit the verification OTP emailed to an agent's owner (POST `/v1/agent/verify`) to unlock full send capability. Previously `init` sent the OTP with no command to submit it, leaving the flow dead-ended.

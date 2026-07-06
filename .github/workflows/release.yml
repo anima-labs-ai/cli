@@ -44,24 +44,69 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      # `@anima/contracts` is a `file:../anima/packages/contracts` dev
+      # dependency, so the anima monorepo must be checked out as a sibling
+      # of the CLI for `bun install` to resolve it — the same arrangement
+      # ci.yml uses. The monorepo is private, so this needs the
+      # `ANIMA_REPO_TOKEN` repo secret (fine-grained PAT with
+      # `Contents: Read` on anima-labs-ai/anima).
+      - name: Verify ANIMA_REPO_TOKEN secret is configured
+        env:
+          ANIMA_REPO_TOKEN: ${{ secrets.ANIMA_REPO_TOKEN }}
+        run: |
+          if [ -z "$ANIMA_REPO_TOKEN" ]; then
+            echo "::error::Repo secret ANIMA_REPO_TOKEN is not set."
+            echo "::error::The release needs a fine-grained PAT with 'Contents: Read' on anima-labs-ai/anima."
+            echo "::error::Steps to fix:"
+            echo "::error::  1. Create the PAT at https://github.com/settings/personal-access-tokens"
+            echo "::error::  2. Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "::error::     Name: ANIMA_REPO_TOKEN, value: <PAT>"
+            exit 1
+          fi
+
+      - name: Checkout CLI
+        uses: actions/checkout@v4
+        with:
+          path: cli
+
+      - name: Checkout anima monorepo (for @anima/contracts)
+        uses: actions/checkout@v4
+        with:
+          repository: anima-labs-ai/anima
+          path: anima
+          token: ${{ secrets.ANIMA_REPO_TOKEN }}
+          fetch-depth: 1
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: .bun-version
+          bun-version-file: cli/.bun-version
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
+      # The contracts package's own deps (@orpc/contract, zod) resolve from
+      # anima's node_modules through the file: symlink — install those
+      # before building the CLI (see ci.yml for the full story).
+      - name: Install anima monorepo deps (for @anima/contracts resolution)
+        working-directory: anima
         run: bun install --frozen-lockfile
 
-      - name: Build (tsc → dist/)
+      - name: Install dependencies
+        working-directory: cli
+        run: bun install --frozen-lockfile
+
+      # tsc emits the library surface + declarations; `bun build` then
+      # overwrites dist/cli.js with a self-contained bundle that inlines
+      # @anima/contracts (a file: dep that doesn't exist on consumer
+      # machines) while keeping registry deps external.
+      - name: Build (tsc + bundled bin → dist/)
+        working-directory: cli
         run: bun run build
 
       - name: Publish
+        working-directory: cli
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -92,21 +137,55 @@ jobs:
       BUN_TARGET: ${{ matrix.target }}
       OUTFILE: ${{ matrix.outfile }}
     steps:
-      - uses: actions/checkout@v4
+      # Same sibling-checkout arrangement as ci.yml and the publish job:
+      # `bun install` (and the --compile bundle) need @anima/contracts from
+      # the private anima monorepo checked out next to the CLI.
+      - name: Verify ANIMA_REPO_TOKEN secret is configured
+        env:
+          ANIMA_REPO_TOKEN: ${{ secrets.ANIMA_REPO_TOKEN }}
+        run: |
+          if [ -z "$ANIMA_REPO_TOKEN" ]; then
+            echo "::error::Repo secret ANIMA_REPO_TOKEN is not set."
+            echo "::error::The release needs a fine-grained PAT with 'Contents: Read' on anima-labs-ai/anima."
+            echo "::error::Steps to fix:"
+            echo "::error::  1. Create the PAT at https://github.com/settings/personal-access-tokens"
+            echo "::error::  2. Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "::error::     Name: ANIMA_REPO_TOKEN, value: <PAT>"
+            exit 1
+          fi
+
+      - name: Checkout CLI
+        uses: actions/checkout@v4
+        with:
+          path: cli
+
+      - name: Checkout anima monorepo (for @anima/contracts)
+        uses: actions/checkout@v4
+        with:
+          repository: anima-labs-ai/anima
+          path: anima
+          token: ${{ secrets.ANIMA_REPO_TOKEN }}
+          fetch-depth: 1
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version-file: .bun-version
+          bun-version-file: cli/.bun-version
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
         with:
           cosign-release: "v2.4.1"
 
+      - name: Install anima monorepo deps (for @anima/contracts resolution)
+        working-directory: anima
+        run: bun install --frozen-lockfile
+
       - name: Install dependencies
+        working-directory: cli
         run: bun install --frozen-lockfile
 
       - name: Build binary
+        working-directory: cli
         run: |
           mkdir -p binaries
           bun build src/cli.ts \
@@ -115,6 +194,7 @@ jobs:
             --outfile="binaries/$OUTFILE"
 
       - name: Emit SHA-256
+        working-directory: cli
         run: |
           cd binaries
           sha256sum "$OUTFILE" | tee "$OUTFILE.sha256"
@@ -129,6 +209,7 @@ jobs:
       #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
       #     anima-<target>
       - name: Sign with cosign (keyless, GitHub OIDC)
+        working-directory: cli
         run: |
           cd binaries
           cosign sign-blob \
@@ -141,6 +222,7 @@ jobs:
       # skipped (gated by the matrix.target check).
       - name: Smoke test (native targets only)
         if: matrix.target == 'bun-linux-x64'
+        working-directory: cli
         run: |
           "./binaries/$OUTFILE" --version
           "./binaries/$OUTFILE" vault --help >/dev/null
@@ -151,9 +233,9 @@ jobs:
         with:
           name: ${{ matrix.outfile }}
           path: |
-            binaries/${{ matrix.outfile }}
-            binaries/${{ matrix.outfile }}.sha256
-            binaries/${{ matrix.outfile }}.sigstore.bundle
+            cli/binaries/${{ matrix.outfile }}
+            cli/binaries/${{ matrix.outfile }}.sha256
+            cli/binaries/${{ matrix.outfile }}.sigstore.bundle
           retention-days: 7
           if-no-files-found: error
 

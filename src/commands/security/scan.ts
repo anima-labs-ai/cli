@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
+import { getConfig } from '../../lib/config.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ScanOptions {
@@ -10,7 +11,7 @@ interface ScanOptions {
 export function securityScanCommand(): Command {
   return new Command('scan')
     .description('Show scanner health status')
-    .option('--org <orgId>', 'Organization ID (derived from auth if omitted)')
+    .option('--org <orgId>', 'Organization ID (defaults to configured default org)')
     .action(async function (this: Command) {
       const opts = this.opts<ScanOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
@@ -18,8 +19,14 @@ export function securityScanCommand(): Command {
 
       try {
         const orpc = await requireOrpcAuth(globals);
-        // The contract requires orgId — derive it from auth when --org is omitted.
-        const orgId = opts.org ?? (await orpc.org.me({})).id;
+        // orgId is a path parameter on the contract, so it must be resolved
+        // client-side: explicit --org flag, then the configured default org.
+        const orgId = opts.org ?? (await getConfig()).defaultOrg;
+        if (!orgId) {
+          throw new Error(
+            "No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'",
+          );
+        }
         const result = await orpc.security.scannerStatus({ orgId });
 
         if (globals.json) {
