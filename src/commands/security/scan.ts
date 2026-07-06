@@ -18,7 +18,9 @@ export function securityScanCommand(): Command {
 
       try {
         const orpc = await requireOrpcAuth(globals);
-        const result = await orpc.security.scannerStatus({ orgId: opts.org });
+        // The contract requires orgId — derive it from auth when --org is omitted.
+        const orgId = opts.org ?? (await orpc.org.me({})).id;
+        const result = await orpc.security.scannerStatus({ orgId });
 
         if (globals.json) {
           output.json(result);

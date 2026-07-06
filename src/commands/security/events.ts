@@ -74,8 +74,10 @@ export function securityEventsCommand(): Command {
 
       try {
         const orpc = await requireOrpcAuth(globals);
+        // The contract requires orgId — derive it from auth when --org is omitted.
+        const orgId = opts.org ?? (await orpc.org.me({})).id;
         const result = await orpc.security.listEvents({
-          orgId: opts.org,
+          orgId,
           agentId: opts.agent,
           type: opts.type,
           severity: opts.severity,
