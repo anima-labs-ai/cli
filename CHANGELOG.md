@@ -16,6 +16,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - `anima onboard`: a 404 from the API is now surfaced as "your CLI is out of date" with an upgrade hint, instead of an opaque "Route not found".
 - `anima onboard`: the `identity` block now reports whether the agent is verified (`verified` + `auth_type`, from `/v1/agent/status`); when unverified, the `anima verify` step leads the next-steps. Best-effort and agent-keys only.
 - `anima init`: the email prompt now reads "Agent owner's email" (the human who owns the agent), surfaces the `anima verify` step after sign-up, and notes that Vault + extra phone numbers unlock on Starter+.
+- `anima setup-mcp install --mode remote` now writes a single unified `anima` entry pointing at the hosted gateway `https://mcp.useanima.sh/mcp` instead of five per-domain entries pointing at internal Cloud Run URLs. `--server` is rejected in remote mode (the gateway serves every domain at one endpoint); stdio mode is unchanged.
+- README and `anima onboard` no longer claim an `anima --mcp` server mode (which never existed) or Codex/Zed auto-configuration; the supported MCP clients are Claude Desktop, Claude Code, Cursor, Windsurf, and VS Code.
+
+### Fixed
+
+- `anima setup-mcp verify --ping` now probes `{origin}/health`; the previous `/mcp/health` rewrite 404'd against every endpoint, so `--ping` always reported remote configs as unreachable.
+- `anima security scan` / `anima security events` without `--org` now derive the organization from auth (via org.me) as the flag help always promised, instead of sending an invalid request.
 
 ## [0.1.0] - 2025-03-25
 

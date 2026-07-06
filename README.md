@@ -18,24 +18,27 @@ In Claude Code, Cursor, Codex, or any MCP-aware agent:
 Read useanima.sh/skill.md and get me set up with Anima
 ```
 
-The agent reads the skill manifest, installs the CLI, registers itself as an MCP server, and finishes onboarding for you.
+The agent reads the skill manifest, installs the CLI, wires up Anima's MCP servers, and finishes onboarding for you.
 
-### MCP server
+### MCP servers
 
-Anima CLI doubles as an MCP server. Add to your `.mcp.json`:
+Run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code) automatically. The default stdio mode installs the per-domain servers (`@anima-labs/mcp-agent`, `-email`, `-phone`, `-vault`, `-platform`); pass `--mode remote` to use the hosted gateway instead.
+
+To wire a client manually, point it at the hosted gateway in `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "anima": {
-      "command": "npx",
-      "args": ["-y", "@anima-labs/cli", "--mcp"]
+      "type": "http",
+      "url": "https://mcp.useanima.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ak_your_api_key"
+      }
     }
   }
 }
 ```
-
-Or run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Codex, Windsurf, Zed) automatically.
 
 ### Alternative installs
 
