@@ -176,6 +176,29 @@ describe('admin commands', () => {
     expect(printed.includes('Invited dev@acme.test')).toBe(true);
   });
 
+  test('member invite honors ANIMA_DEFAULT_ORG when no --org or config default', async () => {
+    startMockServer();
+    setupAuthConfig();
+    process.env.ANIMA_DEFAULT_ORG = 'org_env';
+    setRoute('POST', '/v1/admin/orgs/org_env/members', {
+      status: 200,
+      body: { email: 'dev@acme.test', role: 'admin', invited: true },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    try {
+      await runProgram(['admin', 'member', 'invite', '--email', 'dev@acme.test', '--role', 'admin']);
+      const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+      expect(printed.includes('Invited dev@acme.test')).toBe(true);
+    } finally {
+      console.log = originalLog;
+      delete process.env.ANIMA_DEFAULT_ORG;
+    }
+  });
+
   test('member role change sends correct request', async () => {
     startMockServer();
     setupAuthConfig();

@@ -214,7 +214,7 @@ anima init --non-interactive \     # Scripted setup
 The CLI reads configuration in this priority order:
 
 1. **CLI flags** (`--token`, `--api-url`, `--json`, `--debug`)
-2. **Environment variables** (`ANIMA_API_URL`, `ANIMA_API_KEY`)
+2. **Environment variables** (`ANIMA_API_URL`, `ANIMA_API_KEY`, `ANIMA_DEFAULT_ORG`, `ANIMA_DEFAULT_IDENTITY`, `ANIMA_OUTPUT_FORMAT`)
 3. **Active profile** (set via `anima config profile use <name>`)
 4. **Default config** (set via `anima config set` or `anima init`)
 
