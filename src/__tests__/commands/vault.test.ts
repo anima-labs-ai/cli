@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -314,6 +314,106 @@ describe('vault commands', () => {
     console.log = originalLog;
     const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
     expect(parsed.id).toBe(CRED_ID_1);
+  });
+
+  test('vault store --generate-password sends generatePassword and no password', async () => {
+    setRoute('POST', '/v1/vault/credentials', {
+      status: 200,
+      body: buildCredentialResponse({
+        login: { username: 'bot@acme.io', password: '****' },
+      }),
+      assert: ({ body }) => {
+        const payload = body as {
+          generatePassword?: Record<string, unknown>;
+          login?: { password?: string };
+        };
+        expect(payload.generatePassword).toEqual({ length: 32, special: false });
+        // The CLI must never send a password alongside generation.
+        expect(payload.login?.password).toBeUndefined();
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'vault',
+      'store',
+      '--agent', AGENT_ID_1,
+      '--type', 'login',
+      '--name', 'Acme Portal',
+      '--username', 'bot@acme.io',
+      '--generate-password',
+      '--length', '32',
+      '--no-special',
+    ]);
+
+    console.log = originalLog;
+    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
+    expect(parsed.id).toBe(CRED_ID_1);
+  });
+
+  test('vault store --generate-password alone sends empty options (server defaults)', async () => {
+    setRoute('POST', '/v1/vault/credentials', {
+      status: 200,
+      body: buildCredentialResponse({ login: { username: 'bot@acme.io', password: '****' } }),
+      assert: ({ body }) => {
+        expect((body as { generatePassword?: unknown }).generatePassword).toEqual({});
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'vault',
+      'store',
+      '--agent', AGENT_ID_1,
+      '--name', 'Acme Portal',
+      '--username', 'bot@acme.io',
+      '--generate-password',
+    ]);
+
+    console.log = originalLog;
+    expect(logSpy.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  test('vault store rejects --password combined with --generate-password', async () => {
+    let apiCalled = false;
+    setRoute('POST', '/v1/vault/credentials', {
+      status: 200,
+      body: buildCredentialResponse(),
+      assert: () => {
+        apiCalled = true;
+      },
+    });
+
+    const exitSpy = spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy;
+
+    await runProgram([
+      'vault',
+      'store',
+      '--agent', AGENT_ID_1,
+      '--name', 'Conflicting',
+      '--password', 'hunter2',
+      '--generate-password',
+    ]);
+
+    console.error = originalError;
+    exitSpy.mockRestore();
+
+    expect(apiCalled).toBe(false);
+    const message = String(errorSpy.mock.calls.at(0)?.at(0) ?? '');
+    expect(message).toContain('mutually exclusive');
   });
 
   test('vault get fetches credential by id with agent query', async () => {
