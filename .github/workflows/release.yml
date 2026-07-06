@@ -69,11 +69,26 @@ jobs:
         with:
           path: cli
 
+      # Build against the anima commit pinned in .anima-ref (not HEAD) so
+      # releases are reproducible — the bundled contracts are decided by
+      # the pin, not by whatever anima merged last. See ci.yml for the
+      # full rationale and how to bump the pin.
+      - name: Read pinned anima ref
+        id: anima_ref
+        run: |
+          sha="$(tr -d '[:space:]' < cli/.anima-ref)"
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::.anima-ref must contain a full 40-char lowercase commit SHA, got: '$sha'"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Checkout anima monorepo (for @anima/contracts)
         uses: actions/checkout@v4
         with:
           repository: anima-labs-ai/anima
           path: anima
+          ref: ${{ steps.anima_ref.outputs.sha }}
           token: ${{ secrets.ANIMA_REPO_TOKEN }}
           fetch-depth: 1
 
@@ -159,11 +174,26 @@ jobs:
         with:
           path: cli
 
+      # Build against the anima commit pinned in .anima-ref (not HEAD) so
+      # releases are reproducible — the bundled contracts are decided by
+      # the pin, not by whatever anima merged last. See ci.yml for the
+      # full rationale and how to bump the pin.
+      - name: Read pinned anima ref
+        id: anima_ref
+        run: |
+          sha="$(tr -d '[:space:]' < cli/.anima-ref)"
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::.anima-ref must contain a full 40-char lowercase commit SHA, got: '$sha'"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Checkout anima monorepo (for @anima/contracts)
         uses: actions/checkout@v4
         with:
           repository: anima-labs-ai/anima
           path: anima
+          ref: ${{ steps.anima_ref.outputs.sha }}
           token: ${{ secrets.ANIMA_REPO_TOKEN }}
           fetch-depth: 1
 
