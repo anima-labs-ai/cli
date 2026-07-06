@@ -17,9 +17,9 @@ interface UninstallOptions {
   all?: boolean;
 }
 
-/** All possible Anima server entry names (legacy + split) */
+/** All possible Anima server entry names (unified + split) */
 const ANIMA_SERVER_NAMES = [
-  'anima',          // legacy monolith
+  'anima',          // unified remote gateway (also the legacy monolith name)
   'anima-agent',
   'anima-email',
   'anima-phone',
