@@ -70,8 +70,6 @@ async function runProgram(args: string[]): Promise<number | undefined> {
   return exitCode;
 }
 
-const ORG_ME_BODY = { id: ORG_ID_ME, name: 'Test Org', slug: 'test-org', tier: 'FREE' };
-
 const SCANNER_STATUS_BODY = {
   aiScanner: { active: true, provider: 'anthropic', fallbackReason: null },
 };
@@ -133,10 +131,10 @@ describe('security commands', () => {
     }
   });
 
-  // The contract requires orgId; the --org flag promises "derived from auth
-  // if omitted", so the command must resolve the org via org.me first.
-  test('scan derives orgId from auth when --org is omitted', async () => {
-    setRoute('GET', '/v1/orgs/me', { status: 200, body: ORG_ME_BODY });
+  // The contract requires orgId; with --org omitted the command resolves it
+  // from the configured default org (config.json), not an org.me round-trip.
+  test('scan uses the configured default org when --org is omitted', async () => {
+    writeFileSync(join(testConfigDir, 'config.json'), JSON.stringify({ defaultOrg: ORG_ID_ME }));
     setRoute('GET', `/v1/orgs/${ORG_ID_ME}/security/scanner-status`, {
       status: 200,
       body: SCANNER_STATUS_BODY,
@@ -180,8 +178,8 @@ describe('security commands', () => {
     expect(parsed.aiScanner.active).toBe(true);
   });
 
-  test('events derives orgId from auth when --org is omitted', async () => {
-    setRoute('GET', '/v1/orgs/me', { status: 200, body: ORG_ME_BODY });
+  test('events uses the configured default org when --org is omitted', async () => {
+    writeFileSync(join(testConfigDir, 'config.json'), JSON.stringify({ defaultOrg: ORG_ID_ME }));
     setRoute('GET', `/v1/orgs/${ORG_ID_ME}/security/events`, {
       status: 200,
       body: EMPTY_EVENTS_BODY,
