@@ -157,8 +157,15 @@ anima setup-mcp verify    # Verify MCP server connectivity
 ### `extension` — Manage Anima Chrome extension
 
 ```bash
-anima extension status    # Check extension status
+anima extension status                       # Check extension status
+anima extension connect                      # Mint a headless connect URL (agent key)
+anima extension connect --agent <id>         # Master key: agent is required
+anima extension connect --agent <id> --ttl 15m  # Shorten the token TTL (15m | 1h | session)
 ```
+
+`extension connect` returns a `connectUrl` to open in a Puppeteer-driven browser
+(plus `agentId`, `policy`, and expiry timestamps with `--json`). With an agent API
+key the agent is resolved automatically; with a master key, pass `--agent`.
 
 ### `admin` — Organization and team administration
 
