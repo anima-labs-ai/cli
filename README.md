@@ -128,6 +128,9 @@ anima vault deprovision   # Remove vault from an identity
 anima vault status        # Check vault status
 anima vault sync          # Sync vault data
 anima vault store         # Store a credential
+anima vault store --generate-password  # Store a login with a vault-generated password
+                          # (generated server-side, stays in the vault, only the
+                          #  credential ref is returned; --length/--no-special etc.)
 anima vault get           # Retrieve a credential
 anima vault list          # List all credentials
 anima vault search        # Search credentials

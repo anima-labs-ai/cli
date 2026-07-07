@@ -19,6 +19,22 @@ interface StoreOptions {
   username?: string;
   password?: string;
   uri?: string;
+  generatePassword?: boolean;
+  length?: number;
+  // Negation flags (--no-uppercase, …): commander defaults these to true;
+  // false means the user explicitly excluded the class.
+  uppercase?: boolean;
+  lowercase?: boolean;
+  numbers?: boolean;
+  special?: boolean;
+}
+
+interface GeneratePasswordPayload {
+  length?: number;
+  uppercase?: boolean;
+  lowercase?: boolean;
+  number?: boolean;
+  special?: boolean;
 }
 
 const ALLOWED_TYPES: ReadonlySet<string> = new Set([
@@ -53,12 +69,46 @@ export function storeCommand(): Command {
     .option('--username <user>', 'Login username')
     .option('--password <pass>', 'Login password')
     .option('--uri <url>', 'Login URL')
+    .option(
+      '--generate-password',
+      'Generate the login password server-side — it stays in the vault and only the credential ref is returned',
+    )
+    .option(
+      '--length <number>',
+      'Generated password length (8-128, default 24; requires --generate-password)',
+      Number.parseInt,
+    )
+    .option('--no-uppercase', 'Exclude uppercase letters from the generated password')
+    .option('--no-lowercase', 'Exclude lowercase letters from the generated password')
+    .option('--no-numbers', 'Exclude numbers from the generated password')
+    .option('--no-special', 'Exclude special characters from the generated password')
     .action(async function (this: Command) {
       const opts = this.opts<StoreOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
+        if (opts.generatePassword && opts.type !== 'login') {
+          output.error('--generate-password is only valid with --type login');
+          process.exit(1);
+        }
+        if (opts.generatePassword && opts.password) {
+          output.error(
+            '--generate-password and --password are mutually exclusive — omit --password to have the vault generate one',
+          );
+          process.exit(1);
+        }
+        const generationFlagUsed =
+          opts.length !== undefined ||
+          opts.uppercase === false ||
+          opts.lowercase === false ||
+          opts.numbers === false ||
+          opts.special === false;
+        if (generationFlagUsed && !opts.generatePassword) {
+          output.error('Password generation options require --generate-password');
+          process.exit(1);
+        }
+
         let login: LoginCredentialPayload | undefined;
         if (opts.type === 'login') {
           login = {};
@@ -67,12 +117,26 @@ export function storeCommand(): Command {
           if (opts.uri) login.uris = [{ uri: opts.uri }];
         }
 
+        // Send only what the user asked for — absent fields fall back to the
+        // server defaults (24 chars, all character classes). The contract
+        // field is `number`; the CLI flag stays `--numbers` like `generate`.
+        let generatePassword: GeneratePasswordPayload | undefined;
+        if (opts.generatePassword) {
+          generatePassword = {};
+          if (opts.length !== undefined) generatePassword.length = opts.length;
+          if (opts.uppercase === false) generatePassword.uppercase = false;
+          if (opts.lowercase === false) generatePassword.lowercase = false;
+          if (opts.numbers === false) generatePassword.number = false;
+          if (opts.special === false) generatePassword.special = false;
+        }
+
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.create({
           agentId: opts.agent,
           type: opts.type,
           name: opts.name,
           login,
+          generatePassword,
         });
 
         if (globals.json) {
@@ -87,6 +151,12 @@ export function storeCommand(): Command {
           ['Name', result.name],
           ['Username', result.login?.username],
           ['URI', result.login?.uris?.[0]?.uri],
+          ...(opts.generatePassword
+            ? ([['Password', 'generated — stored in vault, never returned']] as [
+                string,
+                string,
+              ][])
+            : []),
         ]);
       } catch (error: unknown) {
         if (error instanceof ORPCError) {
