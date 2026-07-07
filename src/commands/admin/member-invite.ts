@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
-import { getConfig } from '../../lib/config.js';
+import { resolveConfigValue } from '../../lib/config.js';
 import { Output } from '../../lib/output.js';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
@@ -65,14 +65,11 @@ function validateRole(value: string): MemberRole {
 }
 
 async function resolveOrg(flagOrg?: string): Promise<string> {
-  if (flagOrg) {
-    return flagOrg;
+  // Resolve via the standard precedence — --org flag, then the ANIMA_DEFAULT_ORG
+  // env var, the active profile, and the top-level configured default org.
+  const orgId = await resolveConfigValue('defaultOrg', flagOrg);
+  if (!orgId) {
+    throw new Error("No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'");
   }
-
-  const config = await getConfig();
-  if (config.defaultOrg) {
-    return config.defaultOrg;
-  }
-
-  throw new Error("No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'");
+  return orgId;
 }

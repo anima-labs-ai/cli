@@ -181,7 +181,7 @@ export function onboardCommand(): Command {
 						{
 							command: "anima setup-mcp install --all",
 							description:
-								"Wire Anima MCP to Claude Code, Cursor, Codex, Windsurf, Zed",
+								"Wire Anima MCP to Claude Code, Claude Desktop, Cursor, Windsurf, VS Code",
 						},
 					],
 					docs: "https://docs.useanima.sh/getting-started",
@@ -249,7 +249,7 @@ export function onboardCommand(): Command {
 			if (!opts.skipMcp) {
 				const wantsMcp = await clack.confirm({
 					message:
-						"Wire Anima as an MCP server in Claude Code / Cursor / Codex / Windsurf / Zed?",
+						"Wire Anima as an MCP server in Claude Code / Claude Desktop / Cursor / Windsurf / VS Code?",
 					initialValue: true,
 				});
 				if (!clack.isCancel(wantsMcp) && wantsMcp) {

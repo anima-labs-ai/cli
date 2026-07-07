@@ -45,9 +45,9 @@ function readJsonFile(path: string): Record<string, unknown> | null {
   }
 }
 
-/** All possible Anima server entry names (legacy + split) */
+/** All possible Anima server entry names (unified + split) */
 const ANIMA_SERVER_NAMES = [
-  'anima',          // legacy monolith
+  'anima',          // unified remote gateway (also the legacy monolith name)
   'anima-agent',
   'anima-email',
   'anima-phone',
@@ -143,7 +143,9 @@ function validateEntry(entry: McpServerEntry): {
 
 async function pingEndpoint(url: string): Promise<boolean> {
   try {
-    const healthUrl = url.replace(/\/mcp\/?$/, '/mcp/health');
+    // Health is served at the origin root (e.g. https://mcp.useanima.sh/health);
+    // paths under the MCP endpoint like /mcp/health 404.
+    const healthUrl = new URL('/health', url).toString();
     const res = await fetch(healthUrl, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),

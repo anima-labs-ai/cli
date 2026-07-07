@@ -1,0 +1,116 @@
+name: Anima drift canary
+
+# CI and releases build against the anima monorepo commit pinned in
+# .anima-ref, so anima merges can't break CLI PRs asynchronously. The cost
+# of pinning is that drift between the pin and anima HEAD is invisible
+# until someone bumps the pin — potentially right before a release, which
+# is exactly how the 2026-07-06 breakage was discovered (a contracts
+# change made `orgId` a required path param and CLI main silently stopped
+# typechecking against HEAD).
+#
+# This canary typechecks the CLI against anima HEAD (deliberately
+# unpinned) once a day and files a labeled issue when that breaks — an
+# early, non-blocking signal instead of a red PR. It also exercises
+# ANIMA_REPO_TOKEN daily: that fine-grained PAT has a hard expiry and has
+# already lapsed silently once (2026-07-05), so its next expiry should be
+# reported here rather than discovered on a human's PR.
+#
+# Security: no untrusted external input reaches run: blocks — only
+# github.* built-ins (server_url/repository/run_id) passed via env.
+# Scheduled workflows run from the default branch only.
+
+on:
+  schedule:
+    # Daily, 05:17 UTC — before the Sofia workday; off the top of the hour
+    # to dodge the scheduler crunch.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: Typecheck against anima HEAD
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify ANIMA_REPO_TOKEN secret is configured
+        env:
+          ANIMA_REPO_TOKEN: ${{ secrets.ANIMA_REPO_TOKEN }}
+        run: |
+          if [ -z "$ANIMA_REPO_TOKEN" ]; then
+            echo "::error::Repo secret ANIMA_REPO_TOKEN is not set."
+            echo "::error::The canary needs a fine-grained PAT with 'Contents: Read' on anima-labs-ai/anima."
+            exit 1
+          fi
+
+      - name: Checkout CLI
+        uses: actions/checkout@v4
+        with:
+          path: cli
+
+      # No `ref:` on purpose — the whole point is to build against HEAD.
+      - name: Checkout anima monorepo at HEAD
+        uses: actions/checkout@v4
+        with:
+          repository: anima-labs-ai/anima
+          path: anima
+          token: ${{ secrets.ANIMA_REPO_TOKEN }}
+          fetch-depth: 1
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: cli/.bun-version
+
+      - name: Install anima monorepo deps (for @anima/contracts resolution)
+        working-directory: anima
+        run: bun install --frozen-lockfile
+
+      - name: Install CLI dependencies
+        working-directory: cli
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck against anima HEAD
+        working-directory: cli
+        run: bun run typecheck
+
+      # One open issue at a time: if an anima-drift issue is already open,
+      # the repeat failure is visible on it and in the Actions history —
+      # don't spam a new issue per day.
+      - name: File drift issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          PINNED_REF_FILE: cli/.anima-ref
+        run: |
+          gh label create anima-drift \
+            --repo "$GITHUB_REPOSITORY" \
+            --description "CLI no longer builds against anima monorepo HEAD" \
+            --color D93F0B --force
+          open_count="$(gh issue list --repo "$GITHUB_REPOSITORY" --label anima-drift --state open --json number --jq 'length')"
+          if [ "$open_count" != "0" ]; then
+            echo "An anima-drift issue is already open — not filing another."
+            exit 0
+          fi
+          pinned="$(tr -d '[:space:]' < "$PINNED_REF_FILE" || echo 'unreadable')"
+          cat > "$RUNNER_TEMP/drift-issue.md" <<EOF
+          The daily drift canary failed: CLI main no longer typechecks against the anima monorepo's default-branch HEAD.
+
+          Failed run: $RUN_URL
+          Currently pinned anima commit (.anima-ref): $pinned
+
+          What this means: CI and releases still build against the pin, so nothing is broken *yet* — but the next .anima-ref bump (or the next release prepared against fresh contracts) will hit this. Fix it while it's one change, not a pile.
+
+          Checklist:
+          1. Open the failed run and look at which step failed.
+             - Failed at **checkout** with "Bad credentials": ANIMA_REPO_TOKEN expired again — mint a new fine-grained PAT (Contents: Read on anima-labs-ai/anima) and run: gh secret set ANIMA_REPO_TOKEN --repo anima-labs-ai/cli
+             - Failed at **typecheck**: a contracts change on anima main is incompatible with the CLI.
+          2. For contract drift: fix the CLI against the new contracts and bump .anima-ref to the anima HEAD SHA in the same PR (git ls-remote to find it).
+          3. Close this issue when the canary is green again.
+          EOF
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "CLI no longer typechecks against anima HEAD" \
+            --label anima-drift \
+            --body-file "$RUNNER_TEMP/drift-issue.md"

@@ -3,8 +3,10 @@ Usage: anima extension [options] [command]
 Manage Anima Chrome extension
 
 Options:
-  -h, --help      display help for command
+  -h, --help         display help for command
 
 Commands:
-  status          Show extension installation status
-  help [command]  display help for command
+  status             Show extension installation status
+  connect [options]  Mint a headless extension connection URL for a
+                     Puppeteer-driven browser
+  help [command]     display help for command

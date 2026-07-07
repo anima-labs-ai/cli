@@ -18,24 +18,27 @@ In Claude Code, Cursor, Codex, or any MCP-aware agent:
 Read useanima.sh/skill.md and get me set up with Anima
 ```
 
-The agent reads the skill manifest, installs the CLI, registers itself as an MCP server, and finishes onboarding for you.
+The agent reads the skill manifest, installs the CLI, wires up Anima's MCP servers, and finishes onboarding for you.
 
-### MCP server
+### MCP servers
 
-Anima CLI doubles as an MCP server. Add to your `.mcp.json`:
+Run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code) automatically. The default stdio mode installs the per-domain servers (`@anima-labs/mcp-agent`, `-email`, `-phone`, `-vault`, `-platform`); pass `--mode remote` to use the hosted gateway instead.
+
+To wire a client manually, point it at the hosted gateway in `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "anima": {
-      "command": "npx",
-      "args": ["-y", "@anima-labs/cli", "--mcp"]
+      "type": "http",
+      "url": "https://mcp.useanima.sh/mcp",
+      "headers": {
+        "Authorization": "Bearer ak_your_api_key"
+      }
     }
   }
 }
 ```
-
-Or run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Codex, Windsurf, Zed) automatically.
 
 ### Alternative installs
 
@@ -157,8 +160,15 @@ anima setup-mcp verify    # Verify MCP server connectivity
 ### `extension` — Manage Anima Chrome extension
 
 ```bash
-anima extension status    # Check extension status
+anima extension status                       # Check extension status
+anima extension connect                      # Mint a headless connect URL (agent key)
+anima extension connect --agent <id>         # Master key: agent is required
+anima extension connect --agent <id> --ttl 15m  # Shorten the token TTL (15m | 1h | session)
 ```
+
+`extension connect` returns a `connectUrl` to open in a Puppeteer-driven browser
+(plus `agentId`, `policy`, and expiry timestamps with `--json`). With an agent API
+key the agent is resolved automatically; with a master key, pass `--agent`.
 
 ### `admin` — Organization and team administration
 
@@ -214,7 +224,7 @@ anima init --non-interactive \     # Scripted setup
 The CLI reads configuration in this priority order:
 
 1. **CLI flags** (`--token`, `--api-url`, `--json`, `--debug`)
-2. **Environment variables** (`ANIMA_API_URL`, `ANIMA_API_KEY`)
+2. **Environment variables** (`ANIMA_API_URL`, `ANIMA_API_KEY`, `ANIMA_DEFAULT_ORG`, `ANIMA_DEFAULT_IDENTITY`, `ANIMA_OUTPUT_FORMAT`)
 3. **Active profile** (set via `anima config profile use <name>`)
 4. **Default config** (set via `anima config set` or `anima init`)
 
