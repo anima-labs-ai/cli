@@ -1,7 +1,9 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
-import { type GlobalOptions } from '../../lib/auth.js';
+import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { ApiError } from '../../lib/api-client.js';
+import { exchangeVaultToken } from '../../lib/secret-ref.js';
 
 interface InjectOptions {
   agent?: string;
@@ -93,6 +95,8 @@ export function injectCommand(): Command {
 
       try {
         const orpc = await requireOrpcAuth(globals);
+        const client = await requireAuth(globals);
+        let injectorHintShown = false;
         const input = await readStdin();
 
         // Step 1: Detect vtk_ tokens
@@ -126,7 +130,9 @@ export function injectCommand(): Command {
         // Step 3: Exchange tokens and substitute
         for (const token of tokens) {
           try {
-            const credential = await orpc.vault.exchangeToken({ token });
+            // Raw /v1 path — stable across the server-side rename to
+            // exchangeTokenForInjection, so no contracts-pin dependency.
+            const credential = await exchangeVaultToken(client, token);
             const secret = getPrimarySecret(credential as VaultCredentialLike);
             if (secret) {
               result = result.replaceAll(token, secret);
@@ -136,6 +142,12 @@ export function injectCommand(): Command {
             }
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : 'Unknown error';
+            if (error instanceof ApiError && error.status === 403 && !injectorHintShown) {
+              injectorHintShown = true;
+              output.warn(
+                'Token exchange is gated to injector credentials: use a master key, or grant this key the vault:inject scope. Agents should prefer `anima vault use` (server-side broker).',
+              );
+            }
             output.debug(`Failed to exchange token ${token.substring(0, 12)}...: ${msg}`);
           }
         }
