@@ -5,7 +5,6 @@ import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface GetOptions {
   agent?: string;
-  unmask?: boolean;
 }
 
 function redactValue(value: string | undefined): string | undefined {
@@ -23,83 +22,63 @@ export function getCommand(): Command {
     .description('Get credential by ID')
     .argument('<credentialId>', 'Credential ID')
     .option('--agent <id>', 'Agent ID (optional with agent API key)')
-    .option('--unmask', 'Show raw credential values (passwords, tokens). Use with caution.')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<GetOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
-      const mask = !opts.unmask;
-
-      if (opts.unmask) {
-        output.warn('Displaying unmasked credentials. Do not share this output.');
-      }
 
       try {
-        // The server masks by default. Pass reveal=true to get plaintext,
-        // which requires a master key (mk_) — agent keys will get a 403.
-        // This enforces defense-in-depth: the CLI is no longer the only
-        // layer of protection. If someone hacks the CLI, they still can't
-        // exfiltrate passwords without master-key auth.
+        // The CLI never reveals plaintext. It cannot even ask: `reveal` is
+        // never sent, so the server masks secret fields, and the client
+        // re-masks as defense-in-depth. To view a secret, a human uses the
+        // Anima console, where reveal is audited and step-up gated.
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.get({
           id: credentialId,
           agentId: opts.agent,
-          reveal: opts.unmask ?? false,
         });
 
         if (globals.json) {
-          if (mask) {
-            // Redact sensitive fields in JSON output
-            const masked = { ...result };
-            if (masked.login) {
-              masked.login = { ...masked.login };
-              if (masked.login.password) masked.login.password = '****';
-              if (masked.login.totp) masked.login.totp = '****';
-            }
-            if (masked.card) {
-              masked.card = { ...masked.card };
-              if (masked.card.code) masked.card.code = '****';
-              if (masked.card.number) masked.card.number = '****' + masked.card.number.slice(-4);
-            }
-            if (masked.identity) {
-              masked.identity = { ...masked.identity };
-              if (masked.identity.ssn) masked.identity.ssn = '****';
-            }
-            output.json(masked);
-          } else {
-            output.json(result);
+          const masked = { ...result };
+          if (masked.login) {
+            masked.login = { ...masked.login };
+            if (masked.login.password) masked.login.password = '****';
+            if (masked.login.totp) masked.login.totp = '****';
           }
+          if (masked.card) {
+            masked.card = { ...masked.card };
+            if (masked.card.code) masked.card.code = '****';
+            if (masked.card.number) masked.card.number = '****' + masked.card.number.slice(-4);
+          }
+          if (masked.identity) {
+            masked.identity = { ...masked.identity };
+            if (masked.identity.ssn) masked.identity.ssn = '****';
+          }
+          output.json(masked);
           return;
         }
-
-        const password = mask ? redactValue(result.login?.password) : result.login?.password;
-        const cardNumber = mask ? redactCardNumber(result.card?.number) : result.card?.number;
-        const cardCode = mask ? redactValue(result.card?.code) : result.card?.code;
-        const ssn = mask ? redactValue(result.identity?.ssn) : result.identity?.ssn;
 
         output.details([
           ['Credential ID', result.id],
           ['Type', result.type],
           ['Name', result.name],
           ['Username', result.login?.username],
-          ['Password', password],
+          ['Password', redactValue(result.login?.password)],
           ['URI', result.login?.uris?.[0]?.uri],
-          ['Card Number', cardNumber],
-          ['Card Code', cardCode],
-          ['SSN', ssn],
+          ['Card Number', redactCardNumber(result.card?.number)],
+          ['Card Code', redactValue(result.card?.code)],
+          ['SSN', redactValue(result.identity?.ssn)],
           ['Favorite', result.favorite ? 'Yes' : 'No'],
           ['Updated At', result.updatedAt],
         ]);
 
-        if (mask) {
-          output.info('Sensitive fields masked. Use --unmask to reveal.');
-        }
+        output.info('Sensitive fields are masked. Reveal is available (audited) in the Anima console.');
       } catch (error: unknown) {
         if (error instanceof ORPCError) {
           if (error.status === 401) {
             output.error('Not authenticated. Run `anima auth login` to authenticate.');
           } else if (error.status === 403) {
-            output.error('Forbidden: --unmask requires a master key. Agent keys cannot reveal plaintext.');
+            output.error('Forbidden: you do not have access to this credential.');
           } else if (error.status === 404) {
             output.error('Credential not found.');
           } else {

@@ -32,8 +32,6 @@ Commands:
                                    unresolved vault references
   reload [options]                 Reload vault snapshots on the server (use
                                    after rotating a secret at the provider)
-  unlock [options]                 Start a master-key reveal session with
-                                   explicit ceremony
   proxy [options]                  Run a local proxy that injects a vault
                                    credential into outbound requests
   use [options]                    Call an API with a credential attached

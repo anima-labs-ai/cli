@@ -439,7 +439,7 @@ describe('vault commands', () => {
     expect(parsed.id).toBe(CRED_ID_1);
   });
 
-  test('vault get with --unmask sends reveal=true', async () => {
+  test('vault get masks sensitive fields and never requests reveal', async () => {
     setRoute('GET', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 200,
       body: buildCredentialResponse({
@@ -447,8 +447,8 @@ describe('vault commands', () => {
       }),
       assert: ({ url }) => {
         expect(url.searchParams.get('agentId')).toBe(AGENT_ID_1);
-        // reveal is serialized into the query string by OpenAPILink.
-        expect(url.searchParams.get('reveal')).toBe('true');
+        // The CLI can no longer reveal plaintext: it must never send reveal=true.
+        expect(url.searchParams.get('reveal')).not.toBe('true');
       },
     });
 
@@ -461,13 +461,9 @@ describe('vault commands', () => {
       'vault',
       'get', CRED_ID_1,
       '--agent', AGENT_ID_1,
-      '--unmask',
     ]);
 
     console.log = originalLog;
-    // The command emits a warning ("Displaying unmasked credentials…") before
-    // the JSON payload, so we scan all log calls for the credential JSON
-    // rather than relying on a specific index.
     const outputs = logSpy.mock.calls.map((call) => String(call.at(0) ?? ''));
     const credentialPayload = outputs
       .map((s) => {
@@ -477,7 +473,8 @@ describe('vault commands', () => {
         (v): v is { id: string; login: { password: string } } =>
           v !== null && typeof v === 'object' && 'login' in v,
       );
-    expect(credentialPayload?.login.password).toBe('plaintext-secret');
+    // Even if the server returned plaintext, the CLI must mask it before printing.
+    expect(credentialPayload?.login.password).toBe('****');
   });
 
   test('vault list calls credentials endpoint and renders output', async () => {
@@ -886,13 +883,13 @@ describe('vault commands', () => {
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('vault get handles 403 forbidden when reveal requires master key', async () => {
+  test('vault get handles 403 forbidden with friendly message', async () => {
     setRoute('GET', `/v1/vault/credentials/${CRED_ID_1}`, {
       status: 403,
       body: {
         error: {
           code: 'FORBIDDEN',
-          message: 'reveal requires master key',
+          message: 'forbidden',
         },
       },
     });
@@ -908,14 +905,13 @@ describe('vault commands', () => {
     await runProgram([
       'vault', 'get', CRED_ID_1,
       '--agent', AGENT_ID_1,
-      '--unmask',
     ]);
 
     console.error = originalError;
     process.exit = originalExit;
 
     const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output).toContain('master key');
+    expect(output).toContain('Forbidden');
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 });

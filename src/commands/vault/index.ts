@@ -24,7 +24,6 @@ import { useCommand } from './use.js';
 import { requestCommand } from './request.js';
 import { auditCommand } from './audit.js';
 import { reloadCommand } from './reload.js';
-import { unlockCommand } from './unlock.js';
 import { proxyCommand } from './proxy.js';
 import { agentCommand, typeCommand } from './agent.js';
 
@@ -56,7 +55,6 @@ export function vaultCommands(): Command {
   cmd.addCommand(execCommand());
   cmd.addCommand(auditCommand());
   cmd.addCommand(reloadCommand());
-  cmd.addCommand(unlockCommand());
   cmd.addCommand(proxyCommand());
   cmd.addCommand(useCommand());
   cmd.addCommand(requestCommand());
