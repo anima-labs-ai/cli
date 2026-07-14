@@ -222,13 +222,13 @@ export async function resolveSecretRefs(
         // Create a single-use vtk_ token then exchange it. This is two round-trips
         // instead of one, but each access produces a distinct audit log entry,
         // which is the whole point of tokens over direct reveal.
-        const tokenRes = await client.post<{ token: string }>('/vault/token', {
+        const tokenRes = await client.post<{ token: string }>('/v1/vault/token', {
           agentId: ref.agentId,
           credentialId: ref.credentialId,
           scope: 'autofill',
           ttlSeconds: 60,
         });
-        const cred = await client.post<VaultCredential>('/vault/token/exchange', { token: tokenRes.token });
+        const cred = await client.post<VaultCredential>('/v1/vault/token/exchange', { token: tokenRes.token });
         const fieldVal = extractField(cred, ref.field);
         if (fieldVal === undefined) {
           errors.push({ name, reason: `credential ${ref.credentialId} has no field "${ref.field}"` });

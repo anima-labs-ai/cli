@@ -20,6 +20,8 @@ import { redactCommand } from './redact.js';
 // catalogue. The HTTP endpoints for OAuth linking remain on the API for the
 // console, but the CLI no longer exposes them as first-class commands.
 import { execCommand } from './exec.js';
+import { useCommand } from './use.js';
+import { requestCommand } from './request.js';
 import { auditCommand } from './audit.js';
 import { reloadCommand } from './reload.js';
 import { unlockCommand } from './unlock.js';
@@ -56,6 +58,8 @@ export function vaultCommands(): Command {
   cmd.addCommand(reloadCommand());
   cmd.addCommand(unlockCommand());
   cmd.addCommand(proxyCommand());
+  cmd.addCommand(useCommand());
+  cmd.addCommand(requestCommand());
   cmd.addCommand(agentCommand());
   cmd.addCommand(typeCommand());
 
