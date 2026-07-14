@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { discoverCommand } from './discover.js';
+import { dispatchCommand } from './dispatch.js';
 import { sendTaskCommand } from './send.js';
 import { listTasksCommand } from './tasks.js';
 
@@ -8,6 +9,7 @@ export function a2aCommands(): Command {
     .description('Agent-to-Agent (A2A) protocol commands');
 
   cmd.addCommand(discoverCommand());
+  cmd.addCommand(dispatchCommand());
   cmd.addCommand(sendTaskCommand());
   cmd.addCommand(listTasksCommand());
 
