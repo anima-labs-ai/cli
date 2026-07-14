@@ -226,6 +226,48 @@ describe('vault request commands', () => {
     expect(printed).toContain('****1234');
   });
 
+  test('request create --wait --json exits non-zero on a non-FULFILLED terminal status', async () => {
+    setRoute('POST', '/v1/vault/credential-requests', {
+      status: 200,
+      body: CREATED,
+    });
+    setRoute('GET', '/v1/vault/credential-requests/req_1', {
+      status: 200,
+      body: { status: 'DECLINED', credentialId: null, maskedPreview: null },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    const code = await runProgram([
+      '--json',
+      'vault',
+      'request',
+      'create',
+      '--type',
+      'api_key',
+      '--name',
+      'k',
+      '--reason',
+      'r',
+      '--wait',
+      '--poll-interval',
+      '10',
+      '--timeout',
+      '5',
+    ]);
+
+    console.log = originalLog;
+
+    // HITL security: an agent gating on `create --wait --json && next` must NOT
+    // proceed when the human declined — the JSON path must still exit non-zero.
+    expect(code).toBe(1);
+    // ...while still emitting the JSON payload so the agent can see the status.
+    const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(printed).toContain('DECLINED');
+  });
+
   test('request status polls once and prints masked state', async () => {
     setRoute('GET', '/v1/vault/credential-requests/req_2', {
       status: 200,

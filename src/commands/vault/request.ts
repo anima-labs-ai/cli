@@ -164,16 +164,20 @@ function requestCreateCommand(): Command {
         );
         if (globals.json) {
           output.json({ ...state, requestId: created.requestId, fillUrl: created.fillUrl });
-          return;
-        }
-        if (state.status === 'FULFILLED') {
-          output.success('Request fulfilled — use the credential by reference; the secret stays in the vault');
-        } else if (state.status === 'PENDING') {
-          output.warn(`Timed out waiting; the request is still pending until ${created.expiresAt}`);
         } else {
-          output.warn(`Request ended ${state.status}`);
+          if (state.status === 'FULFILLED') {
+            output.success('Request fulfilled — use the credential by reference; the secret stays in the vault');
+          } else if (state.status === 'PENDING') {
+            output.warn(`Timed out waiting; the request is still pending until ${created.expiresAt}`);
+          } else {
+            output.warn(`Request ended ${state.status}`);
+          }
+          printStatus(output, state);
         }
-        printStatus(output, state);
+        // Exit code must reflect the terminal outcome REGARDLESS of output
+        // format, so an agent can gate on `... create --wait --json && next`:
+        // a DECLINED / EXPIRED / CANCELLED / timeout has to be a non-zero exit,
+        // or the agent proceeds as if the human approved.
         if (state.status !== 'FULFILLED') process.exit(1);
       } catch (error: unknown) {
         handleRequestError(output, error, 'create credential request');

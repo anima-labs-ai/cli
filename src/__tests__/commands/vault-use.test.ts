@@ -184,9 +184,9 @@ describe('vault use command', () => {
       body: USE_RESULT,
     });
 
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
+    const writeSpy = mock(() => true);
+    const originalWrite = process.stdout.write;
+    process.stdout.write = writeSpy as unknown as typeof process.stdout.write;
 
     const code = await runProgram([
       'vault',
@@ -197,10 +197,12 @@ describe('vault use command', () => {
       'https://api.stripe.com/v1/charges',
     ]);
 
-    console.log = originalLog;
+    process.stdout.write = originalWrite;
 
     expect(code).toBeUndefined();
-    const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    // The raw upstream body is the ONLY thing written to stdout (pipeable) —
+    // the status line is human-only, suppressed when stdout is not a TTY.
+    const printed = writeSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(printed).toContain('{"ok":true}');
   });
 

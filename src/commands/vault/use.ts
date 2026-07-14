@@ -88,12 +88,17 @@ export function useCommand(): Command {
           return;
         }
 
-        output.success(`Upstream responded ${result.status}`);
+        // Non-JSON: stdout carries ONLY the upstream body, so `am vault use …
+        // > out` (or a pipe) yields a clean payload. The status line is
+        // human-only (output.info is suppressed when stdout isn't a TTY) and
+        // any truncation notice goes to stderr — never a green ✓, since the
+        // upstream status may itself be a 4xx/5xx.
+        output.info(`Upstream responded ${result.status}`);
         if (result.truncated) {
-          output.warn('Response body was truncated (size cap)');
+          process.stderr.write('Response body was truncated (size cap)\n');
         }
         if (result.body) {
-          console.log(result.body);
+          process.stdout.write(result.body);
         }
       } catch (error: unknown) {
         if (error instanceof ApiError) {
