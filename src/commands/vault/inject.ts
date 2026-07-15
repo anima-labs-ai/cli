@@ -3,7 +3,7 @@ import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import { ApiError } from '../../lib/api-client.js';
-import { exchangeVaultToken } from '../../lib/secret-ref.js';
+import { exchangeVaultToken, INJECTOR_GATE_403_MESSAGE } from '../../lib/secret-ref.js';
 
 interface InjectOptions {
   agent?: string;
@@ -144,9 +144,7 @@ export function injectCommand(): Command {
             const msg = error instanceof Error ? error.message : 'Unknown error';
             if (error instanceof ApiError && error.status === 403 && !injectorHintShown) {
               injectorHintShown = true;
-              output.warn(
-                'Token exchange is gated to injector credentials: use a master key, or grant this key the vault:inject scope. Agents should prefer `anima vault use` (server-side broker).',
-              );
+              output.warn(INJECTOR_GATE_403_MESSAGE);
             }
             output.debug(`Failed to exchange token ${token.substring(0, 12)}...: ${msg}`);
           }

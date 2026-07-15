@@ -3,7 +3,7 @@ import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import { ApiError } from '../../lib/api-client.js';
-import { exchangeVaultToken } from '../../lib/secret-ref.js';
+import { exchangeVaultToken, INJECTOR_GATE_403_MESSAGE } from '../../lib/secret-ref.js';
 
 type TokenScope = 'autofill' | 'proxy' | 'export';
 
@@ -110,9 +110,7 @@ function tokenExchangeCommand(): Command {
           if (error.status === 401) {
             output.error('Not authenticated. Run `anima auth login` to authenticate.');
           } else if (error.status === 403) {
-            output.error(
-              'Token exchange is gated to injector credentials: use a master key, or grant this key the vault:inject scope. Agents should prefer `anima vault use` (server-side broker).',
-            );
+            output.error(INJECTOR_GATE_403_MESSAGE);
           } else if (error.status === 404 || error.status === 410) {
             output.error('Token is invalid, expired, or already used.');
           } else {

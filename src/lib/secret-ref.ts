@@ -148,6 +148,14 @@ export interface VaultCredential {
 }
 
 /**
+ * Guidance shown when a token exchange returns 403 because the caller's key is
+ * not an injector credential. Shared by `vault inject` and `vault token
+ * exchange` so the wording can't drift between the two surfaces.
+ */
+export const INJECTOR_GATE_403_MESSAGE =
+  'Token exchange is gated to injector credentials: use a master key, or grant this key the vault:inject scope. Agents should prefer `anima vault use` (server-side broker).';
+
+/**
  * Exchange a single-use vtk_ token for its credential (plaintext fields).
  * Raw /v1 path on purpose: the oRPC procedure was renamed to
  * `exchangeTokenForInjection` server-side, but the HTTP path is stable, so
