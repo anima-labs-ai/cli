@@ -1,6 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { type GlobalOptions } from '../../lib/auth.js';
+import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
+import { ApiError } from '../../lib/api-client.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 type CredentialType =
@@ -27,6 +28,22 @@ interface StoreOptions {
   lowercase?: boolean;
   numbers?: boolean;
   special?: boolean;
+  // api_key payload (broker config)
+  provider?: string;
+  key?: string;
+  allowedHost: string[];
+  authHeader?: string;
+  authScheme?: string;
+  revealPolicy?: 'standard' | 'brokered';
+}
+
+function collectHost(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+function validateRevealPolicy(value: string): 'standard' | 'brokered' {
+  if (value === 'standard' || value === 'brokered') return value;
+  throw new InvalidArgumentError('reveal-policy must be standard or brokered');
 }
 
 interface GeneratePasswordPayload {
@@ -82,6 +99,21 @@ export function storeCommand(): Command {
     .option('--no-lowercase', 'Exclude lowercase letters from the generated password')
     .option('--no-numbers', 'Exclude numbers from the generated password')
     .option('--no-special', 'Exclude special characters from the generated password')
+    .option('--provider <name>', 'api_key: provider name (e.g. openai, stripe)')
+    .option('--key <value>', 'api_key: the key value (stored encrypted, read back masked)')
+    .option(
+      '--allowed-host <host>',
+      'api_key: host the key may be brokered to via `vault use` (repeatable; fail-closed without any)',
+      collectHost,
+      [],
+    )
+    .option('--auth-header <header>', "api_key: header the broker injects into (default 'Authorization')")
+    .option('--auth-scheme <scheme>', "api_key: value prefix before the key (default 'Bearer '; '' for raw)")
+    .option(
+      '--reveal-policy <policy>',
+      "Reveal policy: 'brokered' = plaintext never returned to anyone, use-only",
+      validateRevealPolicy,
+    )
     .action(async function (this: Command) {
       const opts = this.opts<StoreOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
@@ -91,6 +123,68 @@ export function storeCommand(): Command {
         if (opts.generatePassword && opts.type !== 'login') {
           output.error('--generate-password is only valid with --type login');
           process.exit(1);
+        }
+        const apiKeyFlagUsed =
+          opts.provider !== undefined ||
+          opts.key !== undefined ||
+          opts.allowedHost.length > 0 ||
+          opts.authHeader !== undefined ||
+          opts.authScheme !== undefined;
+        if (apiKeyFlagUsed && opts.type !== 'api_key') {
+          output.error('--provider/--key/--allowed-host/--auth-header/--auth-scheme require --type api_key');
+          process.exit(1);
+        }
+        if (opts.type === 'api_key' && (!opts.provider || !opts.key)) {
+          output.error('--type api_key requires --provider and --key');
+          process.exit(1);
+        }
+        if (opts.revealPolicy && opts.type !== 'api_key') {
+          output.error(
+            '--reveal-policy is currently supported with --type api_key here; other types follow the server defaults (set the policy via console or SDK)',
+          );
+          process.exit(1);
+        }
+
+        // api_key store goes through the raw /v1 path: the broker fields
+        // (allowedHosts/authHeader/authScheme) and revealPolicy are newer than
+        // the pinned oRPC contracts, and the HTTP path is stable.
+        if (opts.type === 'api_key') {
+          const client = await requireAuth(globals);
+          const apiKey: Record<string, unknown> = {
+            provider: opts.provider,
+            key: opts.key,
+          };
+          if (opts.allowedHost.length > 0) apiKey.allowedHosts = opts.allowedHost;
+          if (opts.authHeader !== undefined) apiKey.authHeader = opts.authHeader;
+          if (opts.authScheme !== undefined) apiKey.authScheme = opts.authScheme;
+
+          const created = await client.post<{
+            id: string;
+            type: string;
+            name: string;
+            revealPolicy?: string;
+            apiKey?: { provider?: string; allowedHosts?: string[] };
+          }>('/v1/vault/credentials', {
+            agentId: opts.agent,
+            type: 'api_key',
+            name: opts.name,
+            apiKey,
+            ...(opts.revealPolicy ? { revealPolicy: opts.revealPolicy } : {}),
+          });
+
+          if (globals.json) {
+            output.json(created);
+            return;
+          }
+          output.success(`Stored credential ${created.name}`);
+          output.details([
+            ['Credential ID', created.id],
+            ['Type', created.type],
+            ['Provider', created.apiKey?.provider],
+            ['Broker hosts', created.apiKey?.allowedHosts?.join(', ') ?? '(none — broker refuses until set)'],
+            ['Reveal policy', created.revealPolicy],
+          ]);
+          return;
         }
         if (opts.generatePassword && opts.password) {
           output.error(
@@ -159,7 +253,7 @@ export function storeCommand(): Command {
             : []),
         ]);
       } catch (error: unknown) {
-        if (error instanceof ORPCError) {
+        if (error instanceof ORPCError || error instanceof ApiError) {
           if (error.status === 401) {
             output.error('Not authenticated. Run `anima auth login` to authenticate.');
           } else {

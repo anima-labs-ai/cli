@@ -1,7 +1,9 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
-import { type GlobalOptions } from '../../lib/auth.js';
+import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { ApiError } from '../../lib/api-client.js';
+import { exchangeVaultToken, INJECTOR_GATE_403_MESSAGE } from '../../lib/secret-ref.js';
 
 type TokenScope = 'autofill' | 'proxy' | 'export';
 
@@ -87,8 +89,10 @@ function tokenExchangeCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
-        const orpc = await requireOrpcAuth(globals);
-        const result = await orpc.vault.exchangeToken({ token: opts.vtk });
+        // Raw /v1 path — stable across the server-side rename to
+        // exchangeTokenForInjection, so no contracts-pin dependency.
+        const client = await requireAuth(globals);
+        const result = await exchangeVaultToken(client, opts.vtk);
 
         if (globals.json) {
           output.json(result);
@@ -102,9 +106,11 @@ function tokenExchangeCommand(): Command {
           ['Name', result.name],
         ]);
       } catch (error: unknown) {
-        if (error instanceof ORPCError) {
+        if (error instanceof ORPCError || error instanceof ApiError) {
           if (error.status === 401) {
             output.error('Not authenticated. Run `anima auth login` to authenticate.');
+          } else if (error.status === 403) {
+            output.error(INJECTOR_GATE_403_MESSAGE);
           } else if (error.status === 404 || error.status === 410) {
             output.error('Token is invalid, expired, or already used.');
           } else {

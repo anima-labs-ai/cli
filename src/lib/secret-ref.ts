@@ -134,7 +134,7 @@ export async function loadAnimaConfig(startDir: string = process.cwd()): Promise
   }
 }
 
-interface VaultCredential {
+export interface VaultCredential {
   id: string;
   type: string;
   name: string;
@@ -145,6 +145,25 @@ interface VaultCredential {
   apiKey?: { key?: string };
   oauthToken?: { accessToken?: string };
   certificate?: { privateKey?: string };
+}
+
+/**
+ * Guidance shown when a token exchange returns 403 because the caller's key is
+ * not an injector credential. Shared by `vault inject` and `vault token
+ * exchange` so the wording can't drift between the two surfaces.
+ */
+export const INJECTOR_GATE_403_MESSAGE =
+  'Token exchange is gated to injector credentials: use a master key, or grant this key the vault:inject scope. Agents should prefer `anima vault use` (server-side broker).';
+
+/**
+ * Exchange a single-use vtk_ token for its credential (plaintext fields).
+ * Raw /v1 path on purpose: the oRPC procedure was renamed to
+ * `exchangeTokenForInjection` server-side, but the HTTP path is stable, so
+ * this works on any contracts pin. The API gates it to injector credentials
+ * (master key or the vault:inject scope) — a plain agent key gets 403.
+ */
+export async function exchangeVaultToken(client: ApiClient, token: string): Promise<VaultCredential> {
+  return client.post<VaultCredential>('/v1/vault/token/exchange', { token });
 }
 
 /** Extract a value from a credential using a dotted path (e.g. "login.password"). */
@@ -222,13 +241,13 @@ export async function resolveSecretRefs(
         // Create a single-use vtk_ token then exchange it. This is two round-trips
         // instead of one, but each access produces a distinct audit log entry,
         // which is the whole point of tokens over direct reveal.
-        const tokenRes = await client.post<{ token: string }>('/vault/token', {
+        const tokenRes = await client.post<{ token: string }>('/v1/vault/token', {
           agentId: ref.agentId,
           credentialId: ref.credentialId,
           scope: 'autofill',
           ttlSeconds: 60,
         });
-        const cred = await client.post<VaultCredential>('/vault/token/exchange', { token: tokenRes.token });
+        const cred = await exchangeVaultToken(client, tokenRes.token);
         const fieldVal = extractField(cred, ref.field);
         if (fieldVal === undefined) {
           errors.push({ name, reason: `credential ${ref.credentialId} has no field "${ref.field}"` });

@@ -32,10 +32,12 @@ Commands:
                                    unresolved vault references
   reload [options]                 Reload vault snapshots on the server (use
                                    after rotating a secret at the provider)
-  unlock [options]                 Start a master-key reveal session with
-                                   explicit ceremony
   proxy [options]                  Run a local proxy that injects a vault
                                    credential into outbound requests
+  use [options]                    Call an API with a credential attached
+                                   server-side (secret never leaves Anima)
+  request                          Human-in-the-loop credential requests — a
+                                   human supplies the secret out-of-band
   agent                            Local vault-agent daemon for in-memory secret
                                    handling
   type [options]                   Ask the local daemon to type a credential
