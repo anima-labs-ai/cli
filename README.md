@@ -102,6 +102,16 @@ anima email domains deliverability  # Check deliverability status
 anima email domains delete    # Remove a domain
 ```
 
+### `inbox` — Manage email inboxes
+
+```bash
+anima inbox create        # Create an inbox (--username, --domain, --display-name, --agent)
+anima inbox list          # List inboxes
+anima inbox get <id>      # Get inbox details
+anima inbox update <id>   # Update display name or agent association
+anima inbox delete <id>   # Delete an inbox
+```
+
 ### `phone` — Manage phone numbers and SMS
 
 ```bash

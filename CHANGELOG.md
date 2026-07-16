@@ -25,6 +25,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- `anima inbox create|get|list|update|delete` — manage email inboxes (POST/GET/PATCH/DELETE `/v1/inboxes`). Create takes `--username`, `--domain`, `--display-name`, and `--agent`; update supports clearing fields via `--clear-display-name` / `--unlink-agent`. Closes the CLI gap with the SDK and MCP surfaces.
 - `anima verify <code>` — submit the verification OTP emailed to an agent's owner (POST `/v1/agent/verify`) to unlock full send capability. Previously `init` sent the OTP with no command to submit it, leaving the flow dead-ended.
 
 ### Changed
