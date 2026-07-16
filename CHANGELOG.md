@@ -6,8 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+
+- **`anima setup-mcp install` defaults to `--mode remote`** (the hosted gateway `https://mcp.useanima.sh/mcp`). The previous default, stdio, wrote configs pointing at five per-domain npm packages (`@anima-labs/mcp-agent`, `-email`, `-phone`, `-vault`, `-platform`) that were never published — every fresh install produced configs that could not resolve.
+- `anima setup-mcp install --mode stdio` now targets the one published package, `@anima-labs/mcp`, as a single unified `anima` entry. The `--server` per-domain filter is removed along with the split; an unknown `--mode` value is now rejected instead of silently coercing to stdio.
+- `anima demo` advertises only commands that actually exist (`email send --agent/--to/--subject/--body`, `email list`, `email get`). The fictional `email search`, `email reply`, `--text`/`--test` flags, and the entire `x402` flow (out of scope) are gone, along with the `--only-email`/`--only-x402` options; the demo is explicitly labeled a local simulation.
+
+### CI
+
+- Release and CI workflows fail if the rebrand-mangle token (`useanima.sh` + `s`, the mangled `anima.emails.*` identifier) appears anywhere in the repo.
+- Releases dispatch a Homebrew tap update (`anima-labs-ai/homebrew-tap`) after npm publish when `HOMEBREW_TAP_TOKEN` is configured; the tap also self-updates on a schedule.
+
 ### Fixed
 
+- `anima setup-mcp verify` now flags configs referencing the unpublished `@anima-labs/mcp-*` split packages as errors (with a migration hint) instead of reporting them as valid, and recognizes `npx @anima-labs/mcp` stdio configs.
 - The published npm package no longer declares `@anima/contracts` (a monorepo-local `file:` path) in `dependencies` — that entry made `npm install @anima-labs/cli` fail on any machine without the monorepo checked out next to it. The contracts are now bundled into `dist/cli.js` at build time; registry dependencies are unchanged.
 - `anima security events` / `anima security scan` resolve the organization client-side (`--org` flag, falling back to the configured default org) to match the API contract's required `orgId` path parameter.
 

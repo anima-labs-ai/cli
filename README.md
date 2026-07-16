@@ -22,7 +22,7 @@ The agent reads the skill manifest, installs the CLI, wires up Anima's MCP serve
 
 ### MCP servers
 
-Run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code) automatically. The default stdio mode installs the per-domain servers (`@anima-labs/mcp-agent`, `-email`, `-phone`, `-vault`, `-platform`); pass `--mode remote` to use the hosted gateway instead.
+Run `anima setup-mcp install --all` to wire every supported client (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code) automatically. The default remote mode points clients at the hosted gateway (`https://mcp.useanima.sh/mcp`, Bearer-authenticated); pass `--mode stdio` to run the [`@anima-labs/mcp`](https://www.npmjs.com/package/@anima-labs/mcp) server locally via `npx` instead.
 
 To wire a client manually, point it at the hosted gateway in `.mcp.json`:
 

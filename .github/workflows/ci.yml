@@ -50,6 +50,21 @@ jobs:
         with:
           path: cli
 
+      # A rebrand find-replace (anima.email → useanima.sh) once mangled the
+      # code identifier `anima.emails.*` into a nonsense token that shipped
+      # in SDK READMEs and toolkit source. Fail the build if it ever appears
+      # here. The token is assembled at runtime so this workflow file cannot
+      # trip its own gate.
+      - name: Lint — forbid rebrand-mangle token
+        working-directory: cli
+        run: |
+          banned="useanima.sh"
+          banned="${banned}s"
+          if grep -rn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=binaries -e "$banned" .; then
+            echo "::error::Found the rebrand-mangle token '$banned' (a mangled 'anima.emails.*' identifier — NOT a domain). Restore the original identifier."
+            exit 1
+          fi
+
       # Strict 40-hex validation: the value feeds actions/checkout `ref:`,
       # so reject anything that isn't a plain commit SHA.
       - name: Read pinned anima ref
