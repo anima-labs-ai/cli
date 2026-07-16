@@ -118,36 +118,42 @@ describe('setup-mcp commands', () => {
     expect(byName.get('Windsurf')).toBe(false);
   });
 
-  test('install writes correct config for Claude Desktop', async () => {
+  // C2 regression: the default install must produce a config that resolves
+  // TODAY. The former default (stdio + five @anima-labs/mcp-<domain>
+  // packages) pointed at npm packages that were never published — every
+  // fresh install 404'd. Default is now the hosted remote gateway.
+  test('install defaults to remote mode for Claude Desktop (no 404 packages)', async () => {
     const target = claudeDesktopPath(testConfigDir);
     mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
 
     await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'claude-desktop']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: Record<string, { command: string; args: string[]; env: { ANIMA_API_KEY: string } }>;
+      mcpServers: Record<string, { command: string; args: string[]; env: { ANIMA_TOKEN: string } }>;
     };
-    expect(saved.mcpServers['anima-agent'].command).toBe('npx');
-    expect(saved.mcpServers['anima-agent'].args).toEqual(['-y', '@anima-labs/mcp-agent']);
-    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
-    expect(saved.mcpServers['anima-email']).toBeDefined();
-    expect(saved.mcpServers['anima-phone']).toBeDefined();
-    expect(saved.mcpServers['anima-vault']).toBeDefined();
-    expect(saved.mcpServers['anima-platform']).toBeDefined();
+    const entry = saved.mcpServers.anima;
+    expect(entry.command).toBe('npx');
+    expect(entry.args).toContain('mcp-remote');
+    expect(entry.args).toContain('https://mcp.useanima.sh/mcp');
+    expect(entry.env.ANIMA_TOKEN).toBe('Bearer ak_stored_123');
+    // The unpublished per-domain split must never be written again.
+    expect(Object.keys(saved.mcpServers)).toEqual(['anima']);
+    expect(JSON.stringify(saved)).not.toContain('@anima-labs/mcp-');
   });
 
-  test('install writes correct config for Cursor', async () => {
+  test('install defaults to remote mode for Cursor (native HTTP)', async () => {
     const target = cursorPath(testConfigDir);
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     await program.parseAsync(['node', 'anima', 'setup-mcp', 'install', '--client', 'cursor']);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: Record<string, { command: string; args: string[]; env: { ANIMA_API_KEY: string } }>;
+      mcpServers: Record<string, { url: string; headers: Record<string, string> }>;
     };
-    expect(saved.mcpServers['anima-agent'].command).toBe('npx');
-    expect(saved.mcpServers['anima-agent'].args).toEqual(['-y', '@anima-labs/mcp-agent']);
-    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
+    expect(saved.mcpServers.anima.url).toBe('https://mcp.useanima.sh/mcp');
+    expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ak_stored_123');
+    expect(Object.keys(saved.mcpServers)).toEqual(['anima']);
+    expect(JSON.stringify(saved)).not.toContain('@anima-labs/mcp-');
   });
 
   test('install merges into existing config without overwriting', async () => {
@@ -168,7 +174,7 @@ describe('setup-mcp commands', () => {
     };
     expect(saved.foo).toBe('bar');
     expect(saved.mcpServers.existing).toBeDefined();
-    expect(saved.mcpServers['anima-agent']).toBeDefined();
+    expect(saved.mcpServers.anima).toBeDefined();
   });
 
   test('install creates backup before modifying existing config', async () => {
@@ -244,9 +250,9 @@ describe('setup-mcp commands', () => {
     ]);
 
     const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
-      mcpServers: Record<string, { env: { ANIMA_API_KEY: string } }>;
+      mcpServers: Record<string, { headers: Record<string, string> }>;
     };
-    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_override_999');
+    expect(saved.mcpServers.anima.headers.Authorization).toBe('Bearer ak_override_999');
   });
 
   test('errors on invalid client name', async () => {
@@ -337,7 +343,9 @@ describe('setup-mcp commands', () => {
     expect(saved.mcpServers.anima.env.ANIMA_TOKEN).toBe('Bearer ak_custom_456');
   });
 
-  test('install --mode stdio (default) writes standard npx config', async () => {
+  // C2 regression: stdio mode must target the ONE package that is actually
+  // published on npm (@anima-labs/mcp), not the unpublished per-domain split.
+  test('install --mode stdio targets the published @anima-labs/mcp package', async () => {
     const target = cursorPath(testConfigDir);
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
@@ -352,9 +360,12 @@ describe('setup-mcp commands', () => {
         env: { ANIMA_API_KEY: string };
       }>;
     };
-    expect(saved.mcpServers['anima-agent'].command).toBe('npx');
-    expect(saved.mcpServers['anima-agent'].args).toEqual(['-y', '@anima-labs/mcp-agent']);
-    expect(saved.mcpServers['anima-agent'].env.ANIMA_API_KEY).toBe('ak_stored_123');
+    const entry = saved.mcpServers.anima;
+    expect(entry.command).toBe('npx');
+    expect(entry.args).toEqual(['-y', '@anima-labs/mcp']);
+    expect(entry.env.ANIMA_API_KEY).toBe('ak_stored_123');
+    expect(Object.keys(saved.mcpServers)).toEqual(['anima']);
+    expect(JSON.stringify(saved)).not.toContain('@anima-labs/mcp-');
   });
 
   test('install --mode remote writes native HTTP config for Cursor', async () => {
@@ -463,7 +474,23 @@ describe('setup-mcp commands', () => {
     expect(animaInputs.length).toBe(1);
   });
 
-  test('--url without --mode remote errors', async () => {
+  test('--url without an explicit --mode works (remote is the default)', async () => {
+    const target = cursorPath(testConfigDir);
+    mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
+
+    await program.parseAsync([
+      'node', 'anima', 'setup-mcp', 'install',
+      '--client', 'cursor',
+      '--url', 'https://custom.example.com/mcp',
+    ]);
+
+    const saved = JSON.parse(readFileSync(target, 'utf-8')) as {
+      mcpServers: Record<string, { url: string }>;
+    };
+    expect(saved.mcpServers.anima.url).toBe('https://custom.example.com/mcp');
+  });
+
+  test('--url with --mode stdio errors', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     const exitSpy = mock(() => {});
@@ -478,6 +505,7 @@ describe('setup-mcp commands', () => {
       await program.parseAsync([
         'node', 'anima', 'setup-mcp', 'install',
         '--client', 'cursor',
+        '--mode', 'stdio',
         '--url', 'https://custom.example.com/mcp',
       ]);
     } catch {
@@ -487,6 +515,8 @@ describe('setup-mcp commands', () => {
     console.error = originalError;
 
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join(' ');
+    expect(stderr).toContain('--url can only be used with --mode remote');
   });
 
   test('install --mode remote --json includes mode and urls in output', async () => {
@@ -517,7 +547,7 @@ describe('setup-mcp commands', () => {
     expect(payload.count).toBe(1);
   });
 
-  test('install --mode remote rejects --server domain filtering', async () => {
+  test('install rejects an unknown --mode value instead of silently coercing', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
     const exitSpy = mock(() => {});
@@ -532,8 +562,7 @@ describe('setup-mcp commands', () => {
       await program.parseAsync([
         'node', 'anima', 'setup-mcp', 'install',
         '--client', 'cursor',
-        '--mode', 'remote',
-        '--server', 'email',
+        '--mode', 'local',
       ]);
     } catch {
     } finally {
@@ -543,7 +572,7 @@ describe('setup-mcp commands', () => {
 
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
     const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join(' ');
-    expect(stderr).toContain('--server');
+    expect(stderr).toContain('Invalid mode');
   });
 
   test('status shows mode for configured clients', async () => {
@@ -666,6 +695,70 @@ describe('setup-mcp commands', () => {
     };
     expect(payload.results[0].status).toBe('ok');
     expect(payload.results[0].mode).toBe('stdio');
+  });
+
+  test('verify accepts the published @anima-labs/mcp stdio config', async () => {
+    const cursor = cursorPath(testConfigDir);
+    mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
+    writeFileSync(cursor, JSON.stringify({
+      mcpServers: {
+        anima: {
+          command: 'npx',
+          args: ['-y', '@anima-labs/mcp'],
+          env: { ANIMA_API_KEY: 'ak_test_123' },
+        },
+      },
+    }, null, 2));
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await program.parseAsync([
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+    ]);
+
+    console.log = originalLog;
+
+    const payload = parseLastJsonLog(logSpy) as {
+      results: Array<{ client: string; status: string; mode: string; issues: string[] }>;
+    };
+    expect(payload.results[0].status).toBe('ok');
+    expect(payload.results[0].mode).toBe('stdio');
+    expect(payload.results[0].issues).toEqual([]);
+  });
+
+  // C2 regression: configs written by older CLI versions reference the
+  // per-domain packages that were never published to npm. verify must call
+  // that out as broken instead of blessing a config that can never resolve.
+  test('verify flags legacy unpublished split-package configs as errors', async () => {
+    const cursor = cursorPath(testConfigDir);
+    mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
+    writeFileSync(cursor, JSON.stringify({
+      mcpServers: {
+        'anima-email': {
+          command: 'npx',
+          args: ['-y', '@anima-labs/mcp-email'],
+          env: { ANIMA_API_KEY: 'ak_test_123' },
+        },
+      },
+    }, null, 2));
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await program.parseAsync([
+      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+    ]);
+
+    console.log = originalLog;
+
+    const payload = parseLastJsonLog(logSpy) as {
+      results: Array<{ client: string; status: string; mode: string; issues: string[] }>;
+    };
+    expect(payload.results[0].status).toBe('error');
+    expect(payload.results[0].issues.join(' ')).toContain('@anima-labs/mcp-email is not published on npm');
   });
 
   test('verify detects missing API key in stdio config', async () => {

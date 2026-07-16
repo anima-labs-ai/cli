@@ -15,32 +15,26 @@ import {
 
 type McpInstallMode = 'stdio' | 'remote';
 
-/** Domain MCP servers available for installation */
-type McpServerDomain = 'agent' | 'email' | 'phone' | 'vault' | 'platform';
-
-const MCP_SERVER_DOMAINS: McpServerDomain[] = ['agent', 'email', 'phone', 'vault', 'platform'];
-
 /** Hosted MCP gateway — one Bearer-authenticated endpoint serving every domain */
 const REMOTE_GATEWAY_URL = 'https://mcp.useanima.sh/mcp';
 
-/** Entry name for the unified gateway; verify/status/uninstall already recognize it */
-const REMOTE_ENTRY_NAME = 'anima';
+/**
+ * The one published stdio server. The former per-domain split
+ * (`@anima-labs/mcp-agent`, `-email`, `-phone`, `-vault`, `-platform`)
+ * never shipped to npm — configs referencing those packages can never
+ * resolve, which is why stdio installs target this package only.
+ */
+const STDIO_PACKAGE = '@anima-labs/mcp';
 
-function getPackageName(server: McpServerDomain): string {
-  return `@anima-labs/mcp-${server}`;
-}
-
-function getServerEntryName(server: McpServerDomain): string {
-  return `anima-${server}`;
-}
+/** Server entry name in client configs; verify/status/uninstall recognize it */
+const ENTRY_NAME = 'anima';
 
 interface InstallOptions {
   client?: string;
   all?: boolean;
   apiKey?: string;
-  mode?: McpInstallMode;
+  mode?: string;
   url?: string;
-  server?: string;
 }
 
 interface McpServerConfigStdio {
@@ -190,20 +184,14 @@ async function resolveInstallTargets(opts: InstallOptions): Promise<McpClientDef
   return selectedClients;
 }
 
-function resolveServerDomains(serverOpt?: string): McpServerDomain[] {
-  if (!serverOpt || serverOpt === 'all') {
-    return [...MCP_SERVER_DOMAINS];
+function resolveMode(modeOpt?: string): McpInstallMode {
+  if (modeOpt === undefined || modeOpt === 'remote') {
+    return 'remote';
   }
-
-  const domains = serverOpt.split(',').map((s) => s.trim()) as McpServerDomain[];
-  for (const domain of domains) {
-    if (!MCP_SERVER_DOMAINS.includes(domain)) {
-      throw new Error(
-        `Invalid server "${domain}". Valid values: ${MCP_SERVER_DOMAINS.join(', ')}, all`,
-      );
-    }
+  if (modeOpt === 'stdio') {
+    return 'stdio';
   }
-  return domains;
+  throw new Error(`Invalid mode "${modeOpt}". Valid values: remote, stdio`);
 }
 
 async function resolveApiKey(override?: string): Promise<string> {
@@ -228,10 +216,10 @@ async function resolveApiKey(override?: string): Promise<string> {
   return input;
 }
 
-function buildStdioEntry(apiKey: string, server: McpServerDomain): McpServerConfigStdio {
+function buildStdioEntry(apiKey: string): McpServerConfigStdio {
   return {
     command: 'npx',
-    args: ['-y', getPackageName(server)],
+    args: ['-y', STDIO_PACKAGE],
     env: {
       ANIMA_API_KEY: apiKey,
     },
@@ -291,21 +279,18 @@ function buildRemoteEntry(
 function installForClient(
   client: McpClientDefinition,
   apiKey: string,
-  servers: McpServerDomain[],
-  mode: McpInstallMode = 'stdio',
+  mode: McpInstallMode,
   url?: string,
 ): void {
   const config = readJsonFile(client.configPath);
   const serverMap = getServerMap(config, client.serverKey);
 
-  if (mode === 'remote') {
-    // The gateway serves every domain at one endpoint — a single unified entry.
-    serverMap[REMOTE_ENTRY_NAME] = buildRemoteEntry(apiKey, url ?? REMOTE_GATEWAY_URL, client.name);
-  } else {
-    for (const server of servers) {
-      serverMap[getServerEntryName(server)] = buildStdioEntry(apiKey, server);
-    }
-  }
+  // One unified entry in both modes: the hosted gateway serves every domain
+  // at a single endpoint, and the stdio package registers every tool group.
+  serverMap[ENTRY_NAME] =
+    mode === 'remote'
+      ? buildRemoteEntry(apiKey, url ?? REMOTE_GATEWAY_URL, client.name)
+      : buildStdioEntry(apiKey);
 
   config[client.serverKey] = serverMap;
 
@@ -333,68 +318,59 @@ function injectVscodeInputs(config: Record<string, unknown>): void {
 
 export function installMcpCommand(): Command {
   return new Command('install')
-    .description('Install Anima MCP server(s) in supported clients')
+    .description('Install the Anima MCP server in supported clients')
     .option('--client <name>', 'Target client')
     .option('--all', 'Configure all detected clients')
     .option('--api-key <key>', 'API key override')
-    .option('--mode <mode>', 'Connection mode: stdio (local) or remote (hosted)', 'stdio')
-    .option('--url <endpoint>', 'Remote endpoint URL override')
     .option(
-      '--server <name>',
-      `Domain server(s) to install, stdio mode only: ${MCP_SERVER_DOMAINS.join(', ')}, all (default: all)`,
-      'all',
+      '--mode <mode>',
+      `Connection mode: remote (hosted gateway) or stdio (local ${STDIO_PACKAGE})`,
+      'remote',
     )
+    .option('--url <endpoint>', 'Remote endpoint URL override')
     .action(async function (this: Command) {
       const globals = this.optsWithGlobals<GlobalOptions & InstallOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
-        const mode: McpInstallMode = globals.mode === 'remote' ? 'remote' : 'stdio';
+        const mode = resolveMode(globals.mode);
 
         if (globals.url && mode !== 'remote') {
           throw new Error('--url can only be used with --mode remote');
         }
 
-        if (mode === 'remote' && globals.server && globals.server !== 'all') {
-          throw new Error(
-            '--server applies to stdio mode only — the hosted gateway serves all domains at a single endpoint.',
-          );
-        }
-
         const targets = await resolveInstallTargets(globals);
-        const servers = resolveServerDomains(globals.server);
         const apiKey = await resolveApiKey(globals.apiKey);
 
         for (const client of targets) {
-          installForClient(client, apiKey, servers, mode, globals.url);
+          installForClient(client, apiKey, mode, globals.url);
         }
 
         const endpoint = globals.url ?? REMOTE_GATEWAY_URL;
-        const entryNames =
-          mode === 'remote' ? [REMOTE_ENTRY_NAME] : servers.map(getServerEntryName);
 
         if (globals.json) {
           output.json({
             configured: targets.map((client) => client.name as McpClientName),
             count: targets.length,
             mode,
-            servers: mode === 'remote' ? [REMOTE_ENTRY_NAME] : servers,
-            ...(mode === 'remote' ? { urls: [endpoint] } : {}),
+            servers: [ENTRY_NAME],
+            ...(mode === 'remote' ? { urls: [endpoint] } : { package: STDIO_PACKAGE }),
           });
           return;
         }
 
         output.success(
-          `Configured ${entryNames.length} MCP server${entryNames.length === 1 ? '' : 's'} for ${targets.length} client${targets.length === 1 ? '' : 's'} (${mode} mode).`,
+          `Configured the "${ENTRY_NAME}" MCP server for ${targets.length} client${targets.length === 1 ? '' : 's'} (${mode} mode).`,
         );
         output.table(
           ['Client', 'Config Path'],
           targets.map((client) => [client.label, client.configPath]),
         );
-        output.info(`Servers: ${entryNames.join(', ')}`);
 
         if (mode === 'remote') {
           output.info(`Remote endpoint: ${endpoint}`);
+        } else {
+          output.info(`Local server package: ${STDIO_PACKAGE} (via npx)`);
         }
       } catch (error: unknown) {
         if (error instanceof Error) {

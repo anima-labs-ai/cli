@@ -130,7 +130,18 @@ function validateEntry(entry: McpServerEntry): {
     return { mode: 'stdio', issues };
   }
 
-  if (entry.command === 'npx' && entry.args?.some((a) => a.startsWith('@anima-labs/mcp-'))) {
+  // Legacy per-domain split packages (@anima-labs/mcp-agent, -email, ...)
+  // were never published to npm — configs referencing them can never
+  // resolve. Flag loudly instead of reporting a broken config as ok.
+  const splitPackage = entry.args?.find((a) => a.startsWith('@anima-labs/mcp-'));
+  if (entry.command === 'npx' && splitPackage) {
+    issues.push(
+      `package ${splitPackage} is not published on npm — re-run \`anima setup-mcp install\` to migrate to @anima-labs/mcp`,
+    );
+    return { mode: 'stdio', issues };
+  }
+
+  if (entry.command === 'npx' && entry.args?.includes('@anima-labs/mcp')) {
     if (!entry.env?.ANIMA_API_KEY) {
       issues.push('missing ANIMA_API_KEY in env');
     }
