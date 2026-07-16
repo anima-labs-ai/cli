@@ -58,7 +58,7 @@ export function searchEmailsCommand(): Command {
 
       try {
         if (opts.semantic) {
-          assertNoFlags('are full-text options; not valid with --semantic', [
+          assertNoFlags('cannot be combined with --semantic (full-text options)', [
             ['--direction', opts.direction],
             ['--status', opts.status],
             ['--cursor', opts.cursor],
