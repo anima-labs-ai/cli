@@ -12,6 +12,7 @@ import { emailCommands } from "./commands/email/index.js";
 import { extensionCommands } from "./commands/extension/index.js";
 import { generateCommand } from "./commands/generate/index.js";
 import { identityCommands } from "./commands/identity/index.js";
+import { inboxCommands } from "./commands/inbox/index.js";
 import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
 import { onboardCommand } from "./commands/onboard/index.js";
@@ -74,6 +75,7 @@ export function createProgram(): Command {
 	program.addCommand(authCommands());
 	program.addCommand(identityCommands());
 	program.addCommand(emailCommands());
+	program.addCommand(inboxCommands());
 	program.addCommand(phoneCommands());
 	program.addCommand(podCommands());
 	program.addCommand(registryCommands());
