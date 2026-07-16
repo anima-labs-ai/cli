@@ -25,6 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- `anima email draft create|get|list|send|delete` — email drafts (`/v1/email/drafts`). Drafts may be incomplete (only `--agent` is required at create); `send` atomically converts the draft into a real message (email.send semantics — threading, scanning, limits) and deletes the draft, returning the new message id. Closes the drafts gap with the MCP surface (C5).
+- `anima email search <query>` — full-text search over your emails (POST `/v1/messages/search`, scoped to the EMAIL channel; use `anima message search` for other channels). Add `--semantic` to rank by embedding similarity instead (POST `/v1/messages/search/semantic`, `--threshold` 0–1, limit 1–50); an embedding-provider outage (503) is reported as such rather than as "no matches". Mode-specific flags fail loudly in the wrong mode. The first-run `anima demo` advertises email search again — truthfully this time (B11).
 - `anima inbox create|get|list|update|delete` — manage email inboxes (POST/GET/PATCH/DELETE `/v1/inboxes`). Create takes `--username`, `--domain`, `--display-name`, and `--agent`; update supports clearing fields via `--clear-display-name` / `--unlink-agent`. Closes the CLI gap with the SDK and MCP surfaces.
 - `anima verify <code>` — submit the verification OTP emailed to an agent's owner (POST `/v1/agent/verify`) to unlock full send capability. Previously `init` sent the OTP with no command to submit it, leaving the flow dead-ended.
 
