@@ -63,6 +63,57 @@ export function validateLimit(value: string): string {
 }
 
 /**
+ * The one bounded-integer check behind both numeric-arg helpers below.
+ *
+ * `Number`, not `parseInt` — `parseInt('20abc')` is `20`, so a fat-fingered
+ * value would silently pass at a bound nobody typed. `max` is optional: an
+ * omitted ceiling means "positive integer, no upper bound" (a rate limit, a
+ * TTL), and the message adapts so it never claims a range that isn't enforced.
+ */
+function checkBoundedInt(label: string, value: string, min: number, max?: number): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || (max !== undefined && parsed > max)) {
+    const requirement =
+      max !== undefined
+        ? `an integer between ${min} and ${max}`
+        : min === 1
+          ? 'a positive integer'
+          : `an integer >= ${min}`;
+    throw new InvalidArgumentError(`${label} must be ${requirement}`);
+  }
+  return parsed;
+}
+
+/**
+ * Commander parser factory for a bounded-integer option — the parse-time twin
+ * of [[parseBoundedInt]], for flags whose bounds are fixed and known upfront:
+ * `.option('--max-attempts <n>', '…', boundedInt('--max-attempts', 1, 10))`.
+ * Omit `max` for an open-ended positive integer (a rate limit). Returns the
+ * parsed number, so the call site's options type is `number`, not the raw
+ * string.
+ */
+export function boundedInt(label: string, min: number, max?: number) {
+  return (value: string): number => checkBoundedInt(label, value, min, max);
+}
+
+/**
+ * Validate a bounded integer from *inside an action body*, for the cases a
+ * Commander parser can't cover: `email search`'s `--limit` ceiling is 100 in
+ * full-text mode but 50 with `--semantic`, and that mode isn't known when
+ * Commander parses the flag. Returns `undefined` for an absent value so the
+ * caller applies its own default (`?? 20`); throws InvalidArgumentError, which
+ * the command's own catch renders as a usage error.
+ */
+export function parseBoundedInt(
+  flag: string,
+  value: string | undefined,
+  min: number,
+  max: number,
+): number | undefined {
+  return value === undefined ? undefined : checkBoundedInt(flag, value, min, max);
+}
+
+/**
  * Commander reducer for a repeatable string option — `--label a --label b`
  * accumulates into `['a', 'b']`. Pair it with a `[]` default:
  * `.option('--label <label>', '…', collectValue, [])`.
