@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createProgram } from '../../cli.js';
+import { runCapturingExit } from '../helpers/test-utils.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
@@ -50,6 +51,12 @@ function vscodeDir(baseDir: string): string {
 
 function claudeCodePath(baseDir: string): string {
   return join(baseDir, '.claude.json');
+}
+
+/** Same as `parseLastJsonLog`, for the already-captured logs of a run that exits. */
+function parseLastJson(logs: string[]): unknown {
+  const last = logs.at(-1);
+  return typeof last === 'string' ? JSON.parse(last) : undefined;
 }
 
 function parseLastJsonLog(logSpy: ReturnType<typeof mock>): unknown {
@@ -744,21 +751,18 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await program.parseAsync([
-      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+    const { code, logs } = await runCapturingExit(program, [
+      '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
-    console.log = originalLog;
-
-    const payload = parseLastJsonLog(logSpy) as {
+    const payload = parseLastJson(logs) as {
       results: Array<{ client: string; status: string; mode: string; issues: string[] }>;
     };
     expect(payload.results[0].status).toBe('error');
     expect(payload.results[0].issues.join(' ')).toContain('@anima-labs/mcp-email is not published on npm');
+    // The status in the payload is only half the answer: `setup-mcp verify ||
+    // exit 1` reads the exit code, and it must fail in --json too.
+    expect(code).toBe(1);
   });
 
   test('verify detects missing API key in stdio config', async () => {
@@ -774,21 +778,16 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await program.parseAsync([
-      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+    const { code, logs } = await runCapturingExit(program, [
+      '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
-    console.log = originalLog;
-
-    const payload = parseLastJsonLog(logSpy) as {
+    const payload = parseLastJson(logs) as {
       results: Array<{ client: string; status: string; issues: string[] }>;
     };
     expect(payload.results[0].status).toBe('error');
     expect(payload.results[0].issues).toContain('missing ANIMA_API_KEY in env');
+    expect(code).toBe(1);
   });
 
   test('verify detects missing Bearer prefix in remote config', async () => {
@@ -804,21 +803,16 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await program.parseAsync([
-      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+    const { code, logs } = await runCapturingExit(program, [
+      '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
-    console.log = originalLog;
-
-    const payload = parseLastJsonLog(logSpy) as {
+    const payload = parseLastJson(logs) as {
       results: Array<{ client: string; status: string; issues: string[] }>;
     };
     expect(payload.results[0].status).toBe('error');
     expect(payload.results[0].issues).toContain('ANIMA_TOKEN must start with "Bearer "');
+    expect(code).toBe(1);
   });
 
   test('verify --all checks all configured clients', async () => {
@@ -996,20 +990,15 @@ describe('setup-mcp commands', () => {
   test('verify errors on unconfigured client', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
-    const logSpy = mock(() => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await program.parseAsync([
-      'node', 'anima', '--json', 'setup-mcp', 'verify', '--client', 'cursor',
+    const { code, logs } = await runCapturingExit(program, [
+      '--json', 'setup-mcp', 'verify', '--client', 'cursor',
     ]);
 
-    console.log = originalLog;
-
-    const payload = parseLastJsonLog(logSpy) as {
+    const payload = parseLastJson(logs) as {
       results: Array<{ client: string; status: string; issues: string[] }>;
     };
     expect(payload.results[0].status).toBe('error');
     expect(payload.results[0].issues).toContain('not configured');
+    expect(code).toBe(1);
   });
 });

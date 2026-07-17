@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createProgram } from '../../cli.js';
+import { runCapturingExit } from '../helpers/test-utils.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
@@ -45,42 +46,6 @@ describe('config commands', () => {
     writeFileSync(join(testConfigDir, 'config.json'), JSON.stringify(config, null, 2));
   }
 
-  /**
-   * Run a command that is expected to fail, capturing what the user sees and
-   * the code the shell gets. `process.exit` throws here so the handler stops
-   * where a real exit would — otherwise the action runs on past the error and
-   * e.g. writes the key it just rejected.
-   */
-  async function runCapturingExit(
-    argv: string[],
-  ): Promise<{ code: number | undefined; message: string }> {
-    const errorSpy = mock(() => {});
-    const origError = console.error;
-    const origExit = process.exit;
-    let code: number | undefined;
-
-    console.error = errorSpy;
-    process.exit = ((c?: number) => {
-      code = c;
-      throw new Error('__exit__');
-    }) as unknown as typeof process.exit;
-
-    program.exitOverride();
-    try {
-      await program.parseAsync(['node', 'anima', ...argv]);
-    } catch (error: unknown) {
-      if (!(error instanceof Error) || error.message !== '__exit__') throw error;
-    } finally {
-      console.error = origError;
-      process.exit = origExit;
-    }
-
-    return {
-      code,
-      message: errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n'),
-    };
-  }
-
   describe('config set', () => {
     test('sets a top-level config value', async () => {
       program.exitOverride();
@@ -104,11 +69,11 @@ describe('config commands', () => {
     });
 
     test('rejects invalid config key', async () => {
-      const { code, message } = await runCapturingExit([
+      const { code, errors } = await runCapturingExit(program, [
         'config', 'set', 'invalidKey', 'value',
       ]);
 
-      expect(message).toContain('Invalid config key');
+      expect(errors.join('\n')).toContain('Invalid config key');
       // Bad input, so 2 — matching `generate`, `completion` and `voice place`.
       // Without this the shell is told the set succeeded.
       expect(code).toBe(2);
@@ -149,9 +114,9 @@ describe('config commands', () => {
     test('reports error for unset key', async () => {
       writeAppConfig({});
 
-      const { code, message } = await runCapturingExit(['config', 'get', 'defaultOrg']);
+      const { code, errors } = await runCapturingExit(program, ['config', 'get', 'defaultOrg']);
 
-      expect(message).toContain('is not set');
+      expect(errors.join('\n')).toContain('is not set');
       // A lookup miss, not bad input — 1, like `git config --get` on a key
       // that isn't there.
       expect(code).toBe(1);
@@ -252,11 +217,11 @@ describe('config commands', () => {
     test('errors when switching to nonexistent profile', async () => {
       writeAppConfig({});
 
-      const { code, message } = await runCapturingExit([
+      const { code, errors } = await runCapturingExit(program, [
         'config', 'profile', 'use', 'nonexistent',
       ]);
 
-      expect(message).toContain('does not exist');
+      expect(errors.join('\n')).toContain('does not exist');
       expect(code).toBe(1);
     });
 
@@ -333,7 +298,7 @@ describe('config commands', () => {
   describe('error paths exit non-zero', () => {
     test('config set rejects an empty key with exit 2', async () => {
       writeAppConfig({});
-      const { code } = await runCapturingExit(['config', 'set', '', 'value']);
+      const { code } = await runCapturingExit(program, ['config', 'set', '', 'value']);
       expect(code).toBe(2);
     });
 
@@ -341,32 +306,32 @@ describe('config commands', () => {
       // The rejection must also not leave the bad key in the file — the exit
       // is what stops the write.
       writeAppConfig({});
-      await runCapturingExit(['config', 'set', 'invalidKey', 'value']);
+      await runCapturingExit(program, ['config', 'set', 'invalidKey', 'value']);
       expect(readAppConfig().invalidKey).toBeUndefined();
     });
 
     test('config get rejects an invalid key with exit 2', async () => {
       writeAppConfig({});
-      const { code, message } = await runCapturingExit(['config', 'get', 'invalidKey']);
-      expect(message).toContain('Invalid config key');
+      const { code, errors } = await runCapturingExit(program, ['config', 'get', 'invalidKey']);
+      expect(errors.join('\n')).toContain('Invalid config key');
       expect(code).toBe(2);
     });
 
     test('config get exits 1 when the key is not set in the named profile', async () => {
       writeAppConfig({ profiles: { prod: { defaultOrg: 'prod-org' } } });
-      const { code, message } = await runCapturingExit([
+      const { code, errors } = await runCapturingExit(program, [
         'config', 'get', '--profile', 'prod', 'apiUrl',
       ]);
-      expect(message).toContain('not set in profile');
+      expect(errors.join('\n')).toContain('not set in profile');
       expect(code).toBe(1);
     });
 
     test('config profile delete exits 1 for an unknown profile', async () => {
       writeAppConfig({});
-      const { code, message } = await runCapturingExit([
+      const { code, errors } = await runCapturingExit(program, [
         'config', 'profile', 'delete', 'nonexistent',
       ]);
-      expect(message).toContain('does not exist');
+      expect(errors.join('\n')).toContain('does not exist');
       expect(code).toBe(1);
     });
   });
