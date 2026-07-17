@@ -21,8 +21,7 @@ export function whoamiCommand(): Command {
       const auth = await getAuthConfig();
 
       if (!auth.token && !auth.apiKey) {
-        output.error('Not authenticated. Run `anima auth login` first.');
-        process.exit(1);
+        output.fatal('Not authenticated. Run `anima auth login` first.');
       }
 
       // Run update check in parallel with the API call. Update check times out

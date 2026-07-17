@@ -63,8 +63,7 @@ export function execCommand(): Command {
       // command with `--` so flags don't get interpreted by us.
       const childArgv = this.args;
       if (!opts.dryRun && childArgv.length === 0) {
-        output.error('No command to run. Usage: am vault exec [opts] -- <cmd> [args...]');
-        process.exit(2);
+        output.fatal('No command to run. Usage: am vault exec [opts] -- <cmd> [args...]', 2);
       }
 
       try {
@@ -80,8 +79,7 @@ export function execCommand(): Command {
         const credIds = opts.cred ?? [];
         const asNames = opts.as ?? [];
         if (credIds.length !== asNames.length) {
-          output.error(`--cred and --as must be paired: got ${credIds.length} creds and ${asNames.length} names`);
-          process.exit(2);
+          output.fatal(`--cred and --as must be paired: got ${credIds.length} creds and ${asNames.length} names`, 2);
         }
         for (let i = 0; i < credIds.length; i++) {
           const envName = asNames[i];
@@ -101,8 +99,7 @@ export function execCommand(): Command {
         const { values, errors } = await resolveSecretRefs(client, refs);
         if (errors.length > 0) {
           for (const e of errors) output.error(`Failed to resolve ${e.name}: ${e.reason}`);
-          output.error('Aborting: refusing to run child with unresolved secrets.');
-          process.exit(1);
+          output.fatal('Aborting: refusing to run child with unresolved secrets.');
         }
 
         output.debug(`Resolved ${Object.keys(values).length} secret(s)`);
@@ -141,8 +138,7 @@ export function execCommand(): Command {
         });
 
         child.on('error', (err) => {
-          output.error(`Failed to spawn: ${err.message}`);
-          process.exit(127);
+          output.fatal(`Failed to spawn: ${err.message}`, 127);
         });
 
         child.on('exit', (code, signal) => {

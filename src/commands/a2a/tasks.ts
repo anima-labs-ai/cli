@@ -36,8 +36,7 @@ export function listTasksCommand(): Command {
         if (opts.limit) {
           const parsedLimit = Number.parseInt(opts.limit, 10);
           if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
-            output.error('Limit must be an integer between 1 and 100.');
-            process.exit(1);
+            output.fatal('Limit must be an integer between 1 and 100.');
           }
           limit = parsedLimit;
         }

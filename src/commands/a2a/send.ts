@@ -21,15 +21,15 @@ export function sendTaskCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<SendOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      // Annotated, not inferred, so a later output.fatal()'s `never` narrows control flow.
+      const output: Output = Output.fromGlobals(globals);
 
       try {
         let parsedInput: Record<string, unknown>;
         try {
           parsedInput = JSON.parse(opts.input) as Record<string, unknown>;
         } catch {
-          output.error('Invalid JSON for --input');
-          process.exit(1);
+          output.fatal('Invalid JSON for --input');
         }
 
         const orpc = await requireOrpcAuth(globals);

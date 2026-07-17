@@ -274,6 +274,30 @@ export class Output {
     console.error(`${pc.red('✗')} ${message}`);
   }
 
+  /**
+   * Report an error and exit — the two halves of a failure that must never
+   * come apart. `error()` alone leaves the process to exit 0, which reports
+   * `{"status":"error"}` to a caller whose `set -e` script then happily
+   * continues; that shipped twice (`setup-mcp verify`, `address validate`)
+   * before it was caught. Returning `never` makes the omission unwritable:
+   * there is no path through `fatal` that doesn't exit.
+   *
+   * Renders identically to `error()` — it delegates, so the per-format
+   * `{"status":"error","message":...}` contract has one implementation and
+   * the two cannot drift.
+   *
+   * Convention for `code`: 2 = bad input (closed enum, malformed value),
+   * 1 = operation failed or lookup missed.
+   *
+   * Use `error()` directly only when the render and the exit are genuinely
+   * separate — e.g. `doctor`, `setup-mcp verify` and `address validate`
+   * render a verdict first and let the verdict decide the exit.
+   */
+  fatal(message: string, code = 1): never {
+    this.error(message);
+    process.exit(code);
+  }
+
   warn(message: string): void {
     if (this.format === 'agent' || this.format === 'jsonl') {
       console.log(compactJson({ status: 'warning', message }));

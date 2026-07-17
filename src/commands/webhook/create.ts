@@ -37,8 +37,7 @@ export function createWebhookCommand(): Command {
           try {
             payload.authConfig = JSON.parse(opts.authConfig);
           } catch {
-            output.error('--auth-config must be valid JSON, e.g. {"type":"bearer","token":"..."}');
-            process.exit(1);
+            output.fatal('--auth-config must be valid JSON, e.g. {"type":"bearer","token":"..."}');
           }
         }
         if (opts.rateLimitPerMinute !== undefined) {

@@ -200,10 +200,7 @@ export function generateCommand(): Command {
 
 			const kind = kindArg as ScaffoldKind;
 			if (!VALID_KINDS.includes(kind)) {
-				output.error(
-					`Unknown kind "${kindArg}". Use one of: ${VALID_KINDS.join(", ")}.`,
-				);
-				process.exit(2);
+				output.fatal(`Unknown kind "${kindArg}". Use one of: ${VALID_KINDS.join(", ")}.`, 2);
 			}
 
 			const scaffold = SCAFFOLDS[kind];
@@ -211,8 +208,7 @@ export function generateCommand(): Command {
 			const target = join(dir, scaffold.filename);
 
 			if (existsSync(target) && !opts.force) {
-				output.error(`${target} already exists. Pass --force to overwrite.`);
-				process.exit(1);
+				output.fatal(`${target} already exists. Pass --force to overwrite.`);
 			}
 
 			writeFileSync(target, scaffold.content, "utf-8");

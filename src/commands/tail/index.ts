@@ -140,20 +140,17 @@ export function tailCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<TailOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      // Annotated, not inferred, so a later output.fatal()'s `never` narrows control flow.
+      const output: Output = Output.fromGlobals(globals);
 
       if (opts.filter && !VALID_CHANNELS.has(opts.filter)) {
-        output.error(
-          `--filter must be one of email|sms|voice|vault, got "${opts.filter}"`,
-        );
-        process.exit(2);
+        output.fatal(`--filter must be one of email|sms|voice|vault, got "${opts.filter}"`, 2);
       }
 
       const auth = await getAuthConfig();
       const apiKey = auth.apiKey ?? auth.token;
       if (!apiKey) {
-        output.error('Not authenticated. Run `anima auth login` or set an API key first.');
-        process.exit(1);
+        output.fatal('Not authenticated. Run `anima auth login` or set an API key first.');
       }
       const apiUrl = auth.apiUrl ?? 'https://api.useanima.sh';
 
@@ -182,8 +179,7 @@ export function tailCommand(): Command {
           attempts += 1;
           const message = error instanceof Error ? error.message : String(error);
           if (attempts > MAX_RECONNECT_ATTEMPTS) {
-            output.error(`[am tail] giving up after ${attempts} attempts: ${message}`);
-            process.exit(1);
+            output.fatal(`[am tail] giving up after ${attempts} attempts: ${message}`);
           }
           output.warn(
             `[am tail] disconnected (${message}); retrying in ${backoff}ms (attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS})`,

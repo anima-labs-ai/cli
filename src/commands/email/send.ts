@@ -36,8 +36,7 @@ export function sendEmailCommand(): Command {
 
       try {
         if (opts.subject.length < 1 || opts.subject.length > 998) {
-          output.error('Subject must be between 1 and 998 characters.');
-          process.exit(1);
+          output.fatal('Subject must be between 1 and 998 characters.');
         }
 
         const orpc = await requireOrpcAuth(globals);

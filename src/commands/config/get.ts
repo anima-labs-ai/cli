@@ -19,8 +19,7 @@ export function configGetCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       if (!isValidConfigKey(key)) {
-        output.error(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`);
-        process.exit(2);
+        output.fatal(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`, 2);
       }
 
       const profileName = globals.profile;
@@ -35,8 +34,7 @@ export function configGetCommand(): Command {
           }
           console.log(profileVal);
         } else {
-          output.error(`Key "${key}" not set in profile "${profileName}"`);
-          process.exit(1);
+          output.fatal(`Key "${key}" not set in profile "${profileName}"`);
         }
         return;
       }
@@ -49,8 +47,7 @@ export function configGetCommand(): Command {
         }
         console.log(resolved);
       } else {
-        output.error(`Key "${key}" is not set`);
-        process.exit(1);
+        output.fatal(`Key "${key}" is not set`);
       }
     });
 }

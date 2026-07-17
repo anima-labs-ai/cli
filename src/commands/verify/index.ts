@@ -34,7 +34,8 @@ export function verifyCommand(): Command {
 		.argument("[code]", "6-digit verification code from the owner's email")
 		.action(async function (this: Command, code: string | undefined) {
 			const globals = this.optsWithGlobals<GlobalOptions>();
-			const output = Output.fromGlobals(globals);
+			// Annotated, not inferred, so a later output.fatal()'s `never` narrows control flow.
+			const output: Output = Output.fromGlobals(globals);
 			const isHuman = output.format === "human";
 
 			// Resolve the code: positional arg wins; an interactive human with
@@ -50,20 +51,15 @@ export function verifyCommand(): Command {
 					},
 				});
 				if (clack.isCancel(entered)) {
-					output.error("Cancelled.");
-					process.exit(1);
+					output.fatal("Cancelled.");
 				}
 				otp = (entered as string).trim();
 			}
 			if (!otp) {
-				output.error(
-					"Missing verification code. Usage: anima verify <code> — the 6-digit code emailed to the agent's owner.",
-				);
-				process.exit(1);
+				output.fatal("Missing verification code. Usage: anima verify <code> — the 6-digit code emailed to the agent's owner.");
 			}
 			if (!OTP_PATTERN.test(otp)) {
-				output.error("Code must be exactly 6 digits.");
-				process.exit(1);
+				output.fatal("Code must be exactly 6 digits.");
 			}
 
 			// The agent key from `anima init` (or `auth login`) authenticates
@@ -71,10 +67,7 @@ export function verifyCommand(): Command {
 			// from the credential, not from the request body.
 			const { credential } = await getResolvedAuthCredential(globals);
 			if (!credential) {
-				output.error(
-					"Not authenticated. Run `anima init` to create an agent (or `anima auth login`), then verify.",
-				);
-				process.exit(1);
+				output.fatal("Not authenticated. Run `anima init` to create an agent (or `anima auth login`), then verify.");
 			}
 
 			let result: { verified: boolean; auth_type: string };

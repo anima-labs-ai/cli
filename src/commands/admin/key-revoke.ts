@@ -26,8 +26,7 @@ export function keyRevokeCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       if (!opts.yes) {
-        output.error('Confirmation required. Re-run with --yes to revoke the key.');
-        process.exit(1);
+        output.fatal('Confirmation required. Re-run with --yes to revoke the key.');
       }
 
       try {

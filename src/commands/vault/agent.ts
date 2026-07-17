@@ -304,8 +304,7 @@ function agentStartCommand(): Command {
           fs.rm(PID_FILE, { force: true }).finally(() => process.exit(0));
         }, ttl * 1000).unref();
       } catch (error: unknown) {
-        output.error(`Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
-        process.exit(1);
+        output.fatal(`Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
 }
@@ -343,8 +342,7 @@ function agentStopCommand(): Command {
           await fs.rm(PID_FILE, { force: true });
           output.success('Daemon stopped (signal).');
         } catch (err) {
-          output.error(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
-          process.exit(1);
+          output.fatal(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     });
@@ -396,8 +394,7 @@ export function typeCommand(): Command {
 
       const pid = await isDaemonRunning();
       if (pid === null) {
-        output.error('Daemon not running. Start it with: am vault agent start');
-        process.exit(1);
+        output.fatal('Daemon not running. Start it with: am vault agent start');
       }
 
       try {
@@ -417,13 +414,11 @@ export function typeCommand(): Command {
         });
 
         if (!response.ok) {
-          output.error(`Type failed: ${response.error ?? 'unknown'}`);
-          process.exit(1);
+          output.fatal(`Type failed: ${response.error ?? 'unknown'}`);
         }
         output.success('Typed.');
       } catch (err) {
-        output.error(`IPC failed: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
+        output.fatal(`IPC failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     });
 }

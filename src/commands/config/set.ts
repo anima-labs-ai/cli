@@ -20,8 +20,7 @@ export function configSetCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       if (!isValidConfigKey(key)) {
-        output.error(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`);
-        process.exit(2);
+        output.fatal(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`, 2);
       }
 
       const config = await getConfig();

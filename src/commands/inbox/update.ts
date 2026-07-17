@@ -25,12 +25,10 @@ export function updateInboxCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       if (opts.displayName !== undefined && opts.clearDisplayName) {
-        output.error('--display-name and --clear-display-name are mutually exclusive.');
-        process.exit(1);
+        output.fatal('--display-name and --clear-display-name are mutually exclusive.');
       }
       if (opts.agent !== undefined && opts.unlinkAgent) {
-        output.error('--agent and --unlink-agent are mutually exclusive.');
-        process.exit(1);
+        output.fatal('--agent and --unlink-agent are mutually exclusive.');
       }
       if (
         opts.displayName === undefined &&
@@ -38,10 +36,7 @@ export function updateInboxCommand(): Command {
         opts.agent === undefined &&
         !opts.unlinkAgent
       ) {
-        output.error(
-          'Nothing to update. Pass --display-name, --clear-display-name, --agent, or --unlink-agent.',
-        );
-        process.exit(1);
+        output.fatal('Nothing to update. Pass --display-name, --clear-display-name, --agent, or --unlink-agent.');
       }
 
       try {

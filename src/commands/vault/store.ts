@@ -121,8 +121,7 @@ export function storeCommand(): Command {
 
       try {
         if (opts.generatePassword && opts.type !== 'login') {
-          output.error('--generate-password is only valid with --type login');
-          process.exit(1);
+          output.fatal('--generate-password is only valid with --type login');
         }
         const apiKeyFlagUsed =
           opts.provider !== undefined ||
@@ -131,18 +130,13 @@ export function storeCommand(): Command {
           opts.authHeader !== undefined ||
           opts.authScheme !== undefined;
         if (apiKeyFlagUsed && opts.type !== 'api_key') {
-          output.error('--provider/--key/--allowed-host/--auth-header/--auth-scheme require --type api_key');
-          process.exit(1);
+          output.fatal('--provider/--key/--allowed-host/--auth-header/--auth-scheme require --type api_key');
         }
         if (opts.type === 'api_key' && (!opts.provider || !opts.key)) {
-          output.error('--type api_key requires --provider and --key');
-          process.exit(1);
+          output.fatal('--type api_key requires --provider and --key');
         }
         if (opts.revealPolicy && opts.type !== 'api_key') {
-          output.error(
-            '--reveal-policy is currently supported with --type api_key here; other types follow the server defaults (set the policy via console or SDK)',
-          );
-          process.exit(1);
+          output.fatal('--reveal-policy is currently supported with --type api_key here; other types follow the server defaults (set the policy via console or SDK)');
         }
 
         // api_key store goes through the raw /v1 path: the broker fields
@@ -187,10 +181,7 @@ export function storeCommand(): Command {
           return;
         }
         if (opts.generatePassword && opts.password) {
-          output.error(
-            '--generate-password and --password are mutually exclusive — omit --password to have the vault generate one',
-          );
-          process.exit(1);
+          output.fatal('--generate-password and --password are mutually exclusive — omit --password to have the vault generate one');
         }
         const generationFlagUsed =
           opts.length !== undefined ||
@@ -199,8 +190,7 @@ export function storeCommand(): Command {
           opts.numbers === false ||
           opts.special === false;
         if (generationFlagUsed && !opts.generatePassword) {
-          output.error('Password generation options require --generate-password');
-          process.exit(1);
+          output.fatal('Password generation options require --generate-password');
         }
 
         let login: LoginCredentialPayload | undefined;
