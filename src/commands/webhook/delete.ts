@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function deleteWebhookCommand(): Command {
   return new Command('delete')
     .description('Delete a webhook')
-    .argument('<id>', 'Webhook ID')
+    .argument('<id>', 'Webhook ID', requireNonEmptyArg('Webhook ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function getMessageCommand(): Command {
   return new Command('get')
     .description('Get a message by ID')
-    .argument('<id>', 'Message ID')
+    .argument('<id>', 'Message ID', requireNonEmptyArg('Message ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

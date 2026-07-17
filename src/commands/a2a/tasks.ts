@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -21,7 +22,7 @@ interface TasksOptions {
 export function listTasksCommand(): Command {
   return new Command('tasks')
     .description('List A2A tasks for an agent')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .option('--status <status>', 'Filter by status (submitted, working, input_required, completed, failed, canceled)')
     .option('--cursor <cursor>', 'Pagination cursor')
     .option('--limit <number>', 'Page size (1-100, default 20)')

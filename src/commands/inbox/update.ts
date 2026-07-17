@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 interface UpdateInboxOptions {
   displayName?: string;
@@ -13,7 +14,7 @@ interface UpdateInboxOptions {
 export function updateInboxCommand(): Command {
   return new Command('update')
     .description('Update an inbox')
-    .argument('<id>', 'Inbox ID')
+    .argument('<id>', 'Inbox ID', requireNonEmptyArg('Inbox ID'))
     .option('--display-name <name>', 'New display name (max 128 characters)')
     .option('--clear-display-name', 'Clear the display name')
     .option('--agent <id>', 'Agent ID to associate with the inbox')

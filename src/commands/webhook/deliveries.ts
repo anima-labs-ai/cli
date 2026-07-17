@@ -2,6 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 interface DeliveriesOptions {
   limit?: string;
@@ -11,7 +12,7 @@ interface DeliveriesOptions {
 export function webhookDeliveriesCommand(): Command {
   return new Command('deliveries')
     .description('List webhook delivery history')
-    .argument('<id>', 'Webhook ID')
+    .argument('<id>', 'Webhook ID', requireNonEmptyArg('Webhook ID'))
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--cursor <cursor>', 'Pagination cursor')
     .action(async function (this: Command, id: string) {

@@ -3,11 +3,12 @@ import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
 import { formatDraftDetails } from './format.js';
+import { requireNonEmptyArg } from '../../../lib/args.js';
 
 export function getDraftCommand(): Command {
   return new Command('get')
     .description('Get a draft by ID')
-    .argument('<id>', 'Draft ID')
+    .argument('<id>', 'Draft ID', requireNonEmptyArg('Draft ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

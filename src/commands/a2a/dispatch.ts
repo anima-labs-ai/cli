@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -13,8 +14,8 @@ interface DispatchOptions {
 export function dispatchCommand(): Command {
   return new Command('dispatch')
     .description('Dispatch a task from one of your agents to another agent by DID')
-    .requiredOption('--from <id>', 'Sending agent ID (must belong to your org)')
-    .requiredOption('--to-did <did>', 'Recipient agent DID')
+    .requiredOption('--from <id>', 'Sending agent ID (must belong to your org)', requireNonEmptyArg('Sending agent ID'))
+    .requiredOption('--to-did <did>', 'Recipient agent DID', requireNonEmptyArg('Recipient agent DID'))
     .requiredOption('--type <type>', 'Task type identifier')
     .requiredOption('--input <json>', 'Task input as JSON string')
     .action(async function (this: Command) {

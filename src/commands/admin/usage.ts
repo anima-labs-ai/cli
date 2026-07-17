@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -17,7 +18,7 @@ interface UsageResponse {
 export function usageCommand(): Command {
   return new Command('usage')
     .description('Show usage summary')
-    .requiredOption('--org <org>', 'Organization ID')
+    .requiredOption('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
     .action(async function (this: Command) {
       const opts = this.opts<UsageOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

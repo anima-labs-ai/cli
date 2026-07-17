@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -24,7 +25,7 @@ function isAddressType(value: string): value is AddressType {
 export function listAddressesCommand(): Command {
   return new Command('list')
     .description('List addresses for an agent')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .option('--type <type>', 'Filter by address type: BILLING, SHIPPING, MAILING, REGISTERED')
     .action(async function (this: Command) {
       const opts = this.opts<ListOptions>();

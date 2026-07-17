@@ -3,11 +3,12 @@ import { type GlobalOptions } from '../../lib/auth.js';
 import { getConfig, saveConfig } from '../../lib/config.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import { Output } from '../../lib/output.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function switchOrgCommand(): Command {
   return new Command('switch')
     .description('Set the default organization for subsequent commands')
-    .argument('<orgId>', 'Organization ID or slug to switch to')
+    .argument('<orgId>', 'Organization ID or slug to switch to', requireNonEmptyArg('Organization ID'))
     .action(async function (this: Command, orgIdOrSlug: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

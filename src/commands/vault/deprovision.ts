@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -10,7 +11,7 @@ interface DeprovisionOptions {
 export function deprovisionCommand(): Command {
   return new Command('deprovision')
     .description('Deprovision vault for an agent')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<DeprovisionOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

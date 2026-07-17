@@ -3,6 +3,7 @@ import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import pc from 'picocolors';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 function scoreColor(score: number): (text: string) => string {
   if (score >= 80) return pc.green;
@@ -20,7 +21,7 @@ function scoreBar(score: number, width: number = 20): string {
 export function scoreCommand(): Command {
   return new Command('score')
     .description('Print the quality score of a voice call')
-    .argument('<callId>', 'Call ID')
+    .argument('<callId>', 'Call ID', requireNonEmptyArg('Call ID'))
     .action(async function (this: Command, callId: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

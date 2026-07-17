@@ -3,11 +3,12 @@ import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import pc from 'picocolors';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function summaryCommand(): Command {
   return new Command('summary')
     .description('Print the AI-generated summary of a voice call')
-    .argument('<callId>', 'Call ID')
+    .argument('<callId>', 'Call ID', requireNonEmptyArg('Call ID'))
     .option('--narrative', 'Include narrative summary')
     .action(async function (this: Command, callId: string) {
       const opts = this.opts<{ narrative?: boolean }>();

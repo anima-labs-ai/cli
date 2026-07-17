@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 interface ValidateOptions {
   agent: string;
@@ -17,8 +18,9 @@ export function validateAddressCommand(): Command {
     .argument(
       '<addressId>',
       'ID of the address to validate (e.g. addr_xxx). Run `am address list --agent <agentId>` to find one.',
+      requireNonEmptyArg('Address ID'),
     )
-    .requiredOption('--agent <agentId>', 'Agent that owns the address')
+    .requiredOption('--agent <agentId>', 'Agent that owns the address', requireNonEmptyArg('Agent ID'))
     .addHelpText(
       'after',
       `

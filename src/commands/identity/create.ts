@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -15,7 +16,7 @@ interface CreateIdentityOptions {
 export function createIdentityCommand(): Command {
   return new Command('create')
     .description('Create an identity')
-    .requiredOption('--org <orgId>', 'Organization ID')
+    .requiredOption('--org <orgId>', 'Organization ID', requireNonEmptyArg('Organization ID'))
     .requiredOption('--name <name>', 'Identity name (2-100 chars)')
     .requiredOption('--slug <slug>', 'Identity slug (2-64 chars)')
     .option('--email <email>', 'Identity email')

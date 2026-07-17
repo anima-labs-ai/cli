@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../../lib/args.js';
 
 export function sendDraftCommand(): Command {
   return new Command('send')
     .description('Send a draft — converts it to a real message and deletes the draft')
-    .argument('<id>', 'Draft ID')
+    .argument('<id>', 'Draft ID', requireNonEmptyArg('Draft ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

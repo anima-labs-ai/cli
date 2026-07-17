@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -16,7 +17,7 @@ interface RotateKeyResponse {
 export function keyRotateCommand(): Command {
   return new Command('rotate')
     .description('Rotate API key')
-    .requiredOption('--org <org>', 'Organization ID')
+    .requiredOption('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
     .action(async function (this: Command) {
       const opts = this.opts<KeyRotateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

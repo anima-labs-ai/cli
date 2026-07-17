@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -49,7 +50,7 @@ function normalizeCountryCode(input?: string): string {
 export function provisionPhoneNumberCommand(): Command {
   return new Command('provision')
     .description('Provision a phone number for an agent')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .option('--country <countryCode>', 'Country code (2 chars)', 'US')
     .option('--area-code <areaCode>', 'Area code preference')
     .option('--capabilities <capabilities>', 'Comma-separated capabilities: sms,mms,voice')

@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function deleteInboxCommand(): Command {
   return new Command('delete')
     .description('Delete an inbox')
-    .argument('<id>', 'Inbox ID')
+    .argument('<id>', 'Inbox ID', requireNonEmptyArg('Inbox ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

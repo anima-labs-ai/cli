@@ -3,6 +3,7 @@ import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import pc from 'picocolors';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 function formatTimestamp(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -13,7 +14,7 @@ function formatTimestamp(seconds: number): string {
 export function transcriptCommand(): Command {
   return new Command('transcript')
     .description('Print the transcript of a voice call')
-    .argument('<callId>', 'Call ID')
+    .argument('<callId>', 'Call ID', requireNonEmptyArg('Call ID'))
     .option('--speaker <speaker>', 'Filter by speaker (agent or caller)')
     .action(async function (this: Command, callId: string) {
       const opts = this.opts<{ speaker?: string }>();
