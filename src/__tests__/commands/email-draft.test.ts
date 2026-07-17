@@ -10,7 +10,7 @@
  */
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
-import type { Command } from 'commander';
+import type { Command, CommanderError } from 'commander';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -28,9 +28,11 @@ mock.module('env-paths', () => ({
 
 const { createProgram } = await import('../../cli.js');
 
-// Real-looking CUIDs so the contract's z.string().cuid() input validation
-// in the typed oRPC client doesn't reject the test args before the request
-// ever hits the mock server.
+// Real-looking CUIDs, used to key the mock server's routes. They are NOT
+// required to satisfy the contract: the typed oRPC client does not enforce
+// `z.string().cuid()` on inputs, and sends an invalid — or empty — id to the
+// server regardless. That gap is why ids are validated CLI-side; see
+// `requireNonEmptyArg` and the empty-id tests at the end of this file.
 const DRAFT_ID_1 = 'caaa00000000000000000drf01';
 const DRAFT_ID_2 = 'caaa00000000000000000drf02';
 const AGENT_ID_1 = 'caaa00000000000000000agt01';
@@ -50,6 +52,9 @@ let mockServer: ReturnType<typeof Bun.serve> | null = null;
 let serverPort = 0;
 let program: Command;
 const routes: Record<string, RouteResponse> = {};
+// Every request the CLI actually issued, so a test can assert that a
+// rejected argument never reached the network.
+const requests: string[] = [];
 
 function setRoute(method: string, path: string, route: RouteResponse): void {
   routes[`${method} ${path}`] = route;
@@ -145,6 +150,7 @@ describe('email draft commands', () => {
       async fetch(req) {
         const url = new URL(req.url);
         const key = `${req.method} ${url.pathname}`;
+        requests.push(key);
         const route = routes[key];
 
         if (process.env.ANIMA_TEST_DEBUG) {
@@ -185,6 +191,7 @@ describe('email draft commands', () => {
     mockServer?.stop();
     mockServer = null;
     clearRoutes();
+    requests.length = 0;
     if (existsSync(testConfigDir)) {
       rmSync(testConfigDir, { recursive: true, force: true });
     }
@@ -436,6 +443,57 @@ describe('email draft commands', () => {
     expect(outputText.includes('Failed to send draft: Draft has no recipients')).toBe(true);
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
+
+  // WHY: an id the user never really supplied must be caught as the usage
+  // mistake it is, before anything is sent. An empty id collapses the request
+  // path — `/email/drafts/{id}` becomes `/email/drafts/`, which the API
+  // resolves to the *list* route and answers 200 with a list payload. `get`
+  // then rendered that payload as a draft and died on `draft.to.length`,
+  // reporting a TypeError as "Failed to get draft: …" — blaming the API for
+  // the user's typo. `delete` and `send` were worse: they claimed success for
+  // an id that was never a draft. Rejecting the id up front kills all three.
+  for (const sub of ['get', 'delete', 'send'] as const) {
+    test(`draft ${sub} rejects an empty id as a usage error before any request`, async () => {
+      const logSpy = mock(() => {});
+      const errorSpy = mock(() => {});
+      const exitSpy = mock(() => {});
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalExit = process.exit;
+      // Commander writes the usage error straight to stderr before throwing;
+      // swallow it so a passing run stays quiet.
+      const originalWriteErr = process.stderr.write;
+      console.log = logSpy;
+      console.error = errorSpy;
+      process.exit = exitSpy as unknown as typeof process.exit;
+      process.stderr.write = (() => true) as typeof process.stderr.write;
+
+      let thrown: unknown;
+      try {
+        await program.parseAsync(['node', 'anima', 'email', 'draft', sub, '']);
+      } catch (error: unknown) {
+        thrown = error;
+      }
+
+      console.log = originalLog;
+      console.error = originalError;
+      process.exit = originalExit;
+      process.stderr.write = originalWriteErr;
+
+      // Reported as a usage error, the same way a missing `<id>` already is —
+      // not as a failed API call.
+      expect((thrown as CommanderError | undefined)?.code).toBe('commander.invalidArgument');
+      expect(String((thrown as Error | undefined)?.message)).toMatch(/cannot be empty/i);
+
+      // The empty id never left the CLI.
+      expect(requests).toEqual([]);
+
+      // And was never dressed up as a success (`delete`/`send` used to say
+      // "Deleted draft undefined" / "Draft sent (message undefined…)").
+      const stdout = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+      expect(stdout).not.toContain('success');
+    });
+  }
 
   test('draft subcommands are registered under email', () => {
     const email = program.commands.find((cmd) => cmd.name() === 'email');

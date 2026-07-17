@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 interface TotpOptions {
   agent?: string;
@@ -10,7 +11,7 @@ interface TotpOptions {
 export function totpCommand(): Command {
   return new Command('totp')
     .description('Get TOTP code')
-    .argument('<credentialId>', 'Credential ID')
+    .argument('<credentialId>', 'Credential ID', requireNonEmptyArg('Credential ID'))
     .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<TotpOptions>();

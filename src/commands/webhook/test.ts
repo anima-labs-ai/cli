@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function testWebhookCommand(): Command {
   return new Command('test')
     .description('Send a test event to a webhook')
-    .argument('<id>', 'Webhook ID')
+    .argument('<id>', 'Webhook ID', requireNonEmptyArg('Webhook ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

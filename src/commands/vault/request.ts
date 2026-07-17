@@ -2,6 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError, type ApiClient } from '../../lib/api-client.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 const CREDENTIAL_TYPES = [
   'login',
@@ -198,7 +199,7 @@ interface RequestStatusOptions {
 function requestStatusCommand(): Command {
   return new Command('status')
     .description('Check a credential request (returns a masked preview, never the secret)')
-    .argument('<requestId>', 'Credential request ID')
+    .argument('<requestId>', 'Credential request ID', requireNonEmptyArg('Credential request ID'))
     .option('--wait', 'Poll until the request leaves PENDING')
     .option('--timeout <seconds>', 'Max seconds to wait with --wait (default 900)', validatePositiveInt('timeout'), 900)
     .option('--poll-interval <ms>', 'Poll interval in ms with --wait (default 5000)', validatePositiveInt('poll-interval'), 5000)
@@ -233,7 +234,7 @@ function requestStatusCommand(): Command {
 function requestCancelCommand(): Command {
   return new Command('cancel')
     .description('Cancel a pending credential request (invalidates its fill URL)')
-    .argument('<requestId>', 'Credential request ID')
+    .argument('<requestId>', 'Credential request ID', requireNonEmptyArg('Credential request ID'))
     .action(async function (this: Command, requestId: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

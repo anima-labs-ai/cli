@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../../lib/args.js';
 
 export function domainDnsCommand(): Command {
   return new Command('dns')
     .description('Show domain DNS records')
-    .argument('<id>', 'Domain ID')
+    .argument('<id>', 'Domain ID', requireNonEmptyArg('Domain ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

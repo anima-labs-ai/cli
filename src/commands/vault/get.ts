@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 interface GetOptions {
   agent?: string;
@@ -20,7 +21,7 @@ function redactCardNumber(value: string | undefined): string | undefined {
 export function getCommand(): Command {
   return new Command('get')
     .description('Get credential by ID')
-    .argument('<credentialId>', 'Credential ID')
+    .argument('<credentialId>', 'Credential ID', requireNonEmptyArg('Credential ID'))
     .option('--agent <id>', 'Agent ID (optional with agent API key)')
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<GetOptions>();

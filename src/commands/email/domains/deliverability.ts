@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../../lib/args.js';
 
 function formatRate(rate: number): string {
   return `${(rate * 100).toFixed(2)}%`;
@@ -10,7 +11,7 @@ function formatRate(rate: number): string {
 export function domainDeliverabilityCommand(): Command {
   return new Command('deliverability')
     .description('Check domain deliverability metrics')
-    .argument('<id>', 'Domain ID')
+    .argument('<id>', 'Domain ID', requireNonEmptyArg('Domain ID'))
     .action(async function (this: Command, id: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);

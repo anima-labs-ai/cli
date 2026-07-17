@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 
 function formatDuration(seconds?: number | null): string {
   if (seconds === undefined || seconds === null) return '-';
@@ -13,7 +14,7 @@ function formatDuration(seconds?: number | null): string {
 export function getCallCommand(): Command {
   return new Command('get')
     .description('Get details of a specific voice call')
-    .argument('<callId>', 'Call ID')
+    .argument('<callId>', 'Call ID', requireNonEmptyArg('Call ID'))
     .action(async function (this: Command, callId: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
