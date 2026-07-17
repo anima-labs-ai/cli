@@ -2,6 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { validateLimit } from '../../lib/args.js';
 
 type MessageChannel = 'EMAIL' | 'SMS' | 'MMS' | 'VOICE';
 type MessageDirection = 'INBOUND' | 'OUTBOUND';
@@ -120,14 +121,6 @@ function validateStatus(value: string): MessageStatus {
   throw new InvalidArgumentError(
     'status must be one of QUEUED, SENT, DELIVERED, FAILED, BOUNCED, BLOCKED, PENDING_APPROVAL',
   );
-}
-
-function validateLimit(value: string): string {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
-  }
-  return value;
 }
 
 function handleOrpcError(error: unknown, output: Output, context: string): never {

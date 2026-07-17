@@ -34,3 +34,30 @@ export function requireNonEmptyArg(label: string) {
     return value;
   };
 }
+
+/**
+ * Commander parser for `--limit`, the page size on every paginated list and
+ * search command.
+ *
+ * The 1-100 bound is not a taste call: it mirrors the contract's `Pagination`
+ * schema (`limit: z.number().int().min(1).max(100).default(20)`). Widening it
+ * here would only move the rejection to the server.
+ *
+ * `Number`, not `parseInt` — `parseInt('20abc')` is `20`, so a fat-fingered
+ * limit would silently page at a size nobody asked for.
+ *
+ * Returns the value unparsed. Call sites type `limit?: string` and convert at
+ * the request boundary (`opts.limit ? Number(opts.limit) : undefined`), so
+ * returning a number here would ripple into every action body.
+ *
+ * Not a factory, unlike its neighbour above: every call site wants exactly
+ * these bounds and this message, so there is nothing to parameterise. A limit
+ * with different bounds is a different rule, not a configuration of this one.
+ */
+export function validateLimit(value: string): string {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
+  }
+  return value;
+}
