@@ -39,8 +39,9 @@ export interface OrpcErrorMessages {
  * Turn an oRPC failure into a rendered CLI error and a non-zero exit, in one
  * place. Replaces the ~42 near-identical per-command `handleOrpcError` copies.
  *
- * Message resolution, most specific first: 401 → a fixed "authenticate" hint;
- * a matching `statusMessages` entry; a matching `codeMessages` entry; otherwise
+ * Message resolution, most specific first: 401 → a fixed "authenticate" hint
+ * (always — a `statusMessages` entry for 401 is ignored); then a matching
+ * `statusMessages` entry; then a matching `codeMessages` entry; otherwise
  * `"${context}: ${error.message}"`.
  *
  * Exits via `output.fatal` (never returns) — `output` is a typed parameter, so
