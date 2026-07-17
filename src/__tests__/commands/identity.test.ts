@@ -163,7 +163,7 @@ describe('identity commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -208,7 +208,7 @@ describe('identity commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -236,7 +236,7 @@ describe('identity commands', () => {
       body: buildAgentResponse(),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -273,7 +273,7 @@ describe('identity commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -304,7 +304,7 @@ describe('identity commands', () => {
       body: { success: true },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -325,7 +325,7 @@ describe('identity commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -352,11 +352,11 @@ describe('identity commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -381,11 +381,11 @@ describe('identity commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -416,11 +416,11 @@ describe('identity commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 

@@ -144,7 +144,7 @@ describe('vault request commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -193,7 +193,7 @@ describe('vault request commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -236,7 +236,7 @@ describe('vault request commands', () => {
       body: { status: 'DECLINED', credentialId: null, maskedPreview: null },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -274,7 +274,7 @@ describe('vault request commands', () => {
       body: { status: 'FULFILLED', credentialId: 'cred_5', maskedPreview: '****abcd' },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -298,7 +298,7 @@ describe('vault request commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -318,7 +318,7 @@ describe('vault request commands', () => {
       body: { error: { code: 'NOT_FOUND', message: 'request not found' } },
     });
 
-    const errSpy = mock(() => {});
+    const errSpy = mock((...args: unknown[]) => {});
     const originalErr = console.error;
     console.error = errSpy;
 

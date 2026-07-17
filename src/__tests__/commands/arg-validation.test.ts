@@ -207,14 +207,14 @@ describe('empty id inputs', () => {
 
   for (const { argv, label } of CASES) {
     test(`${label} rejects an empty id as a usage error before any request`, async () => {
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       const originalError = console.error;
       const originalExit = process.exit;
       const originalWriteErr = process.stderr.write;
       console.log = logSpy;
-      console.error = mock(() => {}) as unknown as typeof console.error;
-      process.exit = mock(() => {}) as unknown as typeof process.exit;
+      console.error = mock((...args: unknown[]) => {}) as unknown as typeof console.error;
+      process.exit = mock((...args: unknown[]) => {}) as unknown as typeof process.exit;
       process.stderr.write = (() => true) as typeof process.stderr.write;
 
       let thrown: unknown;

@@ -114,7 +114,7 @@ describe("demo command", () => {
 	test("agent-format demo payload advertises only the shared command list and no x402", async () => {
 		const program = createProgram();
 
-		const logSpy = mock(() => {});
+		const logSpy = mock((...args: unknown[]) => {});
 		const originalLog = console.log;
 		console.log = logSpy;
 

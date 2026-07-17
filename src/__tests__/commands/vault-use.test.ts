@@ -142,7 +142,7 @@ describe('vault use command', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -184,7 +184,7 @@ describe('vault use command', () => {
       body: USE_RESULT,
     });
 
-    const writeSpy = mock(() => true);
+    const writeSpy = mock((chunk: unknown) => true);
     const originalWrite = process.stdout.write;
     process.stdout.write = writeSpy as unknown as typeof process.stdout.write;
 
@@ -214,7 +214,7 @@ describe('vault use command', () => {
       },
     });
 
-    const errSpy = mock(() => {});
+    const errSpy = mock((...args: unknown[]) => {});
     const originalErr = console.error;
     console.error = errSpy;
 

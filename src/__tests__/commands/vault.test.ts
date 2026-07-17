@@ -198,7 +198,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -217,7 +217,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -240,7 +240,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -261,7 +261,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -295,7 +295,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -333,7 +333,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -364,7 +364,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -395,7 +395,7 @@ describe('vault commands', () => {
     const exitSpy = spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`exit:${code}`);
     }) as never);
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -428,7 +428,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -452,7 +452,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -488,7 +488,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -517,7 +517,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -543,7 +543,7 @@ describe('vault commands', () => {
       // so the test only verifies the URL path here.
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -569,7 +569,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -597,7 +597,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -627,7 +627,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -663,7 +663,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -690,7 +690,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -723,7 +723,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -754,7 +754,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -781,7 +781,7 @@ describe('vault commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -807,11 +807,11 @@ describe('vault commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -836,11 +836,11 @@ describe('vault commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -865,11 +865,11 @@ describe('vault commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -894,11 +894,11 @@ describe('vault commands', () => {
       },
     });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 

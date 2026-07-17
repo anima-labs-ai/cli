@@ -63,11 +63,11 @@ describe('auth commands', () => {
         },
       });
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -109,11 +109,11 @@ describe('auth commands', () => {
         },
       });
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -138,15 +138,15 @@ describe('auth commands', () => {
     });
 
     test('login without credentials fails', async () => {
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -173,11 +173,11 @@ describe('auth commands', () => {
         },
       });
 
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -211,11 +211,11 @@ describe('auth commands', () => {
         },
       });
 
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -251,7 +251,7 @@ describe('auth commands', () => {
       const authPath = join(testConfigDir, 'auth.json');
       writeFileSync(authPath, JSON.stringify({ token: 'to-clear', email: 'old@test.com' }));
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -293,7 +293,7 @@ describe('auth commands', () => {
         apiUrl: `http://localhost:${mockServer.port}`,
       }));
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -308,15 +308,15 @@ describe('auth commands', () => {
     });
 
     test('whoami fails when not authenticated', async () => {
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -346,11 +346,11 @@ describe('auth commands', () => {
       const authPath = join(testConfigDir, 'auth.json');
       writeFileSync(authPath, JSON.stringify({ token: 'expired-token', apiUrl: `http://localhost:${mockServer.port}` }));
 
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -381,11 +381,11 @@ describe('auth commands', () => {
       const authPath = join(testConfigDir, 'auth.json');
       writeFileSync(authPath, JSON.stringify({ token: 'valid-token', apiUrl: `http://localhost:${mockServer.port}` }));
 
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -407,7 +407,7 @@ describe('auth commands', () => {
 describe('CLI global options', () => {
   test('--version outputs version', async () => {
     const prog = createProgram();
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -421,7 +421,7 @@ describe('CLI global options', () => {
 
   test('--help outputs help text', async () => {
     const prog = createProgram();
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
 
     const writeSpy = mock((..._args: unknown[]) => true);

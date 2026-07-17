@@ -140,7 +140,7 @@ describe('security commands', () => {
       body: SCANNER_STATUS_BODY,
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -163,7 +163,7 @@ describe('security commands', () => {
       body: SCANNER_STATUS_BODY,
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -188,7 +188,7 @@ describe('security commands', () => {
       body: SCANNER_STATUS_BODY,
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -211,7 +211,7 @@ describe('security commands', () => {
       body: EMPTY_EVENTS_BODY,
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 

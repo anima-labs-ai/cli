@@ -136,7 +136,7 @@ describe('vault store --type api_key', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -174,7 +174,7 @@ describe('vault store --type api_key', () => {
   });
 
   test('api_key requires --provider and --key', async () => {
-    const errSpy = mock(() => {});
+    const errSpy = mock((...args: unknown[]) => {});
     const originalErr = console.error;
     console.error = errSpy;
 

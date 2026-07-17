@@ -84,7 +84,7 @@ describe('config commands', () => {
     test('gets a config value', async () => {
       writeAppConfig({ defaultOrg: 'test-org' });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -100,7 +100,7 @@ describe('config commands', () => {
         profiles: { prod: { apiUrl: 'https://api.useanima.sh' } },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -126,7 +126,7 @@ describe('config commands', () => {
       writeAppConfig({ defaultOrg: 'file-org' });
       process.env.ANIMA_DEFAULT_ORG = 'env-org';
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -147,7 +147,7 @@ describe('config commands', () => {
         outputFormat: 'table',
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -168,7 +168,7 @@ describe('config commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -188,7 +188,7 @@ describe('config commands', () => {
         profiles: { dev: { defaultOrg: 'profile-org' } },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -251,7 +251,7 @@ describe('config commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 
@@ -270,7 +270,7 @@ describe('config commands', () => {
         profiles: { prod: { apiUrl: 'https://api.useanima.sh', defaultOrg: 'prod-org' } },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const origLog = console.log;
       console.log = logSpy;
 

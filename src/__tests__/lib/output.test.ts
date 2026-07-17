@@ -28,7 +28,7 @@ describe('Output', () => {
   describe('json mode output', () => {
     test('success outputs JSON when json mode enabled', () => {
       const output = new Output({ json: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -44,7 +44,7 @@ describe('Output', () => {
 
     test('error outputs JSON when json mode enabled', () => {
       const output = new Output({ json: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = spy;
 
@@ -60,7 +60,7 @@ describe('Output', () => {
 
     test('json() outputs serialized JSON', () => {
       const output = new Output({ json: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -79,7 +79,7 @@ describe('Output', () => {
   describe('human mode output', () => {
     test('success prints colored message', () => {
       const output = new Output({ human: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -93,7 +93,7 @@ describe('Output', () => {
 
     test('error prints to stderr', () => {
       const output = new Output({ human: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = spy;
 
@@ -107,7 +107,7 @@ describe('Output', () => {
 
     test('warn prints warning', () => {
       const output = new Output({ human: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -121,7 +121,7 @@ describe('Output', () => {
 
     test('info prints info message', () => {
       const output = new Output({ human: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -137,7 +137,7 @@ describe('Output', () => {
   describe('debug', () => {
     test('suppresses debug output when debug mode off', () => {
       const output = new Output({ human: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -149,7 +149,7 @@ describe('Output', () => {
 
     test('shows debug output when debug mode on', () => {
       const output = new Output({ json: false, debug: true });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = spy;
 
@@ -165,7 +165,7 @@ describe('Output', () => {
   describe('table', () => {
     test('outputs JSON array in json mode', () => {
       const output = new Output({ json: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -183,7 +183,7 @@ describe('Output', () => {
 
     test('outputs formatted table in human mode', () => {
       const output = new Output({ human: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 
@@ -197,7 +197,7 @@ describe('Output', () => {
   describe('details', () => {
     test('outputs JSON object in json mode', () => {
       const output = new Output({ json: true, debug: false });
-      const spy = mock(() => {});
+      const spy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = spy;
 

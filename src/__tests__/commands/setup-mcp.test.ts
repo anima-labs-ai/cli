@@ -110,7 +110,7 @@ describe('setup-mcp commands', () => {
     mkdirSync(claudeDesktopDir(testConfigDir), { recursive: true });
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -231,7 +231,7 @@ describe('setup-mcp commands', () => {
     writeFileSync(vscode, JSON.stringify({ servers: {} }, null, 2));
     writeFileSync(claudeCode, JSON.stringify({ mcpServers: {} }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -263,11 +263,11 @@ describe('setup-mcp commands', () => {
   });
 
   test('errors on invalid client name', async () => {
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -500,11 +500,11 @@ describe('setup-mcp commands', () => {
   test('--url with --mode stdio errors', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -529,7 +529,7 @@ describe('setup-mcp commands', () => {
   test('install --mode remote --json includes mode and urls in output', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -557,11 +557,11 @@ describe('setup-mcp commands', () => {
   test('install rejects an unknown --mode value instead of silently coercing', async () => {
     mkdirSync(join(testConfigDir, '.cursor'), { recursive: true });
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -595,7 +595,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -626,7 +626,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -655,7 +655,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -687,7 +687,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -717,7 +717,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -841,7 +841,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -870,7 +870,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -907,7 +907,7 @@ describe('setup-mcp commands', () => {
       return new Response('{"status":"ok"}', { status: 200 });
     }) as typeof fetch;
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -941,7 +941,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -970,7 +970,7 @@ describe('setup-mcp commands', () => {
       },
     }, null, 2));
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 

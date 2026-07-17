@@ -216,7 +216,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -258,7 +258,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -317,7 +317,7 @@ describe('email commands', () => {
       body: buildMessageResponse({ id: EMAIL_ID_777, agentId: AGENT_ID_9, subject: 'Subj' }),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -340,7 +340,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -366,7 +366,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -388,7 +388,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -407,7 +407,7 @@ describe('email commands', () => {
       body: buildDomainResponse({ id: DOMAIN_ID_2, domain: 'foo.com' }),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -427,7 +427,7 @@ describe('email commands', () => {
       body: { success: true },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -458,7 +458,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -490,7 +490,7 @@ describe('email commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -515,11 +515,11 @@ describe('email commands', () => {
       },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -551,11 +551,11 @@ describe('email commands', () => {
       },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -587,11 +587,11 @@ describe('email commands', () => {
       },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -613,11 +613,11 @@ describe('email commands', () => {
       },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
