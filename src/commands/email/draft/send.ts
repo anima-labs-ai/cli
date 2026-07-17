@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../../lib/orpc.js';
 import { requireNonEmptyArg } from '../../../lib/args.js';
 
 export function sendDraftCommand(): Command {
@@ -26,24 +26,7 @@ export function sendDraftCommand(): Command {
 
         output.success(`Draft sent (message ${message.id}, status ${message.status})`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to send draft');
+        handleOrpcError(error, output, 'Failed to send draft', { statusMessages: { 404: 'Draft not found. It may have already been sent (send deletes the draft) or deleted.' } });
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 404) {
-      output.error('Draft not found. It may have already been sent (send deletes the draft) or deleted.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

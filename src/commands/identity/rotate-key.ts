@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface RotateIdentityKeyOptions {
   id: string;
@@ -33,24 +33,7 @@ export function rotateIdentityKeyCommand(): Command {
         ]);
         output.success(`API key rotated for identity: ${opts.id}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to rotate identity API key');
+        handleOrpcError(error, output, 'Failed to rotate identity API key', { statusMessages: { 404: 'Identity not found.' } });
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 404) {
-      output.error('Identity not found.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

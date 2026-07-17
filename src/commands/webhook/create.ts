@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 import { boundedInt } from '../../lib/args.js';
 
 interface CreateWebhookOptions {
@@ -68,24 +68,8 @@ export function createWebhookCommand(): Command {
         ]);
         output.success(`Webhook created: ${webhook.id}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to create webhook');
+        handleOrpcError(error, output, 'Failed to create webhook', { statusMessages: { 403: 'Forbidden: you do not have access to create webhooks here.' } });
       }
     });
 }
 
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 403) {
-      output.error('Forbidden: you do not have access to create webhooks here.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
-}
