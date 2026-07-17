@@ -48,20 +48,18 @@ export function placeCallCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<PlaceCallOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      // Annotated, not inferred, so a later output.fatal()'s `never` narrows control flow.
+      const output: Output = Output.fromGlobals(globals);
 
       if (!opts.to) {
-        output.error('Missing --to. Pass an E.164 phone number like +14155550142.');
-        process.exit(2);
+        output.fatal('Missing --to. Pass an E.164 phone number like +14155550142.', 2);
       }
       if (!opts.to.startsWith('+')) {
-        output.error('--to must be E.164 format starting with "+" (e.g. +14155550142).');
-        process.exit(2);
+        output.fatal('--to must be E.164 format starting with "+" (e.g. +14155550142).', 2);
       }
       const tier = (opts.tier ?? 'basic').toLowerCase() as 'basic' | 'premium';
       if (!VALID_TIERS.has(tier)) {
-        output.error(`--tier must be one of basic | premium, got "${opts.tier}".`);
-        process.exit(2);
+        output.fatal(`--tier must be one of basic | premium, got "${opts.tier}".`, 2);
       }
 
       // The TCPA gate at apps/api/src/middleware/tcpa-gate.ts requires a

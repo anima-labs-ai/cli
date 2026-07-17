@@ -11,7 +11,8 @@ export function switchOrgCommand(): Command {
     .argument('<orgId>', 'Organization ID or slug to switch to', requireNonEmptyArg('Organization ID'))
     .action(async function (this: Command, orgIdOrSlug: string) {
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      // Annotated, not inferred, so a later output.fatal()'s `never` narrows control flow.
+      const output: Output = Output.fromGlobals(globals);
 
       try {
         const orpc = await requireOrpcAuth(globals);
@@ -20,10 +21,7 @@ export function switchOrgCommand(): Command {
           (o) => o.id === orgIdOrSlug || o.slug === orgIdOrSlug,
         );
         if (!match) {
-          output.error(
-            `You are not a member of "${orgIdOrSlug}". Run \`am org list\` to see your orgs.`,
-          );
-          process.exit(1);
+          output.fatal(`You are not a member of "${orgIdOrSlug}". Run \`am org list\` to see your orgs.`);
         }
 
         const cfg = await getConfig();

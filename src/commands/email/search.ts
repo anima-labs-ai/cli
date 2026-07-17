@@ -71,15 +71,11 @@ export function searchEmailsCommand(): Command {
         await runFullTextSearch(query, opts, globals, output);
       } catch (error: unknown) {
         if (error instanceof UsageError) {
-          output.error(error.message);
-          process.exit(1);
+          output.fatal(error.message);
           return;
         }
         if (opts.semantic && error instanceof ORPCError && error.status === 503) {
-          output.error(
-            'Semantic search is temporarily unavailable (embedding provider outage). Retry later, or search without --semantic.',
-          );
-          process.exit(1);
+          output.fatal('Semantic search is temporarily unavailable (embedding provider outage). Retry later, or search without --semantic.');
           return;
         }
         handleOrpcError(error, output, 'Failed to search emails');

@@ -48,12 +48,12 @@ export function proxyCommand(): Command {
     .action(async function (this: Command) {
       const opts = this.opts<ProxyOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      // Annotated, not inferred, so a later output.fatal()'s `never` narrows control flow.
+      const output: Output = Output.fromGlobals(globals);
 
       const allowHosts = new Set(opts.allowHost ?? []);
       if (allowHosts.size === 0) {
-        output.error('--allow-host is required (and repeatable). Refusing to run an open proxy.');
-        process.exit(2);
+        output.fatal('--allow-host is required (and repeatable). Refusing to run an open proxy.', 2);
       }
 
       try {
@@ -68,14 +68,12 @@ export function proxyCommand(): Command {
         } else if (opts.cred && opts.cred.startsWith('cred_')) {
           ref = { source: 'anima', credentialId: opts.cred, field: 'apiKey.key', agentId: opts.agent };
         } else {
-          output.error(`--cred "${opts.cred}" not found in anima.json and is not a credential ID`);
-          return process.exit(2);
+          output.fatal(`--cred "${opts.cred}" not found in anima.json and is not a credential ID`, 2);
         }
 
         const { values, errors } = await resolveSecretRefs(client, { secret: ref });
         if (errors.length > 0) {
-          output.error(`Failed to resolve credential: ${errors[0].reason}`);
-          process.exit(1);
+          output.fatal(`Failed to resolve credential: ${errors[0].reason}`);
         }
         const secret = values.secret;
 
@@ -162,8 +160,7 @@ export function proxyCommand(): Command {
           });
         }
       } catch (error: unknown) {
-        output.error(`proxy failed: ${error instanceof Error ? error.message : String(error)}`);
-        process.exit(1);
+        output.fatal(`proxy failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
 }

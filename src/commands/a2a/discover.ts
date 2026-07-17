@@ -19,8 +19,7 @@ export function discoverCommand(): Command {
         const res = await fetch(cardUrl.toString());
 
         if (!res.ok) {
-          output.error(`Failed to fetch agent card: ${res.status} ${res.statusText}`);
-          process.exit(1);
+          output.fatal(`Failed to fetch agent card: ${res.status} ${res.statusText}`);
         }
 
         const card = await res.json() as Record<string, unknown>;

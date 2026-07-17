@@ -234,8 +234,7 @@ export function auditCommand(): Command {
 
         if (opts.check && findings.length > 0) process.exit(1);
       } catch (error: unknown) {
-        output.error(`audit failed: ${error instanceof Error ? error.message : String(error)}`);
-        process.exit(1);
+        output.fatal(`audit failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
 }

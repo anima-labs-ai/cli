@@ -28,8 +28,7 @@ export function updateIdentityCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       if (!opts.name && !opts.slug && !opts.status && !opts.metadata) {
-        output.error('Provide at least one field to update: --name, --slug, --status, or --metadata');
-        process.exit(1);
+        output.fatal('Provide at least one field to update: --name, --slug, --status, or --metadata');
       }
 
       try {

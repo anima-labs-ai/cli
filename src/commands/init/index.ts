@@ -388,12 +388,10 @@ async function runNonInteractive(
 ): Promise<void> {
 	const apiKey = opts.apiKey?.trim() ?? "";
 	if (!apiKey) {
-		output.error("Missing required flag --api-key in non-interactive mode.");
-		process.exit(2);
+		output.fatal("Missing required flag --api-key in non-interactive mode.", 2);
 	}
 	if (!isValidApiKey(apiKey)) {
-		output.error("Invalid API key. Must start with ak_, mk_, or sk_.");
-		process.exit(2);
+		output.fatal("Invalid API key. Must start with ak_, mk_, or sk_.", 2);
 	}
 
 	const apiUrl = opts.apiUrl?.trim() || DEFAULT_API_URL;
@@ -401,8 +399,7 @@ async function runNonInteractive(
 	const identity = opts.identity?.trim() || undefined;
 	const parsedFormat = normalizeOutputFormat(opts.format);
 	if (!parsedFormat) {
-		output.error("Invalid format. Supported values: table, json, yaml.");
-		process.exit(2);
+		output.fatal("Invalid format. Supported values: table, json, yaml.", 2);
 	}
 
 	await saveAuthConfig({
