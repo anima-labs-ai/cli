@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { parseBoundedInt } from '../../lib/args.js';
 
 type PhoneCapability = 'sms' | 'mms' | 'voice';
 
@@ -38,19 +39,6 @@ function parseCapabilities(input?: string): PhoneCapability[] | undefined {
   return uniqueCapabilities as PhoneCapability[];
 }
 
-function parseLimit(input?: string): number {
-  if (!input) {
-    return 10;
-  }
-
-  const parsed = Number.parseInt(input, 10);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 50) {
-    throw new Error('Invalid --limit. Must be an integer between 1 and 50');
-  }
-
-  return parsed;
-}
-
 function normalizeCountryCode(input?: string): string {
   const country = (input ?? 'US').trim().toUpperCase();
   if (country.length !== 2) {
@@ -66,7 +54,7 @@ export function searchPhoneNumbersCommand(): Command {
     .option('--country <countryCode>', 'Country code (2 chars)', 'US')
     .option('--area-code <areaCode>', 'Area code filter')
     .option('--capabilities <capabilities>', 'Comma-separated capabilities: sms,mms,voice')
-    .option('--limit <limit>', 'Result limit (1-50)', '10')
+    .option('--limit <limit>', 'Result limit (1-50)')
     .action(async function (this: Command) {
       const opts = this.opts<SearchOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
@@ -75,7 +63,7 @@ export function searchPhoneNumbersCommand(): Command {
       try {
         const countryCode = normalizeCountryCode(opts.country);
         const capabilities = parseCapabilities(opts.capabilities);
-        const limit = parseLimit(opts.limit);
+        const limit = parseBoundedInt('--limit', opts.limit, 1, 50) ?? 10;
 
         const input: {
           countryCode: string;

@@ -267,6 +267,44 @@ describe('phone commands', () => {
     expect(payload).toContain('+14155550123');
   });
 
+  // Regression: --limit was parsed with Number.parseInt, so "20abc" became 20
+  // and "5.5" became 5 — a fat-fingered limit silently searched at a size
+  // nobody asked for. It must be rejected before any request, the same way the
+  // shared lib/args parser rejects a bad --limit everywhere else.
+  test('phone search rejects a non-integer --limit before any request', async () => {
+    setAuthenticatedConfig(serverPort);
+
+    let searchRequested = false;
+    setRoute('GET', '/v1/phone/search', {
+      status: 200,
+      body: { items: [] },
+      assert: () => {
+        searchRequested = true;
+      },
+    });
+
+    const errorSpy = mock((...args: unknown[]) => {});
+    const exitSpy = mock(() => {});
+    const originalError = console.error;
+    const originalExit = process.exit;
+    console.error = errorSpy;
+    process.exit = exitSpy as unknown as typeof process.exit;
+
+    try {
+      await runProgram(['phone', 'search', '--limit', '20abc']);
+    } finally {
+      console.error = originalError;
+      process.exit = originalExit;
+    }
+
+    // Rejected as the usage mistake it is — not truncated into a real page size.
+    const errorText = errorSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(errorText).toContain('between 1 and 50');
+    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+    // The bad limit never left the CLI.
+    expect(searchRequested).toBe(false);
+  });
+
   test('phone provision sends required payload', async () => {
     setAuthenticatedConfig(serverPort);
 
