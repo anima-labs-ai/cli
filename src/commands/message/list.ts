@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
-import { validateLimit } from '../../lib/args.js';
+import { collectValue, validateLimit } from '../../lib/args.js';
 
 type MessageChannel = 'EMAIL' | 'SMS' | 'MMS' | 'VOICE';
 type MessageDirection = 'INBOUND' | 'OUTBOUND';
@@ -11,6 +11,8 @@ interface ListOptions {
   agent?: string;
   channel?: MessageChannel;
   direction?: MessageDirection;
+  label: string[];
+  includeSpam?: boolean;
   limit?: string;
   cursor?: string;
 }
@@ -21,6 +23,8 @@ export function listMessagesCommand(): Command {
     .option('--agent <id>', 'Filter by agent ID')
     .option('--channel <channel>', 'Filter by channel (EMAIL, SMS, MMS, VOICE)', validateChannel)
     .option('--direction <dir>', 'Filter by direction (INBOUND, OUTBOUND)', validateDirection)
+    .option('--label <label>', 'Only messages carrying this label; repeat to require ALL (e.g. --label unread --label urgent). System: unread, read, archived, spam', collectValue, [])
+    .option('--include-spam', 'Include messages flagged as spam on arrival (excluded by default)')
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--cursor <cursor>', 'Pagination cursor')
     .action(async function (this: Command) {
@@ -34,6 +38,8 @@ export function listMessagesCommand(): Command {
           agentId: opts.agent,
           channel: opts.channel,
           direction: opts.direction,
+          labels: opts.label.length > 0 ? opts.label : undefined,
+          includeSpam: opts.includeSpam,
           cursor: opts.cursor,
           limit: opts.limit ? Number(opts.limit) : undefined,
         });
@@ -50,7 +56,7 @@ export function listMessagesCommand(): Command {
         }
 
         output.table(
-          ['ID', 'Channel', 'Direction', 'Status', 'From', 'To', 'Subject', 'Created At'],
+          ['ID', 'Channel', 'Direction', 'Status', 'From', 'To', 'Subject', 'Labels', 'Created At'],
           items.map((msg) => [
             msg.id,
             msg.channel,
@@ -59,6 +65,7 @@ export function listMessagesCommand(): Command {
             msg.fromAddress,
             msg.toAddress,
             msg.subject ? msg.subject.substring(0, 40) : '-',
+            (msg.labels ?? []).join(', ') || '-',
             msg.createdAt,
           ]),
         );

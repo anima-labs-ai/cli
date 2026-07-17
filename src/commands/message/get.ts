@@ -30,6 +30,7 @@ export function getMessageCommand(): Command {
           ['From', message.fromAddress],
           ['To', message.toAddress],
           ['Subject', message.subject ?? '-'],
+          ['Labels', (message.labels ?? []).join(', ') || '-'],
           ['Thread ID', message.threadId ?? '-'],
           ['External ID', message.externalId ?? '-'],
           ['Sent At', message.sentAt ?? '-'],

@@ -2,6 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { collectValue } from '../../lib/args.js';
 
 type MessageDirection = 'INBOUND' | 'OUTBOUND';
 type MessageStatus =
@@ -18,6 +19,8 @@ interface SearchEmailsOptions {
   agent?: string;
   direction?: MessageDirection;
   status?: MessageStatus;
+  label: string[];
+  includeSpam?: boolean;
   limit?: string;
   cursor?: string;
   threshold?: string;
@@ -48,6 +51,8 @@ export function searchEmailsCommand(): Command {
     .option('--agent <id>', 'Filter by agent ID')
     .option('--direction <dir>', 'Filter by direction (INBOUND, OUTBOUND) — full-text mode only', validateDirection)
     .option('--status <status>', 'Filter by delivery status — full-text mode only', validateStatus)
+    .option('--label <label>', 'Only email carrying this label; repeat to require ALL. System: unread, read, archived, spam — full-text mode only', collectValue, [])
+    .option('--include-spam', 'Include email flagged as spam on arrival (excluded by default) — full-text mode only')
     .option('--limit <number>', 'Max results (full-text 1-100, default 20; semantic 1-50, default 10)')
     .option('--cursor <cursor>', 'Pagination cursor — full-text mode only')
     .option('--threshold <number>', 'Minimum similarity score 0-1 (default 0.7) — semantic mode only')
@@ -62,6 +67,11 @@ export function searchEmailsCommand(): Command {
             ['--direction', opts.direction],
             ['--status', opts.status],
             ['--cursor', opts.cursor],
+            // The semantic endpoint takes only query/agentId/limit/threshold, so
+            // labels would be dropped server-side and the caller told its filter
+            // applied while every label was ignored — refuse rather than lie.
+            ['--label', opts.label.length > 0 ? 'set' : undefined],
+            ['--include-spam', opts.includeSpam ? 'true' : undefined],
           ]);
           await runSemanticSearch(query, opts, globals, output);
           return;
@@ -105,6 +115,8 @@ async function runFullTextSearch(
       agentId: opts.agent,
       direction: opts.direction,
       status: opts.status,
+      labels: opts.label.length > 0 ? opts.label : undefined,
+      includeSpam: opts.includeSpam,
     },
     pagination: {
       cursor: opts.cursor,
@@ -124,7 +136,7 @@ async function runFullTextSearch(
   }
 
   output.table(
-    ['ID', 'Direction', 'Status', 'From', 'To', 'Subject', 'Created At'],
+    ['ID', 'Direction', 'Status', 'From', 'To', 'Subject', 'Labels', 'Created At'],
     items.map((msg) => [
       msg.id,
       msg.direction,
@@ -132,6 +144,7 @@ async function runFullTextSearch(
       msg.fromAddress,
       msg.toAddress,
       msg.subject ? msg.subject.substring(0, 40) : '-',
+      (msg.labels ?? []).join(', ') || '-',
       msg.createdAt,
     ]),
     {

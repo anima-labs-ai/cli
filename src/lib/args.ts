@@ -61,3 +61,17 @@ export function validateLimit(value: string): string {
   }
   return value;
 }
+
+/**
+ * Commander reducer for a repeatable string option — `--label a --label b`
+ * accumulates into `['a', 'b']`. Pair it with a `[]` default:
+ * `.option('--label <label>', '…', collectValue, [])`.
+ *
+ * The same append-on-repeat shape the CLI already uses for `--to`/`--cc` on
+ * `email send`. Hoisted here (rather than re-declared per command) so every
+ * repeatable flag accumulates identically instead of one command silently
+ * keeping only the last value.
+ */
+export function collectValue(value: string, previous: string[]): string[] {
+  return previous.concat([value]);
+}

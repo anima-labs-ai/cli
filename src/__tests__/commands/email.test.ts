@@ -85,6 +85,7 @@ function buildMessageResponse(overrides: Record<string, unknown> = {}): Record<s
     headers: null,
     metadata: null,
     threadId: null,
+    labels: ['unread'],
     inReplyTo: null,
     externalId: null,
     sentAt: '2026-01-01T00:00:00.000Z',
@@ -116,6 +117,21 @@ function buildDomainResponse(overrides: Record<string, unknown> = {}): Record<st
     createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
+}
+
+/**
+ * Read an array query key regardless of which equivalent wire-form oRPC's
+ * OpenAPILink emits — it serializes arrays with indexed brackets
+ * (`?labels[0]=a&labels[1]=b`); plain and bare-bracket are the same array to
+ * the server. Pins the VALUES on the wire, not the encoding oRPC chose.
+ */
+function collectQueryValues(url: URL, key: string): string[] {
+  const values: string[] = [];
+  const indexed = new RegExp(`^${key}(\\[\\d*\\])?$`);
+  for (const [name, value] of url.searchParams.entries()) {
+    if (indexed.test(name)) values.push(value);
+  }
+  return values;
 }
 
 describe('email commands', () => {
@@ -264,6 +280,35 @@ describe('email commands', () => {
     };
     expect(parsed.items[0]?.id).toBe(EMAIL_ID_1);
     expect(parsed.pagination.nextCursor).toBe(CURSOR_2);
+  });
+
+  test('email list forwards repeated --label and --include-spam as query params', async () => {
+    let seen: URL | null = null;
+    setRoute('GET', '/v1/email', {
+      status: 200,
+      body: {
+        items: [buildMessageResponse({ id: EMAIL_ID_1, labels: ['unread', 'urgent'] })],
+        pagination: { nextCursor: null, hasMore: false },
+      },
+      assert: ({ url }) => {
+        seen = url;
+      },
+    });
+
+    await runProgram([
+      '--json',
+      'email', 'list',
+      '--label', 'unread',
+      '--label', 'urgent',
+      '--include-spam',
+    ]);
+
+    expect(seen).not.toBeNull();
+    // Both labels must reach the wire (AND semantics). oRPC serializes arrays
+    // with indexed brackets (`labels[0]=`), so collect across that form.
+    const labelValues = collectQueryValues(seen!, 'labels');
+    expect(labelValues.sort()).toEqual(['unread', 'urgent']);
+    expect(seen!.search.includes('includeSpam=true')).toBe(true);
   });
 
   test('email get fetches by id', async () => {
