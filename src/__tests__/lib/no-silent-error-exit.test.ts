@@ -70,6 +70,11 @@ function isLoudProcessExit(node: ts.Node): boolean {
 // loud exit in its own right. Without this, `output.error(detail); ...;
 // output.fatal(summary)` (one detail line per item, then a fatal) would be a
 // false positive.
+//
+// Note the deliberate asymmetry with isLoudProcessExit, which excludes exit(0):
+// process.exit(0) is a legitimate success exit, but fatal's contract is always a
+// FAILURE exit (code 1 or 2 — see its docstring), so every fatal() is loud and
+// there is no fatal(…, 0) success case to carve out.
 function isOutputFatal(node: ts.Node): boolean {
   return (
     ts.isCallExpression(node) &&
@@ -207,8 +212,14 @@ function continuationReachesLoudExit(errStmt: ts.Statement): boolean {
       const idx = list.indexOf(cur as ts.Statement);
       if (idx >= 0 && listReachesLoudExit(list, idx + 1)) return true;
       const owner = parent.parent;
-      if (!owner || isFunctionLike(owner)) return false; // hit the function boundary
-      cur = owner;
+      if (!owner || isFunctionLike(owner)) return false; // this block IS the function body
+      // Advance to the block itself, NOT `owner`. When `parent` sits directly in
+      // another statement list (a bare `{ }` block-in-block, or a braced `case`
+      // body), `owner` is that outer list; jumping straight to it skips past
+      // `parent`'s own position in it, so a loud exit among `parent`'s trailing
+      // siblings would be missed (a false positive). Climbing to `parent` lets
+      // the next iteration locate it in `owner`'s list and scan what follows.
+      cur = parent;
       continue;
     }
     if (isFunctionLike(parent)) return false;
@@ -332,6 +343,24 @@ describe('no-silent-error-exit analyzer', () => {
          if (a) { output.error('x'); } else if (b) { output.error('y'); } else { output.error('z'); }
          process.exit(1);
        }`,
+    );
+    expect(v).toEqual([]);
+  });
+
+  test('spares a bare-block-wrapped error whose sibling is a loud exit (block-in-block)', () => {
+    // Regression: the continuation walk used to skip `parent`'s position when
+    // the block sat directly in another statement list, missing this exit.
+    const v = findViolations(
+      'ok-block-in-block.ts',
+      `function f() { { output.error('x'); } process.exit(1); }`,
+    );
+    expect(v).toEqual([]);
+  });
+
+  test('spares an error in a braced case body followed by a loud exit', () => {
+    const v = findViolations(
+      'ok-braced-case.ts',
+      `function f() { switch (n) { case 1: { output.error('x'); } process.exit(1); } }`,
     );
     expect(v).toEqual([]);
   });
