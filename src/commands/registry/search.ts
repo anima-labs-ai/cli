@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { validateLimit } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -79,14 +80,6 @@ function validateTrustMin(value: string): string {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100) {
     throw new InvalidArgumentError('trust-min must be an integer between 0 and 100');
-  }
-  return value;
-}
-
-function validateLimit(value: string): string {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
   }
   return value;
 }

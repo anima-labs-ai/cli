@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { validateLimit } from '../../lib/args.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -98,14 +99,6 @@ function validateStatus(value: string): IdentityStatus {
     return value;
   }
   throw new InvalidArgumentError('status must be one of ACTIVE, SUSPENDED, DELETED');
-}
-
-function validateLimit(value: string): string {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
-  }
-  return value;
 }
 
 function handleOrpcError(error: unknown, output: Output, context: string): never {

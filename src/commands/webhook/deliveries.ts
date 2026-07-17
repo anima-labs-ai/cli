@@ -1,8 +1,8 @@
-import { Command, InvalidArgumentError } from 'commander';
+import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
-import { requireNonEmptyArg } from '../../lib/args.js';
+import { requireNonEmptyArg, validateLimit } from '../../lib/args.js';
 
 interface DeliveriesOptions {
   limit?: string;
@@ -55,14 +55,6 @@ export function webhookDeliveriesCommand(): Command {
         handleOrpcError(error, output, 'Failed to list deliveries');
       }
     });
-}
-
-function validateLimit(value: string): string {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
-  }
-  return value;
 }
 
 function handleOrpcError(error: unknown, output: Output, context: string): never {

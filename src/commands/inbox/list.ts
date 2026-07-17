@@ -1,20 +1,13 @@
-import { Command, InvalidArgumentError } from 'commander';
+import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { validateLimit } from '../../lib/args.js';
 
 interface ListInboxesOptions {
   cursor?: string;
   limit?: string;
   query?: string;
-}
-
-function validateLimit(value: string): string {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('limit must be an integer between 1 and 100');
-  }
-  return value;
 }
 
 export function listInboxesCommand(): Command {

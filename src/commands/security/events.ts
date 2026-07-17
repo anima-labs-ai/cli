@@ -48,8 +48,10 @@ function parseType(value: string): EventType {
 }
 
 function parseLimit(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100) {
+  // `Number`, not `parseInt`: `parseInt('20abc')` is 20, so a fat-fingered
+  // limit silently paged at a size nobody asked for.
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
     throw new InvalidArgumentError('Limit must be an integer between 1 and 100');
   }
   return parsed;
