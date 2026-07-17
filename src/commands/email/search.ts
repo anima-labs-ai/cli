@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
-import { collectValue } from '../../lib/args.js';
+import { collectValue, parseBoundedInt } from '../../lib/args.js';
 
 type MessageDirection = 'INBOUND' | 'OUTBOUND';
 type MessageStatus =
@@ -80,7 +80,10 @@ export function searchEmailsCommand(): Command {
         assertNoFlags('only applies to --semantic mode', [['--threshold', opts.threshold]]);
         await runFullTextSearch(query, opts, globals, output);
       } catch (error: unknown) {
-        if (error instanceof UsageError) {
+        // parseBoundedInt (lib/args) throws InvalidArgumentError; assertNoFlags
+        // and parseThreshold throw UsageError. Both are usage mistakes and must
+        // render as the clean one-line error, not "Failed to search emails: …".
+        if (error instanceof UsageError || error instanceof InvalidArgumentError) {
           output.fatal(error.message);
           return;
         }
@@ -201,20 +204,6 @@ function assertNoFlags(
   const offending = flags.filter(([, value]) => value !== undefined).map(([name]) => name);
   if (offending.length === 0) return;
   throw new UsageError(`${offending.join(', ')} ${reason}.`);
-}
-
-function parseBoundedInt(
-  flag: string,
-  value: string | undefined,
-  min: number,
-  max: number,
-): number | undefined {
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
-    throw new UsageError(`${flag} must be an integer between ${min} and ${max}`);
-  }
-  return parsed;
 }
 
 function parseThreshold(value: string | undefined): number {

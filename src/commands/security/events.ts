@@ -3,6 +3,7 @@ import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { boundedInt } from '../../lib/args.js';
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 type EventType =
@@ -47,16 +48,6 @@ function parseType(value: string): EventType {
   return upper;
 }
 
-function parseLimit(value: string): number {
-  // `Number`, not `parseInt`: `parseInt('20abc')` is 20, so a fat-fingered
-  // limit silently paged at a size nobody asked for.
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
-    throw new InvalidArgumentError('Limit must be an integer between 1 and 100');
-  }
-  return parsed;
-}
-
 export function securityEventsCommand(): Command {
   return new Command('events')
     .description('List security events')
@@ -68,7 +59,7 @@ export function securityEventsCommand(): Command {
       parseType,
     )
     .option('--severity <level>', 'Filter by severity (low|medium|high|critical)', parseSeverity)
-    .option('--limit <n>', 'Page size (1-100)', parseLimit)
+    .option('--limit <n>', 'Page size (1-100)', boundedInt('limit', 1, 100))
     .option('--cursor <cursor>', 'Pagination cursor')
     .action(async function (this: Command) {
       const opts = this.opts<EventsOptions>();
