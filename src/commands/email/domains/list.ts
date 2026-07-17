@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../../lib/orpc.js';
 
 export function listDomainsCommand(): Command {
   return new Command('list')
@@ -39,19 +39,4 @@ export function listDomainsCommand(): Command {
         handleOrpcError(error, output, 'Failed to list domains');
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

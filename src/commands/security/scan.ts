@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface ScanOptions {
   org?: string;
@@ -48,24 +48,7 @@ export function securityScanCommand(): Command {
           output.warn('Scanner is not active');
         }
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to fetch scanner status');
+        handleOrpcError(error, output, 'Failed to fetch scanner status', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.' } });
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 403) {
-      output.error('Forbidden: you do not have access to this organization.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

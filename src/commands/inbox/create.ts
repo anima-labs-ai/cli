@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface CreateInboxOptions {
   username?: string;
@@ -49,24 +49,7 @@ export function createInboxCommand(): Command {
         ]);
         output.success(`Inbox created: ${inbox.email}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to create inbox');
+        handleOrpcError(error, output, 'Failed to create inbox', { statusMessages: { 409: 'Inbox address already exists. Choose a different username or domain.' } });
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 409) {
-      output.error('Inbox address already exists. Choose a different username or domain.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

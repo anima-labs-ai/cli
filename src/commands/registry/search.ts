@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { validateLimit } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface SearchOptions {
   query?: string;
@@ -82,19 +82,4 @@ function validateTrustMin(value: string): string {
     throw new InvalidArgumentError('trust-min must be an integer between 0 and 100');
   }
   return value;
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

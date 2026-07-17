@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { validateLimit } from '../../lib/args.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 import { Output } from '../../lib/output.js';
 
 type IdentityStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
@@ -89,7 +89,7 @@ export function listIdentitiesCommand(): Command {
           },
         );
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to list identities');
+        handleOrpcError(error, output, 'Failed to list identities', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.' }, codeMessages: { USER_AUTH_REQUIRED: 'Cross-org listing requires user authentication (Clerk session or OAuth). Run `am auth login --web`, or pass --org explicitly when using an API key.' } });
       }
     });
 }
@@ -99,25 +99,4 @@ function validateStatus(value: string): IdentityStatus {
     return value;
   }
   throw new InvalidArgumentError('status must be one of ACTIVE, SUSPENDED, DELETED');
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 403) {
-      output.error('Forbidden: you do not have access to this organization.');
-    } else if (error.code === 'USER_AUTH_REQUIRED') {
-      output.error(
-        'Cross-org listing requires user authentication (Clerk session or OAuth). Run `am auth login --web`, or pass --org explicitly when using an API key.',
-      );
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

@@ -1,7 +1,7 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { ORPCError, requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 import { collectValue, parseBoundedInt } from '../../lib/args.js';
 
 type MessageDirection = 'INBOUND' | 'OUTBOUND';
@@ -91,7 +91,7 @@ export function searchEmailsCommand(): Command {
           output.fatal('Semantic search is temporarily unavailable (embedding provider outage). Retry later, or search without --semantic.');
           return;
         }
-        handleOrpcError(error, output, 'Failed to search emails');
+        handleOrpcError(error, output, 'Failed to search emails', { statusMessages: { 403: 'Forbidden: you do not have access to this resource.' } });
       }
     });
 }
@@ -239,21 +239,4 @@ function validateStatus(value: string): MessageStatus {
   throw new InvalidArgumentError(
     'status must be one of QUEUED, SENT, DELIVERED, FAILED, BOUNCED, BLOCKED, PENDING_APPROVAL',
   );
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 403) {
-      output.error('Forbidden: you do not have access to this resource.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

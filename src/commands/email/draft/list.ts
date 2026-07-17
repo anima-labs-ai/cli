@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../../lib/orpc.js';
 import { validateLimit } from '../../../lib/args.js';
 
 interface ListDraftsOptions {
@@ -60,19 +60,4 @@ export function listDraftsCommand(): Command {
         handleOrpcError(error, output, 'Failed to list drafts');
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

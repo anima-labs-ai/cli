@@ -20,8 +20,51 @@ import { OpenAPILink } from '@orpc/openapi-client/fetch';
 
 import { type GlobalOptions, ensureAuthHeaders, resolveApiUrl } from './auth.js';
 import { getAuthConfig } from './config.js';
+import type { Output } from './output.js';
 
 export { ORPCError };
+
+/** Per-condition message overrides for {@link handleOrpcError}. */
+export interface OrpcErrorMessages {
+  /** Message for a specific HTTP status, e.g. `{ 404: 'Domain not found.' }`. */
+  statusMessages?: Record<number, string>;
+  /**
+   * Message for a specific oRPC error `code` (a non-status condition).
+   * Checked after `statusMessages`, so a status override wins when both match.
+   */
+  codeMessages?: Record<string, string>;
+}
+
+/**
+ * Turn an oRPC failure into a rendered CLI error and a non-zero exit, in one
+ * place. Replaces the ~42 near-identical per-command `handleOrpcError` copies.
+ *
+ * Message resolution, most specific first: 401 → a fixed "authenticate" hint;
+ * a matching `statusMessages` entry; a matching `codeMessages` entry; otherwise
+ * `"${context}: ${error.message}"`.
+ *
+ * Exits via `output.fatal` (never returns) — `output` is a typed parameter, so
+ * the `never` narrows and the whole `process.exit` dance stays inside here.
+ */
+export function handleOrpcError(
+  error: unknown,
+  output: Output,
+  context: string,
+  messages?: OrpcErrorMessages,
+): never {
+  if (error instanceof ORPCError) {
+    if (error.status === 401) {
+      output.fatal('Not authenticated. Run `anima auth login` to authenticate.');
+    }
+    const byStatus = messages?.statusMessages?.[error.status];
+    if (byStatus !== undefined) output.fatal(byStatus);
+    const byCode = messages?.codeMessages?.[error.code];
+    if (byCode !== undefined) output.fatal(byCode);
+    output.fatal(`${context}: ${error.message}`);
+  }
+  if (error instanceof Error) output.fatal(`${context}: ${error.message}`);
+  output.fatal(context);
+}
 
 export type AnimaClient = ContractRouterClient<typeof contract>;
 

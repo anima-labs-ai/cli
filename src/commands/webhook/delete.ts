@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 import { requireNonEmptyArg } from '../../lib/args.js';
 
 export function deleteWebhookCommand(): Command {
@@ -23,24 +23,7 @@ export function deleteWebhookCommand(): Command {
 
         output.success(`Webhook ${id} deleted`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to delete webhook');
+        handleOrpcError(error, output, 'Failed to delete webhook', { statusMessages: { 404: 'Webhook not found.' } });
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 404) {
-      output.error('Webhook not found.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }

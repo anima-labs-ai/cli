@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
-import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
+import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 import { collectValue, requireNonEmptyArg } from '../../lib/args.js';
 
 interface LabelOptions {
@@ -58,26 +58,7 @@ export function labelMessageCommand(): Command {
 
         output.success(`Labels on ${message.id}: ${message.labels.join(', ') || '(none)'}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to update labels');
+        handleOrpcError(error, output, 'Failed to update labels', { statusMessages: { 404: 'Message not found.', 403: 'Forbidden: you do not have access to this resource.' } });
       }
     });
-}
-
-function handleOrpcError(error: unknown, output: Output, context: string): never {
-  if (error instanceof ORPCError) {
-    if (error.status === 401) {
-      output.error('Not authenticated. Run `anima auth login` to authenticate.');
-    } else if (error.status === 404) {
-      output.error('Message not found.');
-    } else if (error.status === 403) {
-      output.error('Forbidden: you do not have access to this resource.');
-    } else {
-      output.error(`${context}: ${error.message}`);
-    }
-  } else if (error instanceof Error) {
-    output.error(`${context}: ${error.message}`);
-  } else {
-    output.error(context);
-  }
-  process.exit(1);
 }
