@@ -53,6 +53,13 @@ export const ADVERTISED_COMMANDS = [
 		name: "Fetch one email by id",
 		command: "anima email get <email-id>",
 	},
+	{
+		// Restored for real this time: `email search` was advertised as
+		// fiction before B11 shipped; it now hits POST /messages/search
+		// (add --semantic for embedding-based ranking).
+		name: "Search your emails",
+		command: "anima email search 'invoice' --semantic",
+	},
 ] as const;
 
 async function runEmailDemo(output: Output, isAgent: boolean): Promise<void> {

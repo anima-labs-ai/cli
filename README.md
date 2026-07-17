@@ -88,6 +88,18 @@ anima identity rotate-key # Rotate identity signing key
 anima email send          # Send an email
 anima email list          # List received emails
 anima email get <id>      # Get email details
+anima email search <query>             # Full-text search over your emails
+anima email search <query> --semantic  # Meaning-based (embedding) search
+```
+
+#### `email draft` — Compose now, send later
+
+```bash
+anima email draft create  # Create a draft (may be incomplete — only --agent required)
+anima email draft list    # List drafts
+anima email draft get <id>     # Get draft details
+anima email draft send <id>    # Send: converts the draft to a real message
+anima email draft delete <id>  # Delete a draft without sending
 ```
 
 #### `email domains` — Custom domain management

@@ -86,9 +86,16 @@ jobs:
           token: ${{ secrets.ANIMA_REPO_TOKEN }}
           fetch-depth: 1
 
+      # Pinned via cli/.bun-version, matching release.yml and
+      # anima-drift-canary.yml. `bun-version: latest` made setup-bun resolve
+      # the tag through api.github.com on every run, so a GitHub API hiccup
+      # fast-failed this job in ~8s before a single check ran (observed
+      # 2026-07-16: "Failed to fetch url .../oven-sh/bun/git/refs/tags
+      # (status code: 503)"). An exact version downloads the release directly
+      # and keeps CI on the same bun the release pipeline ships with.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: cli/.bun-version
 
       # The @anima/contracts package symlinks into the CLI from the
       # anima sibling checkout via `file:../anima/packages/contracts`.

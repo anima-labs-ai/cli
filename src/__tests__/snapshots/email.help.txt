@@ -3,11 +3,14 @@ Usage: anima email [options] [command]
 Send and manage emails
 
 Options:
-  -h, --help      display help for command
+  -h, --help                display help for command
 
 Commands:
-  send [options]  Send an email
-  list [options]  List emails
-  get <id>        Get email by ID
-  domains         Manage email sending domains
-  help [command]  display help for command
+  send [options]            Send an email
+  list [options]            List emails
+  get <id>                  Get email by ID
+  search [options] <query>  Search emails by text query (add --semantic for
+                            meaning-based ranking)
+  draft                     Manage email drafts (compose now, send later)
+  domains                   Manage email sending domains
+  help [command]            display help for command
