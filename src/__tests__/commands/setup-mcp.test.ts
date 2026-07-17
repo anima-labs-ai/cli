@@ -267,7 +267,7 @@ describe('setup-mcp commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -504,7 +504,7 @@ describe('setup-mcp commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -561,7 +561,7 @@ describe('setup-mcp commands', () => {
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 

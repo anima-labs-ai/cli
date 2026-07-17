@@ -1,0 +1,18 @@
+// Emit config for `bun run build`. tsconfig.json is the typecheck/editor
+// config and deliberately covers src/__tests__ — but tsc here emits rather
+// than just checking, and package.json ships `files: ["dist"]`, so building
+// with that config would publish 116 compiled test artifacts to npm.
+//
+// The narrower `types` is also load-bearing, not tidiness: the CLI is built
+// `--target=node` and runs on node (engines.node >= 22), while the tests run
+// under bun. Withholding bun's globals from the production compile is what
+// keeps a real `Bun.serve` out of src/ — it would typecheck and then die for
+// npm users. (src/commands/generate/index.ts only emits one inside a
+// template string, which is why it compiles today.)
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "exclude": ["node_modules", "dist", "src/__tests__"]
+}
