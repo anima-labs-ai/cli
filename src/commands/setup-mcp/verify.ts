@@ -268,35 +268,40 @@ export function verifyMcpCommand(): Command {
           });
         }
 
-        if (globals.json) {
-          output.json({ results });
-          return;
-        }
-
         const allOk = results.every((r) => r.status === 'ok');
 
-        output.table(
-          ['Client', 'Status', 'Mode', 'Issues'],
-          results.map((r) => [
-            r.client,
-            r.status === 'ok' ? '✓' : '✗',
-            r.mode,
-            r.issues.length > 0 ? r.issues.join('; ') : '-',
-          ]),
-        );
-
-        if (allOk) {
-          output.success(
-            `All ${results.length} client${results.length === 1 ? '' : 's'} verified.`,
-          );
+        if (globals.json) {
+          output.json({ results });
         } else {
-          const failCount = results.filter(
-            (r) => r.status !== 'ok',
-          ).length;
-          output.error(
-            `${failCount} client${failCount === 1 ? '' : 's'} with issues. Run \`anima setup-mcp install\` to fix.`,
+          output.table(
+            ['Client', 'Status', 'Mode', 'Issues'],
+            results.map((r) => [
+              r.client,
+              r.status === 'ok' ? '✓' : '✗',
+              r.mode,
+              r.issues.length > 0 ? r.issues.join('; ') : '-',
+            ]),
           );
+
+          if (allOk) {
+            output.success(
+              `All ${results.length} client${results.length === 1 ? '' : 's'} verified.`,
+            );
+          } else {
+            const failCount = results.filter(
+              (r) => r.status !== 'ok',
+            ).length;
+            output.error(
+              `${failCount} client${failCount === 1 ? '' : 's'} with issues. Run \`anima setup-mcp install\` to fix.`,
+            );
+          }
         }
+
+        // A command called `verify` exists to be scripted, so its exit code is
+        // the answer — `setup-mcp verify || exit 1` could never fail while this
+        // reported "clients with issues" and exited 0. The verdict decides, in
+        // every format, like `doctor`.
+        if (!allOk) process.exit(1);
       } catch (error: unknown) {
         if (error instanceof Error) {
           output.error(error.message);

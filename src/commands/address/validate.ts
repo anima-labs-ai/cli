@@ -41,10 +41,7 @@ Examples:
 
         if (globals.json) {
           output.json(response);
-          return;
-        }
-
-        if (response.valid) {
+        } else if (response.valid) {
           output.success('Address is valid');
         } else {
           output.error('Address validation failed');
@@ -59,6 +56,14 @@ Examples:
             }
           }
         }
+
+        // The verdict is this command's whole contract, so it decides the exit
+        // — after rendering, and regardless of --json. Reporting "validation
+        // failed" and exiting 0 let `validate … && ship` ship an address the
+        // API rejected, while the same script correctly halted when the API was
+        // merely down. Matches `doctor`, which exits on the verdict, not the
+        // format.
+        if (!response.valid) process.exit(1);
       } catch (error: unknown) {
         if (error instanceof ORPCError) {
           output.error(`Failed to validate address: ${error.message}`);
