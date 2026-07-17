@@ -25,6 +25,7 @@ export function configProfileCommand(): Command {
           output.success(`Switched to profile "${name}"`);
         } catch (err: unknown) {
           output.error(err instanceof Error ? err.message : String(err));
+          process.exit(1);
         }
       }),
   );
@@ -42,6 +43,7 @@ export function configProfileCommand(): Command {
           output.success(`Deleted profile "${name}"`);
         } catch (err: unknown) {
           output.error(err instanceof Error ? err.message : String(err));
+          process.exit(1);
         }
       }),
   );

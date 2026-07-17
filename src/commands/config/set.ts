@@ -21,7 +21,7 @@ export function configSetCommand(): Command {
 
       if (!isValidConfigKey(key)) {
         output.error(`Invalid config key "${key}". Valid keys: ${getValidConfigKeys().join(', ')}`);
-        return;
+        process.exit(2);
       }
 
       const config = await getConfig();

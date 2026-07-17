@@ -45,6 +45,42 @@ describe('config commands', () => {
     writeFileSync(join(testConfigDir, 'config.json'), JSON.stringify(config, null, 2));
   }
 
+  /**
+   * Run a command that is expected to fail, capturing what the user sees and
+   * the code the shell gets. `process.exit` throws here so the handler stops
+   * where a real exit would — otherwise the action runs on past the error and
+   * e.g. writes the key it just rejected.
+   */
+  async function runCapturingExit(
+    argv: string[],
+  ): Promise<{ code: number | undefined; message: string }> {
+    const errorSpy = mock(() => {});
+    const origError = console.error;
+    const origExit = process.exit;
+    let code: number | undefined;
+
+    console.error = errorSpy;
+    process.exit = ((c?: number) => {
+      code = c;
+      throw new Error('__exit__');
+    }) as unknown as typeof process.exit;
+
+    program.exitOverride();
+    try {
+      await program.parseAsync(['node', 'anima', ...argv]);
+    } catch (error: unknown) {
+      if (!(error instanceof Error) || error.message !== '__exit__') throw error;
+    } finally {
+      console.error = origError;
+      process.exit = origExit;
+    }
+
+    return {
+      code,
+      message: errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n'),
+    };
+  }
+
   describe('config set', () => {
     test('sets a top-level config value', async () => {
       program.exitOverride();
@@ -68,17 +104,14 @@ describe('config commands', () => {
     });
 
     test('rejects invalid config key', async () => {
-      const errorSpy = mock(() => {});
-      const origError = console.error;
-      console.error = errorSpy;
+      const { code, message } = await runCapturingExit([
+        'config', 'set', 'invalidKey', 'value',
+      ]);
 
-      program.exitOverride();
-      await program.parseAsync(['node', 'anima', 'config', 'set', 'invalidKey', 'value']);
-
-      console.error = origError;
-      expect(errorSpy).toHaveBeenCalled();
-      const errorMsg = errorSpy.mock.calls[0]?.[0] as string;
-      expect(errorMsg).toContain('Invalid config key');
+      expect(message).toContain('Invalid config key');
+      // Bad input, so 2 — matching `generate`, `completion` and `voice place`.
+      // Without this the shell is told the set succeeded.
+      expect(code).toBe(2);
     });
   });
 
@@ -116,15 +149,12 @@ describe('config commands', () => {
     test('reports error for unset key', async () => {
       writeAppConfig({});
 
-      const errorSpy = mock(() => {});
-      const origError = console.error;
-      console.error = errorSpy;
+      const { code, message } = await runCapturingExit(['config', 'get', 'defaultOrg']);
 
-      program.exitOverride();
-      await program.parseAsync(['node', 'anima', 'config', 'get', 'defaultOrg']);
-
-      console.error = origError;
-      expect(errorSpy).toHaveBeenCalled();
+      expect(message).toContain('is not set');
+      // A lookup miss, not bad input — 1, like `git config --get` on a key
+      // that isn't there.
+      expect(code).toBe(1);
     });
 
     test('resolves env var over config file', async () => {
@@ -222,15 +252,12 @@ describe('config commands', () => {
     test('errors when switching to nonexistent profile', async () => {
       writeAppConfig({});
 
-      const errorSpy = mock(() => {});
-      const origError = console.error;
-      console.error = errorSpy;
+      const { code, message } = await runCapturingExit([
+        'config', 'profile', 'use', 'nonexistent',
+      ]);
 
-      program.exitOverride();
-      await program.parseAsync(['node', 'anima', 'config', 'profile', 'use', 'nonexistent']);
-
-      console.error = origError;
-      expect(errorSpy).toHaveBeenCalled();
+      expect(message).toContain('does not exist');
+      expect(code).toBe(1);
     });
 
     test('deletes a profile', async () => {
@@ -289,6 +316,58 @@ describe('config commands', () => {
       const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
       expect(output).toContain('prod');
       expect(output).toContain('prod-org');
+    });
+  });
+
+  /**
+   * WHY: printing `{"status":"error"}` and then exiting 0 is a lie the shell
+   * believes. `anima config set … && deploy` would deploy on a rejected key;
+   * `set -e` scripts and CI sail through a real failure. The tests above this
+   * block assert the *message* and pass either way — which is exactly how this
+   * shipped. The exit code is the part a script can actually see.
+   *
+   * Code follows the convention already in the CLI: 2 = the input was bad
+   * (`generate` unknown kind, `completion` unsupported shell, `voice place`
+   * malformed --to), 1 = the input was fine but the operation failed.
+   */
+  describe('error paths exit non-zero', () => {
+    test('config set rejects an empty key with exit 2', async () => {
+      writeAppConfig({});
+      const { code } = await runCapturingExit(['config', 'set', '', 'value']);
+      expect(code).toBe(2);
+    });
+
+    test('config set does not persist a rejected key', async () => {
+      // The rejection must also not leave the bad key in the file — the exit
+      // is what stops the write.
+      writeAppConfig({});
+      await runCapturingExit(['config', 'set', 'invalidKey', 'value']);
+      expect(readAppConfig().invalidKey).toBeUndefined();
+    });
+
+    test('config get rejects an invalid key with exit 2', async () => {
+      writeAppConfig({});
+      const { code, message } = await runCapturingExit(['config', 'get', 'invalidKey']);
+      expect(message).toContain('Invalid config key');
+      expect(code).toBe(2);
+    });
+
+    test('config get exits 1 when the key is not set in the named profile', async () => {
+      writeAppConfig({ profiles: { prod: { defaultOrg: 'prod-org' } } });
+      const { code, message } = await runCapturingExit([
+        'config', 'get', '--profile', 'prod', 'apiUrl',
+      ]);
+      expect(message).toContain('not set in profile');
+      expect(code).toBe(1);
+    });
+
+    test('config profile delete exits 1 for an unknown profile', async () => {
+      writeAppConfig({});
+      const { code, message } = await runCapturingExit([
+        'config', 'profile', 'delete', 'nonexistent',
+      ]);
+      expect(message).toContain('does not exist');
+      expect(code).toBe(1);
     });
   });
 });
