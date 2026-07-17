@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
-import type { Command } from 'commander';
+import type { Command, CommanderError } from 'commander';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -225,5 +225,41 @@ describe('security commands', () => {
     const parsed = JSON.parse(String(printed)) as typeof EMPTY_EVENTS_BODY;
     expect(parsed.items).toEqual([]);
     expect(parsed.pagination.hasMore).toBe(false);
+  });
+
+  // Regression: `--limit` parsed with `parseInt`, so "20abc" became 20 and
+  // "5.5" became 5 — a fat-fingered limit silently paged at a size nobody
+  // asked for. It must be rejected as a usage error before any request, the
+  // same way the paginated `list` commands reject it (lib/args validateLimit).
+  test('events rejects a non-integer --limit before any request', async () => {
+    writeFileSync(join(testConfigDir, 'config.json'), JSON.stringify({ defaultOrg: ORG_ID_ME }));
+    let eventsRequested = false;
+    setRoute('GET', `/v1/orgs/${ORG_ID_ME}/security/events`, {
+      status: 200,
+      body: EMPTY_EVENTS_BODY,
+      assert: () => {
+        eventsRequested = true;
+      },
+    });
+
+    const originalError = console.error;
+    const originalWriteErr = process.stderr.write;
+    console.error = mock(() => {}) as unknown as typeof console.error;
+    process.stderr.write = (() => true) as typeof process.stderr.write;
+
+    let thrown: unknown;
+    try {
+      await runProgram(['security', 'events', '--limit', '20abc']);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    console.error = originalError;
+    process.stderr.write = originalWriteErr;
+
+    // Reported as the usage mistake it is — not truncated into a real page size.
+    expect((thrown as CommanderError | undefined)?.code).toBe('commander.invalidArgument');
+    // The bad limit never left the CLI.
+    expect(eventsRequested).toBe(false);
   });
 });
