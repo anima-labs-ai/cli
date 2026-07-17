@@ -92,6 +92,7 @@ function buildMessageResponse(overrides: Record<string, unknown> = {}): Record<s
     headers: null,
     metadata: null,
     threadId: null,
+    labels: ['unread'],
     inReplyTo: null,
     externalId: null,
     sentAt: null,
@@ -252,6 +253,72 @@ describe('email search command', () => {
     const printed = logSpy.mock.calls.at(0)?.at(0);
     const parsed = JSON.parse(String(printed)) as { items: Array<{ id: string }> };
     expect(parsed.items[0]?.id).toBe(MESSAGE_ID_2);
+  });
+
+  test('plain search carries repeated --label and --include-spam into filters', async () => {
+    setRoute('POST', '/v1/messages/search', {
+      status: 200,
+      body: {
+        items: [buildMessageResponse({ labels: ['unread', 'urgent'] })],
+        pagination: { nextCursor: null, hasMore: false },
+      },
+      assert: ({ body }) => {
+        // The label filter lives inside `filters`, EMAIL-scoped like the rest.
+        // Both values must survive: dropping one silently returns more mail
+        // than the AND-of-labels the user asked for.
+        expect(body).toMatchObject({
+          query: 'invoice',
+          filters: { channel: 'EMAIL', labels: ['unread', 'urgent'], includeSpam: true },
+        });
+      },
+    });
+
+    const logSpy = mock(() => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram([
+      '--json',
+      'email', 'search', 'invoice',
+      '--label', 'unread',
+      '--label', 'urgent',
+      '--include-spam',
+    ]);
+
+    console.log = originalLog;
+
+    const printed = logSpy.mock.calls.at(0)?.at(0);
+    const parsed = JSON.parse(String(printed)) as { items: Array<{ id: string }> };
+    expect(parsed.items[0]?.id).toBe(MESSAGE_ID_1);
+  });
+
+  test('--label and --include-spam are rejected in --semantic mode and send no request', async () => {
+    // WHY: POST /messages/search/semantic takes only query/agentId/limit/threshold,
+    // so a label filter would be dropped server-side while the caller is told its
+    // search was filtered — the silent no-op this refusal exists to prevent.
+    const errorSpy = mock(() => {});
+    const originalError = console.error;
+    console.error = errorSpy;
+
+    const exitSpy = mock(() => {});
+    const originalExit = process.exit;
+    process.exit = exitSpy as unknown as typeof process.exit;
+
+    await runProgram([
+      'email', 'search', 'invoice',
+      '--semantic',
+      '--label', 'unread',
+      '--include-spam',
+    ]);
+
+    process.exit = originalExit;
+    console.error = originalError;
+
+    const outputText = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(outputText.includes('--label')).toBe(true);
+    expect(outputText.includes('--include-spam')).toBe(true);
+    expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
+    expect(requestCount).toBe(0);
   });
 
   test('--semantic hits /messages/search/semantic with contract defaults (limit 10, threshold 0.7)', async () => {

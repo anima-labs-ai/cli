@@ -90,6 +90,12 @@ anima email list          # List received emails
 anima email get <id>      # Get email details
 anima email search <query>             # Full-text search over your emails
 anima email search <query> --semantic  # Meaning-based (embedding) search
+
+# Filter by label (repeat --label to require ALL); spam is hidden by default.
+# Relabel a message with `anima message label <id>` (see below).
+anima email list --label unread                 # unread mail only
+anima email list --label unread --include-spam  # include spam-flagged
+anima email search <query> --label unread       # combine text + label (full-text only)
 ```
 
 #### `email draft` — Compose now, send later
@@ -140,6 +146,19 @@ anima phone send-sms      # Send an SMS message
 anima message list        # List messages (email, SMS, MMS)
 anima message get <id>    # Get message details
 anima message search <q>  # Full-text search messages
+anima message label <id>  # Add/remove labels on a message
+
+# Labels are an agent's workflow state. System labels: unread, read,
+# archived, spam. Adding `read` clears `unread` (and vice versa).
+anima message label <id> --add read              # mark read
+anima message label <id> --add archived --remove unread
+anima message label <id> --add urgent            # your own tag
+
+# Filter list/search by label (repeat --label to require ALL). Spam is
+# hidden by default; --include-spam surfaces it.
+anima message list --label unread --label urgent
+anima message list --include-spam
+anima message search <q> --label unread
 ```
 
 ### `vault` — Manage password vault credentials
