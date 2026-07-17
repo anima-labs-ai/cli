@@ -19,7 +19,6 @@ import { onboardCommand } from "./commands/onboard/index.js";
 import { orgCommands } from "./commands/org/index.js";
 import { demoCommand } from "./commands/demo/index.js";
 import { phoneCommands } from "./commands/phone/index.js";
-import { podCommands } from "./commands/pod/index.js";
 import { registryCommands } from "./commands/registry/index.js";
 import { securityCommands } from "./commands/security/index.js";
 import { setupMcpCommands } from "./commands/setup-mcp/index.js";
@@ -77,7 +76,6 @@ export function createProgram(): Command {
 	program.addCommand(emailCommands());
 	program.addCommand(inboxCommands());
 	program.addCommand(phoneCommands());
-	program.addCommand(podCommands());
 	program.addCommand(registryCommands());
 	program.addCommand(vaultCommands());
 	program.addCommand(configCommands());
