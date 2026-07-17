@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -28,7 +29,7 @@ function formatCapabilities(caps: AgentCardCapabilities): string {
 export function getAgentCardCommand(): Command {
   return new Command('card')
     .description('Get the public agent card')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<CardOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -16,7 +17,7 @@ interface UpdateIdentityOptions {
 export function updateIdentityCommand(): Command {
   return new Command('update')
     .description('Update an identity')
-    .requiredOption('--id <id>', 'Identity ID')
+    .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
     .option('--name <name>', 'Identity name (2-100 chars)')
     .option('--slug <slug>', 'Identity slug (2-64 chars)')
     .option('--status <status>', 'Identity status (ACTIVE|SUSPENDED|DELETED)', validateStatus)

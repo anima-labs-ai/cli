@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -11,7 +12,7 @@ interface ReleaseOptions {
 export function releasePhoneNumberCommand(): Command {
   return new Command('release')
     .description('Release a provisioned phone number')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--number <phoneNumber>', 'Phone number to release')
     .action(async function (this: Command) {
       const opts = this.opts<ReleaseOptions>();

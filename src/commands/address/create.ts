@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -31,7 +32,7 @@ function isAddressType(value: string): value is AddressType {
 export function createAddressCommand(): Command {
   return new Command('create')
     .description('Create an address for an agent')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--type <type>', 'Address type: BILLING, SHIPPING, MAILING, REGISTERED')
     .option('--label <label>', 'Optional label for the address')
     .requiredOption('--street1 <street1>', 'Primary street address')

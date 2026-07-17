@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../../lib/args.js';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../../lib/orpc.js';
@@ -25,7 +26,7 @@ function collect(value: string, previous: string[]): string[] {
 export function createDraftCommand(): Command {
   return new Command('create')
     .description('Create an email draft (drafts may be incomplete — only --agent is required)')
-    .requiredOption('--agent <id>', 'Owning agent ID')
+    .requiredOption('--agent <id>', 'Owning agent ID', requireNonEmptyArg('Owning agent ID'))
     .option('--to <email>', 'Recipient email (repeatable)', collect, [])
     .option('--cc <email>', 'CC recipient email (repeatable)', collect, [])
     .option('--bcc <email>', 'BCC recipient email (repeatable)', collect, [])

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -10,7 +11,7 @@ interface DeleteIdentityOptions {
 export function deleteIdentityCommand(): Command {
   return new Command('delete')
     .description('Delete an identity')
-    .requiredOption('--id <id>', 'Identity ID')
+    .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
     .action(async function (this: Command) {
       const opts = this.opts<DeleteIdentityOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

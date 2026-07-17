@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -25,9 +26,9 @@ interface ShareCreateOptions {
 function shareCreateCommand(): Command {
   return new Command('create')
     .description('Share a credential with another agent')
-    .requiredOption('--agent <id>', 'Source agent ID (the agent granting access)')
-    .requiredOption('--credential <id>', 'Credential ID to share')
-    .requiredOption('--target <id>', 'Target agent ID (the agent receiving access)')
+    .requiredOption('--agent <id>', 'Source agent ID (the agent granting access)', requireNonEmptyArg('Source agent ID'))
+    .requiredOption('--credential <id>', 'Credential ID to share', requireNonEmptyArg('Credential ID'))
+    .requiredOption('--target <id>', 'Target agent ID (the agent receiving access)', requireNonEmptyArg('Target agent ID'))
     .option(
       '--permission <perm>',
       'READ = view metadata only; USE = fetch for runtime use; MANAGE = view + update + re-share',
@@ -155,7 +156,7 @@ interface ShareRevokeOptions {
 function shareRevokeCommand(): Command {
   return new Command('revoke')
     .description('Revoke a credential share')
-    .requiredOption('--id <shareId>', 'Share ID to revoke')
+    .requiredOption('--id <shareId>', 'Share ID to revoke', requireNonEmptyArg('Share ID'))
     .option('--agent <id>', 'Agent ID that owns the share')
     .action(async function (this: Command) {
       const opts = this.opts<ShareRevokeOptions>();

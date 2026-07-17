@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -10,7 +11,7 @@ interface UsageOptions {
 export function podUsageCommand(): Command {
   return new Command('usage')
     .description('Get resource usage for a pod')
-    .requiredOption('--id <id>', 'Pod ID')
+    .requiredOption('--id <id>', 'Pod ID', requireNonEmptyArg('Pod ID'))
     .action(async function (this: Command) {
       const opts = this.opts<UsageOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

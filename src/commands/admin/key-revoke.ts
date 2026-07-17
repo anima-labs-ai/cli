@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -17,7 +18,7 @@ interface RevokeKeyResponse {
 export function keyRevokeCommand(): Command {
   return new Command('revoke')
     .description('Revoke API key')
-    .requiredOption('--key-id <id>', 'API key ID to revoke')
+    .requiredOption('--key-id <id>', 'API key ID to revoke', requireNonEmptyArg('API key ID'))
     .option('--yes', 'Confirm key revocation without prompt')
     .action(async function (this: Command) {
       const opts = this.opts<KeyRevokeOptions>();

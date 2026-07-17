@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -14,7 +15,7 @@ interface RegisterOptions {
 export function registerAgentCommand(): Command {
   return new Command('register')
     .description('Register an agent in the public registry')
-    .requiredOption('--agent-id <id>', 'Agent ID (CUID)')
+    .requiredOption('--agent-id <id>', 'Agent ID (CUID)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--name <name>', 'Display name (2-200 chars)')
     .option('--description <desc>', 'Agent description (max 2000 chars)')
     .option('--tags <tags>', 'Comma-separated tags (max 20)')

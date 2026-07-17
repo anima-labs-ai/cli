@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -13,7 +14,7 @@ interface SendOptions {
 export function sendTaskCommand(): Command {
   return new Command('send')
     .description('Submit a task to an agent via A2A protocol')
-    .requiredOption('--agent <id>', 'Target agent ID')
+    .requiredOption('--agent <id>', 'Target agent ID', requireNonEmptyArg('Target agent ID'))
     .requiredOption('--type <type>', 'Task type identifier')
     .requiredOption('--input <json>', 'Task input as JSON string')
     .option('--from-did <did>', 'DID of the requesting agent')

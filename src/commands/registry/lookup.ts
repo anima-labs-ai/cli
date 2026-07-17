@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -10,7 +11,7 @@ interface LookupOptions {
 export function lookupAgentCommand(): Command {
   return new Command('lookup')
     .description('Look up an agent in the registry by DID')
-    .requiredOption('--did <did>', 'Agent DID')
+    .requiredOption('--did <did>', 'Agent DID', requireNonEmptyArg('Agent DID'))
     .action(async function (this: Command) {
       const opts = this.opts<LookupOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

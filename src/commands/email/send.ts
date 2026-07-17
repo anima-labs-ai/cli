@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -21,7 +22,7 @@ function collect(value: string, previous: string[]): string[] {
 export function sendEmailCommand(): Command {
   return new Command('send')
     .description('Send an email')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--to <email>', 'Recipient email', collect, [])
     .requiredOption('--subject <subject>', 'Email subject')
     .requiredOption('--body <body>', 'Email body text')

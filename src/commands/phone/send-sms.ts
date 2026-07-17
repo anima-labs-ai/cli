@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -28,7 +29,7 @@ function validateBody(body: string): string {
 export function sendSmsCommand(): Command {
   return new Command('send-sms')
     .description('Send an SMS from an agent')
-    .requiredOption('--agent <id>', 'Agent ID')
+    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--to <number>', 'Destination phone number')
     .requiredOption('--body <message>', 'SMS message body')
     .option('--media-url <url>', 'Media URL (repeatable)', (value: string, previous: string[] = []) => {
