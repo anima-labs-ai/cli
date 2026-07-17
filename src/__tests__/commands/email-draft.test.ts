@@ -222,7 +222,7 @@ describe('email draft commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -262,7 +262,7 @@ describe('email draft commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -282,7 +282,7 @@ describe('email draft commands', () => {
       body: buildDraftResponse({ id: DRAFT_ID_2, subject: 'Subj' }),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -310,7 +310,7 @@ describe('email draft commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -342,7 +342,7 @@ describe('email draft commands', () => {
       body: buildMessageResponse({ id: MESSAGE_ID_1, status: 'QUEUED' }),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -362,7 +362,7 @@ describe('email draft commands', () => {
       body: buildMessageResponse({ id: MESSAGE_ID_1, status: 'QUEUED' }),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -380,7 +380,7 @@ describe('email draft commands', () => {
       body: buildDraftResponse({ id: DRAFT_ID_2 }),
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -400,11 +400,11 @@ describe('email draft commands', () => {
       body: { error: { code: 'NOT_FOUND', message: 'draft not found' } },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -426,11 +426,11 @@ describe('email draft commands', () => {
       body: { error: { code: 'BAD_REQUEST', message: 'Draft has no recipients' } },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitSpy = mock(() => {});
+    const exitSpy = mock((...args: unknown[]) => {});
     const originalExit = process.exit;
     process.exit = exitSpy as unknown as typeof process.exit;
 
@@ -454,9 +454,9 @@ describe('email draft commands', () => {
   // an id that was never a draft. Rejecting the id up front kills all three.
   for (const sub of ['get', 'delete', 'send'] as const) {
     test(`draft ${sub} rejects an empty id as a usage error before any request`, async () => {
-      const logSpy = mock(() => {});
-      const errorSpy = mock(() => {});
-      const exitSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
+      const errorSpy = mock((...args: unknown[]) => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       const originalError = console.error;
       const originalExit = process.exit;

@@ -218,7 +218,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -238,7 +238,7 @@ describe('voice commands', () => {
         body: { voices: [] },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -259,7 +259,7 @@ describe('voice commands', () => {
         body: { voices: [buildVoice({ id: 'v1', name: 'Test', provider: 'telnyx', tier: 'basic', language: 'en' })] },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -290,7 +290,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -310,7 +310,7 @@ describe('voice commands', () => {
         body: { calls: [], total: 0 },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -335,7 +335,7 @@ describe('voice commands', () => {
         body: buildCallResponse({ id: CALL_ID_1, direction: 'OUTBOUND' }),
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -356,7 +356,7 @@ describe('voice commands', () => {
         body: buildCallResponse({ id: CALL_ID_1, direction: 'INBOUND', tier: 'basic' }),
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -389,7 +389,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -417,7 +417,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -443,7 +443,7 @@ describe('voice commands', () => {
         body: buildSummaryResponse(),
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -465,10 +465,10 @@ describe('voice commands', () => {
         body: { error: { code: 'NOT_FOUND', message: 'Summary not ready' } },
       });
 
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 
@@ -496,7 +496,7 @@ describe('voice commands', () => {
         body: buildScoreResponse(),
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -518,7 +518,7 @@ describe('voice commands', () => {
         body: buildScoreResponse({ compositeScore: 90 }),
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -561,7 +561,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -606,7 +606,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -628,7 +628,7 @@ describe('voice commands', () => {
         body: { results: [] },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -658,7 +658,7 @@ describe('voice commands', () => {
         },
       });
 
-      const logSpy = mock(() => {});
+      const logSpy = mock((...args: unknown[]) => {});
       const originalLog = console.log;
       console.log = logSpy;
 
@@ -680,10 +680,10 @@ describe('voice commands', () => {
 
   describe('authentication', () => {
     test('voice calls fails when not authenticated', async () => {
-      const exitSpy = mock(() => {});
+      const exitSpy = mock((...args: unknown[]) => {});
       const originalExit = process.exit;
       process.exit = exitSpy as unknown as typeof process.exit;
-      const errorSpy = mock(() => {});
+      const errorSpy = mock((...args: unknown[]) => {});
       const originalError = console.error;
       console.error = errorSpy;
 

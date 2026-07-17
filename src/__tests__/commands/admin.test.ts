@@ -141,7 +141,7 @@ describe('admin commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -165,7 +165,7 @@ describe('admin commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -185,7 +185,7 @@ describe('admin commands', () => {
       body: { email: 'dev@acme.test', role: 'admin', invited: true },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -210,7 +210,7 @@ describe('admin commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -237,7 +237,7 @@ describe('admin commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -260,7 +260,7 @@ describe('admin commands', () => {
       },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -279,7 +279,7 @@ describe('admin commands', () => {
       body: { identities: 8, emails: 121, storage: '2.1 GB' },
     });
 
-    const logSpy = mock(() => {});
+    const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
@@ -295,7 +295,7 @@ describe('admin commands', () => {
     startMockServer();
     setupAuthConfig();
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -315,7 +315,7 @@ describe('admin commands', () => {
       body: { error: { code: 'FORBIDDEN', message: 'forbidden' } },
     });
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -328,7 +328,7 @@ describe('admin commands', () => {
   });
 
   test('errors when not authenticated', async () => {
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
@@ -344,7 +344,7 @@ describe('admin commands', () => {
     startMockServer();
     setupAuthConfig();
 
-    const errorSpy = mock(() => {});
+    const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 

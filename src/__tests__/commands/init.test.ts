@@ -83,7 +83,7 @@ describe("init command", () => {
 	});
 
 	test("non-interactive mode errors without --api-key", async () => {
-		const errorSpy = mock(() => {});
+		const errorSpy = mock((...args: unknown[]) => {});
 		const origError = console.error;
 		const origExit = process.exit;
 		process.exit = ((_code?: number) => undefined) as typeof process.exit;
@@ -109,7 +109,7 @@ describe("init command", () => {
 	// is exercised by manual smoke tests at release time.
 
 	test("invalid API key prefix shows error", async () => {
-		const errorSpy = mock(() => {});
+		const errorSpy = mock((...args: unknown[]) => {});
 		const origError = console.error;
 		const origExit = process.exit;
 		// The new non-interactive path calls process.exit(2) on validation
@@ -138,7 +138,7 @@ describe("init command", () => {
 	});
 
 	test("JSON mode outputs config as JSON", async () => {
-		const logSpy = mock(() => {});
+		const logSpy = mock((...args: unknown[]) => {});
 		const origLog = console.log;
 		console.log = logSpy;
 
