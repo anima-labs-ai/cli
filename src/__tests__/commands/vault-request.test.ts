@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
-import type { Command } from 'commander';
+import type { Command, CommanderError } from 'commander';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -174,6 +174,45 @@ describe('vault request commands', () => {
     const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(printed).toContain('req_1');
     expect(printed).toContain('https://console.useanima.sh/vault/fill/tok_abc');
+  });
+
+  // The contract pins ttlSeconds to .min(60).max(3600) (and the --ttl help says
+  // "60-3600"), but the client only checked > 0 — so --ttl 30 sailed past the
+  // CLI and earned a server round-trip + rejection. Enforce the documented
+  // window client-side so a fat-fingered ttl fails fast, before any request.
+  test('request create rejects a --ttl below the contract minimum before any request', async () => {
+    let requested = false;
+    setRoute('POST', '/v1/vault/credential-requests', {
+      status: 200,
+      body: CREATED,
+      assert: () => {
+        requested = true;
+      },
+    });
+
+    let thrown: unknown;
+    try {
+      await runProgram([
+        'vault',
+        'request',
+        'create',
+        '--type',
+        'api_key',
+        '--name',
+        'Prod Stripe key',
+        '--reason',
+        'Deploy needs to verify billing',
+        '--ttl',
+        '30',
+      ]);
+    } catch (error) {
+      thrown = error;
+    }
+
+    // Rejected as the usage error it is — same shape as any bad option.
+    expect((thrown as CommanderError | undefined)?.code).toBe('commander.invalidArgument');
+    // The out-of-range ttl never left the CLI.
+    expect(requested).toBe(false);
   });
 
   test('request create --wait polls status until FULFILLED', async () => {
