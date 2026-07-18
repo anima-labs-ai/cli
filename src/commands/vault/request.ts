@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError, type ApiClient } from '../../lib/api-client.js';
-import { requireNonEmptyArg } from '../../lib/args.js';
+import { boundedInt, requireNonEmptyArg } from '../../lib/args.js';
 
 const CREDENTIAL_TYPES = [
   'login',
@@ -112,7 +112,7 @@ function requestCreateCommand(): Command {
     .requiredOption('--type <type>', `Credential type: ${CREDENTIAL_TYPES.join(', ')}`, validateType)
     .requiredOption('--name <name>', 'Display name for the credential to be created')
     .requiredOption('--reason <reason>', 'Why the credential is needed (shown to the owner)')
-    .option('--ttl <seconds>', 'Request TTL in seconds (60-3600, default 900)', validatePositiveInt('ttl'))
+    .option('--ttl <seconds>', 'Request TTL in seconds (60-3600, default 900)', boundedInt('ttl', 60, 3600))
     .option('--notify-owner', 'Email the fill URL to the org owner')
     .option('--wait', 'Poll until the request is fulfilled, declined, or expires')
     .option('--timeout <seconds>', 'Max seconds to wait with --wait (default 900)', validatePositiveInt('timeout'), 900)
