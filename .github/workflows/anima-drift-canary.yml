@@ -33,7 +33,7 @@ permissions:
 jobs:
   drift:
     name: Typecheck against anima HEAD
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Verify ANIMA_REPO_TOKEN secret is configured
         env:

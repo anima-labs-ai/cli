@@ -8,7 +8,7 @@ on:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       # The CLI declares `@anima/contracts` as `file:../anima/packages/contracts`,
       # so we need the anima monorepo checked out as a sibling for `bun install`
