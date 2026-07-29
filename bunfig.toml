@@ -1,0 +1,7 @@
+[test]
+# Runs before any test file. Replaces `process.exit` so a command action that
+# exits (Output.fatal, init's bail()) fails that one test instead of ending the
+# whole run — see src/__tests__/helpers/no-process-exit.ts for what that used to
+# cost. `[test] preload` rather than a top-level `preload`: the shipped CLI must
+# keep exiting for real.
+preload = ["./src/__tests__/helpers/no-process-exit.ts"]
