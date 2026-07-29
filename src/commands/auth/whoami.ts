@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import pkg from '../../../package.json' with { type: 'json' };
-import { getAuthConfig } from '../../lib/config.js';
+import { getAuthConfig, resolveConfigValueWithSource } from '../../lib/config.js';
 import { Output } from '../../lib/output.js';
 import { checkForUpdate } from '../../lib/update-notifier.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -88,12 +88,34 @@ export function whoamiCommand(): Command {
                   ? 'Session token'
                   : 'API Key';
 
+      // Which agent am I? `whoami` answered only "which org", which stopped
+      // being the whole answer once every command resolves `--agent` from
+      // `defaultIdentity`: the id that decides who a send comes from was the
+      // one thing the identity command would not tell you. Reported with its
+      // source, because the layer that won (a shell env var, a profile you
+      // forgot you switched) is exactly what you are checking when you ask.
+      const agent = await resolveConfigValueWithSource('defaultIdentity');
+      const agentSource =
+        agent === undefined
+          ? undefined
+          : agent.source.layer === 'env'
+            ? agent.source.variable
+            : agent.source.layer === 'profile'
+              ? `profile "${agent.source.name}"`
+              : 'config';
+
       if (output.format === 'human') {
         output.details([
           ['Organization', result.name],
           ['Org ID', result.id],
           ['Slug', result.slug],
           ['Tier', result.tier],
+          [
+            'Agent',
+            agent === undefined
+              ? 'none configured — pass --agent, or `am identity use <id>`'
+              : `${agent.value}  (from ${agentSource})`,
+          ],
           ['Auth Method', authMethod],
           ['API URL', auth.apiUrl ?? 'http://localhost:4001'],
           ['CLI Version', pkg.version],
@@ -125,6 +147,8 @@ export function whoamiCommand(): Command {
         org_name: result.name,
         org_slug: result.slug,
         tier: result.tier,
+        agent_id: agent?.value ?? null,
+        agent_id_source: agentSource ?? null,
         auth_method: authMethodCode,
         api_url: auth.apiUrl ?? 'http://localhost:4001',
         cli_version: pkg.version,

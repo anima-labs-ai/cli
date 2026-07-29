@@ -342,6 +342,18 @@ async function runInteractiveNew(
 		email: humanEmail as string,
 	});
 	const priorConfig = await getConfig();
+	const outputFormat = priorConfig.outputFormat ?? "table";
+
+	// Also write the new credentials as a named profile, keyed by org.
+	//
+	// The flat top-level config holds exactly one setup, so onboarding a
+	// second org could only overwrite the first — which is what
+	// `archiveCurrentSetup` above exists to soften. Writing a profile at the
+	// same time makes that symmetric: every org the machine has ever been set
+	// up for is addressable by name from the moment it is created, not only
+	// once a later init displaces it. `saveConfig` puts the key in the OS
+	// keychain, so this stores no secret in config.json.
+	const profileName = signup.organization_id;
 	await saveConfig({
 		...priorConfig,
 		defaultOrg: signup.organization_id,
@@ -349,7 +361,17 @@ async function runInteractiveNew(
 		// Only seed a format when there isn't one. This used to reset to
 		// "table" unconditionally, quietly undoing `am config set outputFormat`
 		// for anyone who re-ran init.
-		outputFormat: priorConfig.outputFormat ?? "table",
+		outputFormat,
+		profiles: {
+			...priorConfig.profiles,
+			[profileName]: {
+				apiUrl,
+				apiKey: signup.api_key,
+				defaultOrg: signup.organization_id,
+				defaultIdentity: signup.agent_id,
+				outputFormat,
+			},
+		},
 	});
 
 	// ── Provision phone (optional) ──
@@ -435,8 +457,21 @@ async function runInteractiveNew(
 		"2. More capabilities",
 	);
 
+	// Only commands this key can actually run. `am tail` used to be here and
+	// cannot work: /v1/events/stream is master-gated and init stores an agent
+	// key, so the second thing onboarding suggested answered 403. A syntax
+	// guard (see onboard-advertised.test.ts) would not have caught that — the
+	// command exists, the credential just cannot use it — so the rule for this
+	// list is narrower than "is it real syntax": it has to work with what init
+	// just saved.
 	clack.outro(
-		`Welcome aboard. ✸  Try:\n  am email send --to friend@example.com --subject "Hi" --body "I am alive"\n  am tail   (live event stream)\n  Dashboard: https://console.useanima.sh`,
+		[
+			"Welcome aboard. ✸  Try:",
+			'  am email send --to friend@example.com --subject "Hi" --body "I am alive"',
+			"  am identity list          (every agent in your org)",
+			"  am auth whoami            (which agent you are acting as)",
+			"  Dashboard: https://console.useanima.sh",
+		].join("\n"),
 	);
 }
 

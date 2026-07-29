@@ -1,8 +1,7 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
-import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
+import { handleOrpcError, requireOrpcAuth } from '../../lib/orpc.js';
 import { Output } from '../../lib/output.js';
 
 interface KeyRevokeOptions {
@@ -10,14 +9,12 @@ interface KeyRevokeOptions {
   yes?: boolean;
 }
 
-interface RevokeKeyResponse {
-  revoked?: boolean;
-  keyId?: string;
-}
-
 export function keyRevokeCommand(): Command {
+  // Was POST /v1/admin/keys/revoke, a route the API does not have. The real
+  // one is DELETE /api-keys/{id}; `am admin key list` has no equivalent yet,
+  // so the id still comes from the console or `apiKeys.list`.
   return new Command('revoke')
-    .description('Revoke API key')
+    .description('Revoke an API key')
     .requiredOption('--key-id <id>', 'API key ID to revoke', requireNonEmptyArg('API key ID'))
     .option('--yes', 'Confirm key revocation without prompt')
     .action(async function (this: Command) {
@@ -30,23 +27,17 @@ export function keyRevokeCommand(): Command {
       }
 
       try {
-        await requireAuth(globals);
-        const api = await getApiClient(globals);
-        const result = await api.post<RevokeKeyResponse>('/v1/admin/keys/revoke', { keyId: opts.keyId });
+        const orpc = await requireOrpcAuth(globals);
+        const result = await orpc.apiKeys.revoke({ id: opts.keyId });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        output.success(`Revoked API key ${result.keyId ?? opts.keyId}`);
+        output.success(`Revoked API key ${opts.keyId}`);
       } catch (err: unknown) {
-        if (err instanceof ApiError) {
-          output.error(err.message);
-        } else {
-          output.error(err instanceof Error ? err.message : String(err));
-        }
-        process.exit(1);
+        handleOrpcError(err, output, 'Failed to revoke API key');
       }
     });
 }

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { createIdentityCommand } from './create.js';
 import { listIdentitiesCommand } from './list.js';
+import { useIdentityCommand } from './use.js';
 import { getIdentityCommand } from './get.js';
 import { updateIdentityCommand } from './update.js';
 import { deleteIdentityCommand } from './delete.js';
@@ -16,6 +17,7 @@ export function identityCommands(): Command {
 
   cmd.addCommand(createIdentityCommand());
   cmd.addCommand(listIdentitiesCommand());
+  cmd.addCommand(useIdentityCommand());
   cmd.addCommand(getIdentityCommand());
   cmd.addCommand(updateIdentityCommand());
   cmd.addCommand(deleteIdentityCommand());

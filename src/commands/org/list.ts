@@ -42,7 +42,20 @@ export function listOrgsCommand(): Command {
         // orgs" — so ask `/orgs/me` for it rather than making the user go and
         // run a different command. The API's own error says as much
         // ("query /orgs/me instead"); this just does it.
-        if (err instanceof ORPCError && err.code === 'USER_AUTH_REQUIRED') {
+        //
+        // Matched on the message, not the code. The API throws
+        // `AppError("USER_AUTH_REQUIRED", …, 400)`, but that code does not
+        // survive the trip: the client receives ORPCError with
+        // `code: "INTERNAL_SERVER_ERROR"` and `status: 400`, so the
+        // `err.code === 'USER_AUTH_REQUIRED'` branch that used to live here
+        // could never match and every API-key user fell through to the raw
+        // server message. Status alone is too broad — a 400 is also what a
+        // malformed request returns — so it takes both.
+        if (
+          err instanceof ORPCError &&
+          err.status === 400 &&
+          /requires user authentication/i.test(err.message)
+        ) {
           try {
             const orpc = await requireOrpcAuth(globals);
             const org = await orpc.org.me({});
