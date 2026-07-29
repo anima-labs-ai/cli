@@ -22,7 +22,7 @@ export function getCommand(): Command {
   return new Command('get')
     .description('Get credential by ID')
     .argument('<credentialId>', 'Credential ID', requireNonEmptyArg('Credential ID'))
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<GetOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

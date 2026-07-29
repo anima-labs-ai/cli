@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -48,7 +49,7 @@ export function searchEmailsCommand(): Command {
     .description('Search emails by text query (add --semantic for meaning-based ranking)')
     .argument('<query>', 'Search query text')
     .option('--semantic', 'Rank by semantic similarity instead of text match (searches message content across channels)')
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .option('--direction <dir>', 'Filter by direction (INBOUND, OUTBOUND) — full-text mode only', validateDirection)
     .option('--status <status>', 'Filter by delivery status — full-text mode only', validateStatus)
     .option('--label <label>', 'Only email carrying this label; repeat to require ALL. System: unread, read, archived, spam — full-text mode only', collectValue, [])

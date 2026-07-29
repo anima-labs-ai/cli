@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -80,7 +81,7 @@ interface LoginCredentialPayload {
 export function storeCommand(): Command {
   return new Command('store')
     .description('Store/create a vault credential')
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .option('--type <type>', 'Credential type', validateType, 'login' as CredentialType)
     .requiredOption('--name <name>', 'Credential name')
     .option('--username <user>', 'Login username')

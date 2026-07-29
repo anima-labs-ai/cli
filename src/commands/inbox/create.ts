@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -16,7 +17,7 @@ export function createInboxCommand(): Command {
     .option('--username <username>', 'Local part of the inbox address (letters, numbers, dots, hyphens, underscores)')
     .option('--domain <domain>', 'Domain for the inbox address (default domain if omitted)')
     .option('--display-name <name>', 'Human-readable display name (max 128 characters)')
-    .option('--agent <id>', 'Agent ID to associate with the inbox')
+    .option('--agent <id>', 'Agent ID to associate with the inbox', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<CreateInboxOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

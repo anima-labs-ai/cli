@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -20,7 +21,7 @@ interface ListOptions {
 export function listMessagesCommand(): Command {
   return new Command('list')
     .description('List messages across all channels')
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .option('--channel <channel>', 'Filter by channel (EMAIL, SMS, MMS, VOICE)', validateChannel)
     .option('--direction <dir>', 'Filter by direction (INBOUND, OUTBOUND)', validateDirection)
     .option('--label <label>', 'Only messages carrying this label; repeat to require ALL (e.g. --label unread --label urgent). System: unread, read, archived, spam', collectValue, [])

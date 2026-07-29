@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -16,6 +17,7 @@ export function extensionConnectCommand(): Command {
     .option(
       '--agent <id>',
       'Agent to bind the connection to (required with a master key; resolved automatically with an agent key)',
+      requireNonEmptyArg('Agent ID'),
     )
     .option('--ttl <ttl>', 'Token TTL — one of 15m, 1h, session (shorten-only vs the org setting)')
     .action(async function (this: Command) {

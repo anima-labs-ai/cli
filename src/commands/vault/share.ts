@@ -106,7 +106,7 @@ function validateDirection(value: string): 'granted' | 'received' {
 function shareListCommand(): Command {
   return new Command('list')
     .description('List credential shares')
-    .option('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .option('--direction <dir>', 'Direction: granted or received', validateDirection, 'received')
     .action(async function (this: Command) {
       const opts = this.opts<ShareListOptions>();
@@ -164,7 +164,7 @@ function shareRevokeCommand(): Command {
   return new Command('revoke')
     .description('Revoke a credential share')
     .requiredOption('--id <shareId>', 'Share ID to revoke', requireNonEmptyArg('Share ID'))
-    .option('--agent <id>', 'Agent ID that owns the share')
+    .option('--agent <id>', 'Agent ID that owns the share', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<ShareRevokeOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

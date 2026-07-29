@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
@@ -51,8 +52,8 @@ function parseType(value: string): EventType {
 export function securityEventsCommand(): Command {
   return new Command('events')
     .description('List security events')
-    .option('--org <orgId>', 'Organization ID (defaults to configured default org)')
-    .option('--agent <agentId>', 'Filter events by agent')
+    .option('--org <orgId>', 'Organization ID (defaults to configured default org)', requireNonEmptyArg('Organization ID'))
+    .option('--agent <agentId>', 'Filter events by agent', requireNonEmptyArg('Agent ID'))
     .option(
       '--type <type>',
       'Filter by type (PII_DETECTED|INJECTION_DETECTED|RATE_LIMITED|BLOCKED|APPROVED|REJECTED)',

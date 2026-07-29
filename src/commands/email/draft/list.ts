@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../../lib/args.js';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../../lib/orpc.js';
@@ -15,7 +16,7 @@ export function listDraftsCommand(): Command {
     .description('List email drafts')
     .option('--cursor <cursor>', 'Pagination cursor')
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<ListDraftsOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

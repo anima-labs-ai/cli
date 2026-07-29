@@ -17,7 +17,7 @@ export function sendTaskCommand(): Command {
     .requiredOption('--agent <id>', 'Target agent ID', requireNonEmptyArg('Target agent ID'))
     .requiredOption('--type <type>', 'Task type identifier')
     .requiredOption('--input <json>', 'Task input as JSON string')
-    .option('--from-did <did>', 'DID of the requesting agent')
+    .option('--from-did <did>', 'DID of the requesting agent', requireNonEmptyArg('Agent DID'))
     .action(async function (this: Command) {
       const opts = this.opts<SendOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
