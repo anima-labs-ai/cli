@@ -43,6 +43,7 @@ import {
 	saveAuthConfig,
 	saveConfig,
 } from "../../lib/config.js";
+import { handleOrpcError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
 
 const DEFAULT_API_URL = "https://api.useanima.sh";
@@ -93,6 +94,25 @@ function bail(): never {
 	process.exit(0);
 }
 
+/**
+ * A failed sign-up, carrying the HTTP status.
+ *
+ * The status is what tells the two failures apart, and they want opposite
+ * advice: 409 means an org already exists for this *email* and no retry of any
+ * kind will work, while a 4xx on the username genuinely does want a different
+ * username. Flattening both into a message string is how the caller ended up
+ * offering one piece of guidance for both.
+ */
+class SignUpError extends Error {
+	constructor(
+		readonly status: number,
+		readonly body: string,
+	) {
+		super(`HTTP ${status}: ${body.slice(0, 200)}`);
+		this.name = "SignUpError";
+	}
+}
+
 async function callSignUp(
 	apiUrl: string,
 	humanEmail: string,
@@ -104,8 +124,7 @@ async function callSignUp(
 		body: JSON.stringify({ human_email: humanEmail, username }),
 	});
 	if (!response.ok) {
-		const text = await response.text();
-		throw new Error(`HTTP ${response.status}: ${text.slice(0, 200)}`);
+		throw new SignUpError(response.status, await response.text());
 	}
 	return (await response.json()) as SignUpResponse;
 }
@@ -133,6 +152,75 @@ async function tryProvisionPhone(
 	}
 	const data = (await response.json()) as { phoneNumber: string };
 	return { phoneNumber: data.phoneNumber };
+}
+
+/**
+ * Is there already a working setup on this machine?
+ *
+ * Exported, with [[archiveCurrentSetup]], because the wizard around them is
+ * built on clack prompts that init.test.ts documents as unmockable — so the
+ * only way these two get tested at all is directly. They are the parts worth
+ * testing: everything else in the branch is prompt wiring, while these decide
+ * whether a user's existing credentials survive a second `am init`.
+ */
+export async function currentSetup(): Promise<{
+	apiKey?: string;
+	apiUrl?: string;
+	email?: string;
+	defaultOrg?: string;
+	defaultIdentity?: string;
+} | null> {
+	const auth = await getAuthConfig();
+	const config = await getConfig();
+	const configured =
+		auth.apiKey !== undefined ||
+		config.defaultIdentity !== undefined ||
+		config.defaultOrg !== undefined;
+	if (!configured) return null;
+	return {
+		apiKey: auth.apiKey,
+		apiUrl: auth.apiUrl,
+		email: auth.email,
+		defaultOrg: config.defaultOrg,
+		defaultIdentity: config.defaultIdentity,
+	};
+}
+
+/**
+ * Copy the active credentials into a named profile before init overwrites
+ * them, and return the name it used (or null when there was nothing to keep).
+ *
+ * `saveConfig` puts a profile's apiKey in the OS keychain and leaves only
+ * metadata in config.json, so this archives the key without ever writing it
+ * to disk in the clear.
+ */
+export async function archiveCurrentSetup(): Promise<string | null> {
+	const existing = await currentSetup();
+	if (!existing) return null;
+
+	const config = await getConfig();
+	// Name it after the agent it belongs to — the id is what `am config set
+	// defaultIdentity` and every `--agent` flag take, so the profile name is
+	// also the answer to "how do I get back to it".
+	const base = existing.defaultIdentity ?? existing.defaultOrg ?? "previous";
+	let name = base;
+	for (let n = 2; config.profiles?.[name] !== undefined; n++) name = `${base}-${n}`;
+
+	await saveConfig({
+		...config,
+		profiles: {
+			...config.profiles,
+			[name]: {
+				apiUrl: existing.apiUrl,
+				apiKey: existing.apiKey,
+				defaultOrg: existing.defaultOrg,
+				defaultIdentity: existing.defaultIdentity,
+				outputFormat: config.outputFormat,
+			},
+		},
+	});
+
+	return name;
 }
 
 async function runInteractiveNew(
@@ -201,6 +289,34 @@ async function runInteractiveNew(
 		signupSpinner.stop(`Inbox created: ${signup.inbox_id}`);
 	} catch (error) {
 		signupSpinner.stop("Sign-up failed.");
+
+		// A 409 is not a retryable mistake: sign-up looks the org up by
+		// `human_email`, so it is refusing *this human*, not this username.
+		// The old advice here — "the username may be taken (try a variation)" —
+		// was offered for every failure alike, and following it on a 409 loops
+		// forever, because no username makes an existing org sign up again.
+		if (error instanceof SignUpError && error.status === 409) {
+			output.error(
+				`An Anima organization already exists for ${humanEmail as string}.`,
+			);
+			clack.note(
+				[
+					"Sign-up cannot hand out credentials for an org that already",
+					"exists — that is what stops anyone who knows your email from",
+					"claiming your agent.",
+					"",
+					"  Already have your API key?   am init  →  “existing API key”",
+					"  Lost it?                     https://console.useanima.sh",
+					"  Wanted a second agent?       am identity create --name … --slug …",
+					"",
+					"Signing up again needs a different owner email, which creates a",
+					"separate organization.",
+				].join("\n"),
+				"This email is already registered",
+			);
+			process.exit(1);
+		}
+
 		output.error(error instanceof Error ? error.message : String(error));
 		output.info(
 			"Common causes: the username may be taken (try a variation), or the Anima API URL may be unreachable.",
@@ -209,17 +325,31 @@ async function runInteractiveNew(
 	}
 
 	// ── Save creds locally ──
+	//
+	// Signing up again (necessarily with a different owner email, since the
+	// same one is refused) used to overwrite apiKey, defaultOrg and
+	// defaultIdentity in place. The previous agent kept working server-side but
+	// became unreachable from this machine — its key was simply gone, with
+	// nothing recording that it had ever been here. Park it in a named profile
+	// first, which is what profiles are for and which keeps the key in the OS
+	// keychain rather than config.json.
+	const archived = await archiveCurrentSetup();
+
 	await saveAuthConfig({
 		...(await getAuthConfig()),
 		apiKey: signup.api_key,
 		apiUrl,
 		email: humanEmail as string,
 	});
+	const priorConfig = await getConfig();
 	await saveConfig({
-		...(await getConfig()),
+		...priorConfig,
 		defaultOrg: signup.organization_id,
 		defaultIdentity: signup.agent_id,
-		outputFormat: "table",
+		// Only seed a format when there isn't one. This used to reset to
+		// "table" unconditionally, quietly undoing `am config set outputFormat`
+		// for anyone who re-ran init.
+		outputFormat: priorConfig.outputFormat ?? "table",
 	});
 
 	// ── Provision phone (optional) ──
@@ -265,6 +395,11 @@ async function runInteractiveNew(
 		`API key:  ${signup.api_key.slice(0, 12)}…  (saved to ${getConfigDir()})`,
 	];
 	if (phoneNumber) lines.push(`Phone:    ${phoneNumber}`);
+	if (archived) {
+		lines.push("");
+		lines.push(`Your previous agent was not deleted — it is saved as a profile.`);
+		lines.push(`Switch back with:  am config profile use ${archived}`);
+	}
 	if (phoneError) {
 		lines.push("");
 		lines.push(`Phone:    not provisioned (${phoneError})`);
@@ -452,6 +587,156 @@ async function runNonInteractive(
 }
 
 /**
+ * Create another agent inside the org that is already configured.
+ *
+ * This is the branch the wizard never had. "I already have an org, I just want
+ * a second agent" was only reachable by knowing `am identity create --org …`
+ * and the org id — so the discoverable path, re-running init, went to sign-up
+ * instead and was refused.
+ */
+async function createAgentInCurrentOrg(
+	orgId: string,
+	globals: GlobalOptions,
+	output: Output,
+): Promise<void> {
+	const name = await clack.text({
+		message: "Agent name:",
+		placeholder: "Shopping Agent",
+		validate: (value) => {
+			if (!value || value.trim().length < 2) return "At least 2 characters.";
+			if (value.length > 100) return "At most 100 characters.";
+		},
+	});
+	if (isCancel(name)) bail();
+
+	const slug = await clack.text({
+		message: "Agent slug (becomes <slug>@agents.useanima.sh):",
+		placeholder: "shopping-agent",
+		validate: (value) => {
+			if (!value) return "Slug is required.";
+			if (!/^[a-z0-9-]+$/.test(value)) {
+				return "Lowercase letters, digits, and hyphens only.";
+			}
+			if (value.length < 2 || value.length > 64) return "2-64 characters.";
+		},
+	});
+	if (isCancel(slug)) bail();
+
+	const spinner = clack.spinner();
+	spinner.start("Creating agent…");
+
+	// Everything that needs `agent` stays inside the try. `handleOrpcError` is
+	// typed `never`, but TypeScript's definite-assignment analysis does not
+	// carry that out of a catch block, so a `let agent` declared above and used
+	// below reads as possibly-unassigned.
+	try {
+		const orpc = await requireOrpcAuth(globals);
+		const agent = await orpc.agent.create({
+			orgId,
+			name: (name as string).trim(),
+			slug: slug as string,
+			metadata: {},
+		});
+		spinner.stop(`Agent created: ${agent.id}`);
+
+		const makeDefault = await clack.confirm({
+			message: "Make this the default agent for future commands?",
+			initialValue: true,
+		});
+		if (isCancel(makeDefault)) bail();
+
+		if (makeDefault) {
+			const config = await getConfig();
+			await saveConfig({ ...config, defaultIdentity: agent.id });
+		}
+
+		clack.outro(
+			makeDefault
+				? `Done. Commands now act as ${agent.id} unless you pass --agent.`
+				: `Done. Use it with:  --agent ${agent.id}`,
+		);
+	} catch (error) {
+		spinner.stop("Could not create the agent.");
+		handleOrpcError(error, output, "Failed to create agent");
+	}
+}
+
+/**
+ * Offer a configured user the things they might actually want, before the
+ * wizard assumes they are new. Returns true when the choice was handled here
+ * and the caller should stop.
+ */
+async function offerExistingSetupChoices(
+	existing: NonNullable<Awaited<ReturnType<typeof currentSetup>>>,
+	globals: GlobalOptions,
+	output: Output,
+): Promise<boolean> {
+	clack.intro("🪐 Anima is already set up on this machine");
+
+	clack.note(
+		[
+			`Owner:    ${existing.email ?? "—"}`,
+			`Agent:    ${existing.defaultIdentity ?? "—"}`,
+			`Org:      ${existing.defaultOrg ?? "—"}`,
+			`API URL:  ${existing.apiUrl ?? DEFAULT_API_URL}`,
+		].join("\n"),
+		"Current configuration",
+	);
+
+	const choice = await clack.select({
+		message: "What would you like to do?",
+		initialValue: "agent" as "agent" | "org" | "existing" | "keep",
+		options: [
+			{
+				value: "agent",
+				label: "Add another agent to this org (recommended)",
+				hint: "New identity + inbox, same org and billing",
+			},
+			{
+				value: "org",
+				label: "Start a separate organization",
+				hint: "Needs a different owner email; current setup is kept as a profile",
+			},
+			{
+				value: "existing",
+				label: "Point this machine at a different API key",
+				hint: "Switch to another org you already have credentials for",
+			},
+			{ value: "keep", label: "Leave everything as it is" },
+		],
+	});
+	if (isCancel(choice)) bail();
+
+	if (choice === "keep") {
+		clack.outro("Nothing changed.");
+		return true;
+	}
+
+	if (choice === "agent") {
+		if (!existing.defaultOrg) {
+			// Every path that sets defaultIdentity also sets defaultOrg, so this
+			// is a hand-edited or half-migrated config rather than a normal state.
+			output.error(
+				"No default organization is configured, so there is no org to add an agent to.",
+			);
+			output.info("Set one with `am org switch <orgId>`, or run `am org list`.");
+			process.exit(1);
+		}
+		await createAgentInCurrentOrg(existing.defaultOrg, globals, output);
+		return true;
+	}
+
+	if (choice === "existing") {
+		await runInteractiveExisting(globals, output);
+		return true;
+	}
+
+	// "org" falls through to the normal new-account flow, which archives the
+	// current credentials into a profile before overwriting them.
+	return false;
+}
+
+/**
  * The interactive `init` wizard: pick new-agent vs existing-key, then run
  * the matching flow. Exported so `onboard` can launch setup directly when an
  * unauthenticated human runs it, instead of just printing "run anima init".
@@ -460,6 +745,18 @@ export async function runInteractiveInit(
 	globals: GlobalOptions,
 	output: Output,
 ): Promise<void> {
+	// Ask before the wizard, not after it. Re-running init used to walk a
+	// configured user through every prompt — email, username, phone, MCP — and
+	// only then discover, from a 409 on the final call, that sign-up refuses an
+	// email that already has an org. The two things such a user actually wants,
+	// another agent in the org they already have or a look at what is
+	// configured, were not on offer anywhere in that flow.
+	const existing = await currentSetup();
+	if (existing) {
+		const done = await offerExistingSetupChoices(existing, globals, output);
+		if (done) return;
+	}
+
 	const mode = await clack.select({
 		message: "How would you like to set up?",
 		initialValue: "new" as "new" | "existing",
