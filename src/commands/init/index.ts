@@ -651,13 +651,15 @@ function masterKeyGuidance(orgId: string): string {
 		"an agent key (ak_…), which can send and read as its own agent but",
 		"cannot provision new ones.",
 		"",
-		"To get one:",
+		"Quickest route — a code goes to the org owner's email, and you get",
+		"15 minutes of admin access:",
+		"",
+		"  am auth elevate",
+		"",
+		"Or, if you already have a master key:",
 		"  1. Open https://console.useanima.sh and copy your master key (mk_…)",
 		"  2. am init  →  “Configure with an existing API key”",
 		`  3. am identity create --org ${orgId} --name "…" --slug "…"`,
-		"",
-		"An Anima Connect token with the admin:full scope also works, but",
-		"`am auth login` does not request that scope today.",
 	].join("\n");
 }
 
