@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -7,7 +8,7 @@ import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 type AddressType = 'BILLING' | 'SHIPPING' | 'MAILING' | 'REGISTERED';
 
 interface CreateOptions {
-  agent: string;
+  agent?: string;
   type: string;
   label?: string;
   street1: string;
@@ -32,7 +33,7 @@ function isAddressType(value: string): value is AddressType {
 export function createAddressCommand(): Command {
   return new Command('create')
     .description('Create an address for an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--type <type>', 'Address type: BILLING, SHIPPING, MAILING, REGISTERED')
     .option('--label <label>', 'Optional label for the address')
     .requiredOption('--street1 <street1>', 'Primary street address')
@@ -47,6 +48,8 @@ export function createAddressCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const addressType = opts.type.toUpperCase();
         if (!isAddressType(addressType)) {
           throw new Error(
@@ -56,7 +59,7 @@ export function createAddressCommand(): Command {
 
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.address.create({
-          agentId: opts.agent,
+          agentId,
           type: addressType,
           label: opts.label,
           street1: opts.street1,

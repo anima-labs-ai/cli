@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -7,7 +8,7 @@ import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 type AddressType = 'BILLING' | 'SHIPPING' | 'MAILING' | 'REGISTERED';
 
 interface ListOptions {
-  agent: string;
+  agent?: string;
   type?: string;
 }
 
@@ -25,7 +26,7 @@ function isAddressType(value: string): value is AddressType {
 export function listAddressesCommand(): Command {
   return new Command('list')
     .description('List addresses for an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .option('--type <type>', 'Filter by address type: BILLING, SHIPPING, MAILING, REGISTERED')
     .action(async function (this: Command) {
       const opts = this.opts<ListOptions>();
@@ -33,6 +34,8 @@ export function listAddressesCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         let typeFilter: AddressType | undefined;
         if (opts.type) {
           const upper = opts.type.toUpperCase();
@@ -46,7 +49,7 @@ export function listAddressesCommand(): Command {
 
         const orpc = await requireOrpcAuth(globals);
         const items = await orpc.address.list({
-          agentId: opts.agent,
+          agentId,
           type: typeFilter,
         });
 

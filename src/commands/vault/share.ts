@@ -1,5 +1,6 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -16,7 +17,7 @@ function validatePermission(value: string): SharePermission {
 // ---------------------------------------------------------------------------
 
 interface ShareCreateOptions {
-  agent: string;
+  agent?: string;
   credential: string;
   target: string;
   permission: SharePermission;
@@ -26,7 +27,11 @@ interface ShareCreateOptions {
 function shareCreateCommand(): Command {
   return new Command('create')
     .description('Share a credential with another agent')
-    .requiredOption('--agent <id>', 'Source agent ID (the agent granting access)', requireNonEmptyArg('Source agent ID'))
+    .option(
+      '--agent <id>',
+      'Source agent ID, the agent granting access (defaults to your configured identity)',
+      requireNonEmptyArg('Source agent ID'),
+    )
     .requiredOption('--credential <id>', 'Credential ID to share', requireNonEmptyArg('Credential ID'))
     .requiredOption('--target <id>', 'Target agent ID (the agent receiving access)', requireNonEmptyArg('Target agent ID'))
     .option(
@@ -42,12 +47,14 @@ function shareCreateCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const sourceAgentId = await resolveAgentId(opts.agent, output);
+
         // Contract field is `sourceAgentId` — `agentId` was the old name and is no
         // longer accepted by the API. Keep the CLI flag `--agent` for ergonomics.
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.share({
           credentialId: opts.credential,
-          sourceAgentId: opts.agent,
+          sourceAgentId,
           targetAgentId: opts.target,
           permission: opts.permission,
           expiresInSeconds: opts.ttl ? Number(opts.ttl) : undefined,

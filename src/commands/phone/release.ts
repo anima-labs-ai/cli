@@ -1,18 +1,19 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ReleaseOptions {
-  agent: string;
+  agent?: string;
   number: string;
 }
 
 export function releasePhoneNumberCommand(): Command {
   return new Command('release')
     .description('Release a provisioned phone number')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--number <phoneNumber>', 'Phone number to release')
     .action(async function (this: Command) {
       const opts = this.opts<ReleaseOptions>();
@@ -20,9 +21,11 @@ export function releasePhoneNumberCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.phone.release({
-          agentId: opts.agent,
+          agentId,
           phoneNumber: opts.number,
         });
 

@@ -82,11 +82,37 @@ export interface ProfileConfig {
 }
 
 /**
- * Layered config resolution: flags > env > profile > defaults
+ * Which layer a resolved value came from. `flag` and `env` name themselves;
+ * `profile` carries the profile's name, because "from a profile" is not
+ * actionable when you have three of them and want to know which one just
+ * decided who you are sending as.
  */
-export async function resolveConfigValue(key: keyof ProfileConfig, flagValue?: string): Promise<string | undefined> {
+export type ConfigSource =
+  | { layer: 'flag' }
+  | { layer: 'env'; variable: string }
+  | { layer: 'profile'; name: string }
+  | { layer: 'config' };
+
+/**
+ * Layered config resolution: flags > env > profile > defaults, reporting which
+ * layer answered.
+ *
+ * Split out from [[resolveConfigValue]] rather than duplicated beside it: the
+ * value and its provenance are read from the same four checks in the same
+ * order, so a second implementation would eventually disagree with the first
+ * and mislabel where a value came from — the failure mode being a caller that
+ * tells you the identity came from your config file while it actually came
+ * from a stale `ANIMA_DEFAULT_IDENTITY` in the shell. `resolveConfigValue`
+ * delegates here for exactly that reason.
+ */
+export async function resolveConfigValueWithSource(
+  key: keyof ProfileConfig,
+  flagValue?: string,
+): Promise<{ value: string; source: ConfigSource } | undefined> {
   // 1. CLI flag (highest priority)
-  if (flagValue !== undefined && flagValue !== '') return flagValue;
+  if (flagValue !== undefined && flagValue !== '') {
+    return { value: flagValue, source: { layer: 'flag' } };
+  }
 
   // 2. Environment variable
   const envMap: Record<string, string> = {
@@ -99,21 +125,34 @@ export async function resolveConfigValue(key: keyof ProfileConfig, flagValue?: s
   const envKey = envMap[key];
   if (envKey) {
     const envVal = process.env[envKey];
-    if (envVal !== undefined && envVal !== '') return envVal;
+    if (envVal !== undefined && envVal !== '') {
+      return { value: envVal, source: { layer: 'env', variable: envKey } };
+    }
   }
 
   // 3. Active profile
   const config = await getConfig();
   if (config.activeProfile && config.profiles?.[config.activeProfile]) {
     const profileVal = config.profiles[config.activeProfile][key];
-    if (profileVal !== undefined) return profileVal;
+    if (profileVal !== undefined) {
+      return { value: profileVal, source: { layer: 'profile', name: config.activeProfile } };
+    }
   }
 
   // 4. Top-level defaults
   const topLevel = config[key as keyof AppConfig];
-  if (topLevel !== undefined && typeof topLevel === 'string') return topLevel;
+  if (topLevel !== undefined && typeof topLevel === 'string') {
+    return { value: topLevel, source: { layer: 'config' } };
+  }
 
   return undefined;
+}
+
+/**
+ * Layered config resolution: flags > env > profile > defaults
+ */
+export async function resolveConfigValue(key: keyof ProfileConfig, flagValue?: string): Promise<string | undefined> {
+  return (await resolveConfigValueWithSource(key, flagValue))?.value;
 }
 
 export async function getActiveProfile(): Promise<{ name: string; config: ProfileConfig } | null> {

@@ -1,32 +1,35 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ProvisionOptions {
-  agent: string;
+  agent?: string;
 }
 
 export function provisionCommand(): Command {
   return new Command('provision')
     .description('Provision vault for an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<ProvisionOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const orpc = await requireOrpcAuth(globals);
-        const result = await orpc.vault.provision({ agentId: opts.agent });
+        const result = await orpc.vault.provision({ agentId });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        output.success(`Vault provisioned for agent ${opts.agent}`);
+        output.success(`Vault provisioned for agent ${agentId}`);
         output.details([
           ['Vault ID', result.id],
           ['Agent ID', result.agentId],

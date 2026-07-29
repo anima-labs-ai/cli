@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -7,7 +8,7 @@ import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 type PhoneCapability = 'sms' | 'mms' | 'voice';
 
 interface ProvisionOptions {
-  agent: string;
+  agent?: string;
   country?: string;
   areaCode?: string;
   capabilities?: string;
@@ -50,7 +51,7 @@ function normalizeCountryCode(input?: string): string {
 export function provisionPhoneNumberCommand(): Command {
   return new Command('provision')
     .description('Provision a phone number for an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .option('--country <countryCode>', 'Country code (2 chars)', 'US')
     .option('--area-code <areaCode>', 'Area code preference')
     .option('--capabilities <capabilities>', 'Comma-separated capabilities: sms,mms,voice')
@@ -60,6 +61,8 @@ export function provisionPhoneNumberCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const countryCode = normalizeCountryCode(opts.country);
         const capabilities = parseCapabilities(opts.capabilities);
 
@@ -69,7 +72,7 @@ export function provisionPhoneNumberCommand(): Command {
           areaCode?: string;
           capabilities?: PhoneCapability[];
         } = {
-          agentId: opts.agent,
+          agentId,
           countryCode,
         };
 

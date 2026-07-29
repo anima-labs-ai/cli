@@ -38,6 +38,7 @@ import type { GlobalOptions } from "../../lib/auth.js";
 import {
 	getAuthConfig,
 	getConfig,
+	getConfigDir,
 	saveAuthConfig,
 	saveConfig,
 } from "../../lib/config.js";
@@ -255,7 +256,12 @@ async function runInteractiveNew(
 		`Inbox:    ${signup.inbox_id}`,
 		`Agent ID: ${signup.agent_id}`,
 		`Org ID:   ${signup.organization_id}`,
-		`API key:  ${signup.api_key.slice(0, 12)}…  (saved to ~/.anima/config)`,
+		// Read the path rather than name it: config lives wherever env-paths puts
+		// it (~/Library/Preferences/anima on macOS, $XDG_CONFIG_HOME/anima on
+		// Linux), never in the `~/.anima/config` this line used to claim. That
+		// directory does not exist, so anyone who went looking for their key
+		// after init found nothing there.
+		`API key:  ${signup.api_key.slice(0, 12)}…  (saved to ${getConfigDir()})`,
 	];
 	if (phoneNumber) lines.push(`Phone:    ${phoneNumber}`);
 	if (phoneError) {

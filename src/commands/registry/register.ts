@@ -1,11 +1,12 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface RegisterOptions {
-  agentId: string;
+  agentId?: string;
   name: string;
   description?: string;
   tags?: string;
@@ -15,7 +16,7 @@ interface RegisterOptions {
 export function registerAgentCommand(): Command {
   return new Command('register')
     .description('Register an agent in the public registry')
-    .requiredOption('--agent-id <id>', 'Agent ID (CUID)', requireNonEmptyArg('Agent ID'))
+    .option('--agent-id <id>', 'Agent ID (CUID; defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--name <name>', 'Display name (2-200 chars)')
     .option('--description <desc>', 'Agent description (max 2000 chars)')
     .option('--tags <tags>', 'Comma-separated tags (max 20)')
@@ -26,9 +27,11 @@ export function registerAgentCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agentId, output);
+
         const orpc = await requireOrpcAuth(globals);
         const entry = await orpc.registry.register({
-          agentId: opts.agentId,
+          agentId,
           name: opts.name,
           description: opts.description,
           tags: opts.tags ? opts.tags.split(',').map((s) => s.trim()).filter(Boolean) : undefined,

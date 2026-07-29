@@ -3,9 +3,10 @@ import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 
 interface ValidateOptions {
-  agent: string;
+  agent?: string;
 }
 
 export function validateAddressCommand(): Command {
@@ -20,7 +21,7 @@ export function validateAddressCommand(): Command {
       'ID of the address to validate (e.g. addr_xxx). Run `am address list --agent <agentId>` to find one.',
       requireNonEmptyArg('Address ID'),
     )
-    .requiredOption('--agent <agentId>', 'Agent that owns the address', requireNonEmptyArg('Agent ID'))
+    .option('--agent <agentId>', 'Agent that owns the address (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .addHelpText(
       'after',
       `
@@ -35,10 +36,12 @@ Examples:
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.address.validate({
           id: addressId,
-          agentId: opts.agent,
+          agentId,
         });
 
         if (globals.json) {

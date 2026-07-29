@@ -166,9 +166,17 @@ describe('empty id inputs', () => {
 
     // Guard the guard. Without these the assertion below passes while checking
     // nothing, which is how the first version of this test told the truth about
-    // positionals and said nothing at all about options. 28/36 today.
+    // positionals and said nothing at all about options. 28/19 today.
+    //
+    // The option count dropped from 36 when `--agent` learned to fall back to
+    // the configured `defaultIdentity`: 17 id options stopped being mandatory
+    // and left this sweep, which only collects mandatory ones. They did not
+    // stop guarding — an explicit `--agent ""` is still a usage error — and
+    // agent-default.test.ts asserts exactly that for all 17, so the guarantee
+    // moved rather than shrank. Widening this sweep to every optional id input
+    // is a bigger job than that change: 44 of them have never had a guard.
     expect(positionals.length).toBeGreaterThan(20);
-    expect(options.length).toBeGreaterThan(30);
+    expect(options.length).toBeGreaterThan(15);
 
     const unguarded = inputs.filter((i) => !i.guarded).map((i) => `${i.command} ${i.input}`);
     expect(unguarded).toEqual([]);
