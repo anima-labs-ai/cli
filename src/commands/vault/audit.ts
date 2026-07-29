@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Output } from '../../lib/output.js';
@@ -135,7 +136,7 @@ export function auditCommand(): Command {
   return new Command('audit')
     .description('Scan files for plaintext secrets and unresolved vault references')
     .argument('[paths...]', 'Files or directories to scan (default: cwd)')
-    .option('--agent <id>', 'Agent ID (used to load known vault credentials for literal matching)')
+    .option('--agent <id>', 'Agent ID (used to load known vault credentials for literal matching)', requireNonEmptyArg('Agent ID'))
     .option('--check', 'Exit with code 1 if any findings (for CI)')
     .option('--fix', 'Interactively replace findings with SecretRefs (coming soon)')
     .action(async function (this: Command, paths: string[]) {

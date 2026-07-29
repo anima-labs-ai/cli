@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -30,7 +31,7 @@ export function searchMessagesCommand(): Command {
   return new Command('search')
     .description('Search messages by text query')
     .argument('<query>', 'Search query text')
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .option('--channel <channel>', 'Filter by channel (EMAIL, SMS, MMS, VOICE)', validateChannel)
     .option('--direction <dir>', 'Filter by direction (INBOUND, OUTBOUND)', validateDirection)
     .option('--status <status>', 'Filter by status', validateStatus)

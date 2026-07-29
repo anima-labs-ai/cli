@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -17,7 +18,7 @@ export function listEmailsCommand(): Command {
     .description('List emails')
     .option('--cursor <cursor>', 'Pagination cursor')
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .option('--label <label>', 'Only email carrying this label; repeat to require ALL (e.g. --label unread --label urgent). System: unread, read, archived, spam', collectValue, [])
     .option('--include-spam', 'Include email flagged as spam on arrival (excluded by default)')
     .action(async function (this: Command) {

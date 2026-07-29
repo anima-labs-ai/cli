@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { spawn } from 'node:child_process';
+import { collectNonEmpty, requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -37,12 +38,12 @@ interface ExecOptions {
 export function execCommand(): Command {
   return new Command('exec')
     .description('Run a command with resolved vault secrets injected into its environment')
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .option('--config <path>', 'Path to anima.json (defaults to auto-discovery)')
     .option(
       '--cred <credId>',
       'Credential ID to resolve; repeatable. Pair with --as to map to an env var.',
-      (value, previous: string[] = []) => [...previous, value],
+      collectNonEmpty('Credential ID'),
     )
     .option(
       '--as <name>',

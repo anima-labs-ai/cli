@@ -1,5 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
-import { validateLimit } from '../../lib/args.js';
+import { requireNonEmptyArg, validateLimit } from '../../lib/args.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -23,6 +23,7 @@ export function listIdentitiesCommand(): Command {
     .option(
       '--org <orgId>',
       'Filter to one organization (omit to list across all your orgs)',
+      requireNonEmptyArg('Organization ID'),
     )
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--cursor <cursor>', 'Pagination cursor')

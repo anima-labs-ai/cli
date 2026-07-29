@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { requireNonEmptyArg } from '../../../lib/args.js';
+import { collectNonEmpty, requireNonEmptyArg } from '../../../lib/args.js';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../../lib/orpc.js';
@@ -33,9 +33,14 @@ export function createDraftCommand(): Command {
     .option('--subject <subject>', 'Subject line')
     .option('--body <body>', 'Plain-text body')
     .option('--html <html>', 'HTML body')
-    .option('--from-identity <id>', 'EmailIdentity ID to send from (must belong to the agent and be verified)')
-    .option('--in-reply-to <messageId>', 'In-Reply-To Message-ID for threading on send')
-    .option('--reference <messageId>', 'References chain Message-ID for threading (repeatable)', collect, [])
+    .option('--from-identity <id>', 'EmailIdentity ID to send from (must belong to the agent and be verified)', requireNonEmptyArg('Identity ID'))
+    .option('--in-reply-to <messageId>', 'In-Reply-To Message-ID for threading on send', requireNonEmptyArg('Message ID'))
+    .option(
+      '--reference <messageId>',
+      'References chain Message-ID for threading (repeatable)',
+      collectNonEmpty('Message ID'),
+      [],
+    )
     .action(async function (this: Command) {
       const opts = this.opts<CreateDraftOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

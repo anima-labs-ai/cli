@@ -34,6 +34,7 @@
 
 import * as clack from "@clack/prompts";
 import { Command } from "commander";
+import { requireNonEmptyArg } from "../../lib/args.js";
 import type { GlobalOptions } from "../../lib/auth.js";
 import {
 	getAuthConfig,
@@ -487,7 +488,11 @@ export function initCommand(): Command {
 		.option("--api-key <key>", "API key (required in non-interactive mode)")
 		.option("--api-url <url>", "API URL")
 		.option("--org <org>", "Default organization")
-		.option("--identity <id>", "Default identity")
+		.option(
+			"--identity <id>",
+			"Default identity",
+			requireNonEmptyArg("Identity ID"),
+		)
 		.option("--format <format>", "Output format (table/json/yaml)")
 		.action(async function (this: Command) {
 			const opts = this.opts<InitOptions>();

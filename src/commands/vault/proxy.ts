@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import http from 'node:http';
 import https from 'node:https';
 import crypto from 'node:crypto';
@@ -35,7 +36,7 @@ interface ProxyOptions {
 export function proxyCommand(): Command {
   return new Command('proxy')
     .description('Run a local proxy that injects a vault credential into outbound requests')
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .option('--port <port>', 'Port to listen on (default 19840)', '19840')
     .requiredOption('--cred <ref>', 'Credential reference: cred_id or anima.json key')
     .option('--header <name>', 'Header name to inject (default: Authorization)', 'Authorization')

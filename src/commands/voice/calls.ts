@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -24,7 +25,7 @@ function formatDate(iso: string): string {
 export function listCallsCommand(): Command {
   return new Command('calls')
     .description('List voice calls')
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .option('--state <state>', 'Filter by state (INITIATING, RINGING, ACTIVE, ENDED)')
     .option('--limit <n>', 'Max results (default: 20)')
     .option('--offset <n>', 'Offset for pagination')

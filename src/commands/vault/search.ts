@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -38,7 +39,7 @@ function validateType(value: string): CredentialType {
 export function searchCommand(): Command {
   return new Command('search')
     .description('Search credentials')
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--query <search>', 'Search query')
     .option('--type <type>', 'Credential type filter', validateType)
     .action(async function (this: Command) {

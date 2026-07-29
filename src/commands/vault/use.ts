@@ -60,7 +60,7 @@ interface UseCredentialResponse {
 export function useCommand(): Command {
   return new Command('use')
     .description('Call an API with a credential attached server-side (secret never leaves Anima)')
-    .option('--agent <id>', 'Agent ID (optional with an agent-bound key)')
+    .option('--agent <id>', 'Agent ID (optional with an agent-bound key)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--credential <id>', 'Credential ID to broker the call with', requireNonEmptyArg('Credential ID'))
     .option('--method <method>', 'HTTP method: GET, POST, PUT, PATCH, DELETE, HEAD', validateMethod, 'GET' as UseMethod)
     .requiredOption('--url <url>', 'Absolute https:// URL (host must be on the credential allowlist)')

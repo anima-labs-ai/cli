@@ -27,7 +27,7 @@ interface TokenCreateOptions {
 function tokenCreateCommand(): Command {
   return new Command('create')
     .description('Create an ephemeral vault token')
-    .option('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--credential <id>', 'Credential ID', requireNonEmptyArg('Credential ID'))
     .option('--scope <scope>', 'Token scope: autofill, proxy, export', validateScope, 'autofill' as TokenScope)
     .option('--ttl <seconds>', 'TTL in seconds (10-3600, default 60)')
@@ -137,7 +137,7 @@ interface TokenRevokeOptions {
 function tokenRevokeCommand(): Command {
   return new Command('revoke')
     .description('Revoke all tokens for a credential')
-    .option('--agent <id>', 'Agent ID')
+    .option('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--credential <id>', 'Credential ID', requireNonEmptyArg('Credential ID'))
     .action(async function (this: Command) {
       const opts = this.opts<TokenRevokeOptions>();

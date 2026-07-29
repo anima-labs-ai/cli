@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -22,7 +23,7 @@ interface MemberInviteResponse {
 export function memberInviteCommand(): Command {
   return new Command('invite')
     .description('Invite a team member')
-    .option('--org <org>', 'Organization ID (overrides configured default org)')
+    .option('--org <org>', 'Organization ID (overrides configured default org)', requireNonEmptyArg('Organization ID'))
     .requiredOption('--email <email>', 'Member email address')
     .option('--role <role>', 'Role: admin|member|viewer', validateRole, 'member')
     .action(async function (this: Command) {
