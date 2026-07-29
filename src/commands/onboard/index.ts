@@ -31,6 +31,39 @@ interface OnboardOptions {
 	skipMcp?: boolean;
 }
 
+/**
+ * Every command `onboard` tells the caller to run next.
+ *
+ * Hoisted out of the response body for the same reason `demo` keeps its
+ * `ADVERTISED_COMMANDS` in one place: onboard-advertised syntax is the first
+ * thing a new user types, so it has to be real, and the only way to keep it
+ * real is to let a test walk it against the actual commander tree.
+ *
+ * It was not real. `demo` lost its `--only-<flow>` flags when it became a
+ * single email walkthrough, but this list still advertised
+ * `anima demo --only-email` (and `--only-x402`, whose flow no longer exists at
+ * all), so following onboarding's own instructions produced "error: unknown
+ * option '--only-email'".
+ *
+ * Index 0 is the verification step, which is emitted conditionally.
+ */
+export const ONBOARD_NEXT_STEPS = [
+	{
+		command: "anima verify <code>",
+		description:
+			"Verify with the OTP emailed to the agent's owner — unlocks full send capability",
+	},
+	{
+		command: "anima demo",
+		description: "Email send + receive walkthrough, simulated locally",
+	},
+	{
+		command: "anima setup-mcp install --all",
+		description:
+			"Wire Anima MCP to Claude Code, Claude Desktop, Cursor, Windsurf, VS Code",
+	},
+] as const;
+
 export function onboardCommand(): Command {
 	return new Command("onboard")
 		.description(
@@ -152,11 +185,7 @@ export function onboardCommand(): Command {
 			}
 
 			if (isAgent) {
-				const verifyStep = {
-					command: "anima verify <code>",
-					description:
-						"Verify with the OTP emailed to the agent's owner — unlocks full send capability",
-				};
+				const verifyStep = ONBOARD_NEXT_STEPS[0];
 				output.payload({
 					status: "ready",
 					identity: {
@@ -170,19 +199,7 @@ export function onboardCommand(): Command {
 					next_steps: [
 						// Lead with verification when the agent is still unverified.
 						...(verified === false ? [verifyStep] : []),
-						{
-							command: "anima demo --only-email",
-							description: "Test-mode email send + receive (no real emails)",
-						},
-						{
-							command: "anima demo --only-x402",
-							description: "x402 sandbox fetch (HTTP 402 settlement demo)",
-						},
-						{
-							command: "anima setup-mcp install --all",
-							description:
-								"Wire Anima MCP to Claude Code, Claude Desktop, Cursor, Windsurf, VS Code",
-						},
+						...ONBOARD_NEXT_STEPS.slice(1),
 					],
 					docs: "https://docs.useanima.sh/getting-started",
 					skill_manifest: "https://useanima.sh/skill.md",
@@ -225,23 +242,10 @@ export function onboardCommand(): Command {
 					clack.outro("See you later.");
 					return;
 				}
+				// No flow picker any more: `demo` is one email walkthrough, and
+				// the x402 option offered here had no command behind it at all.
 				if (wantsDemo) {
-					const which = await clack.select({
-						message: "Which flow?",
-						options: [
-							{
-								value: "email",
-								label: "Email send (test mode) — see the agent inbox in action",
-							},
-							{ value: "x402", label: "x402 fetch (sandbox) — pay for an API call" },
-							{ value: "skip", label: "Skip" },
-						],
-					});
-					if (clack.isCancel(which) || which === "skip") {
-						// fall through to MCP step
-					} else {
-						clack.log.info(`Run: anima demo --only-${which}`);
-					}
+					clack.log.info("Run: anima demo");
 				}
 			}
 

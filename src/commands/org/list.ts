@@ -36,15 +36,41 @@ export function listOrgsCommand(): Command {
           },
         );
       } catch (err: unknown) {
-        if (err instanceof ORPCError) {
-          if (err.code === 'USER_AUTH_REQUIRED') {
-            output.error(
-              'This command requires user authentication. API keys are scoped to a single org — run `am whoami` to see it.',
+        // `/me/orgs` answers "every org this human belongs to", which only a
+        // Clerk session or OAuth token can be asked. An API key is scoped to
+        // one org, and that org is still a perfectly good answer to "list my
+        // orgs" — so ask `/orgs/me` for it rather than making the user go and
+        // run a different command. The API's own error says as much
+        // ("query /orgs/me instead"); this just does it.
+        if (err instanceof ORPCError && err.code === 'USER_AUTH_REQUIRED') {
+          try {
+            const orpc = await requireOrpcAuth(globals);
+            const org = await orpc.org.me({});
+            const defaultOrg = await resolveConfigValue('defaultOrg');
+
+            if (globals.json) {
+              output.json({ items: [org] });
+              return;
+            }
+
+            output.table(
+              ['ID', 'Name', 'Slug', 'Role', 'Tier', 'Default'],
+              [[org.id, org.name, org.slug, '-', org.tier ?? '-', org.id === defaultOrg ? '*' : '']],
+              {
+                summary:
+                  'Scoped to the org this API key belongs to. Sign in with `am auth login` to list every org you are a member of.',
+              },
             );
-          } else {
-            output.error(`Failed to list orgs: ${err.message}`);
+            return;
+          } catch (fallbackErr: unknown) {
+            output.error(
+              `Failed to list orgs: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+            );
+            process.exit(1);
           }
-        } else if (err instanceof Error) {
+        }
+
+        if (err instanceof ORPCError || err instanceof Error) {
           output.error(`Failed to list orgs: ${err.message}`);
         }
         process.exit(1);

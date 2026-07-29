@@ -128,17 +128,20 @@ describe('admin commands', () => {
     }
   }
 
-  test('org list displays organizations', async () => {
+  /**
+   * `admin org list` used to GET /v1/admin/orgs, and this test used to mock
+   * exactly that. The route does not exist in the API — there is no
+   * `/v1/admin/*` namespace at all — so the command answered "Route not found"
+   * for every real user while the suite stayed green against an endpoint the
+   * mock had invented. Pointing the mock at the endpoint the CLI actually
+   * calls is the part that makes this test worth having.
+   */
+  test('org list displays the org the credential is scoped to', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/v1/admin/orgs', {
+    setRoute('GET', '/v1/orgs/me', {
       status: 200,
-      body: {
-        orgs: [
-          { name: 'Acme', plan: 'pro', memberCount: 6, createdAt: '2026-01-10T00:00:00.000Z' },
-          { name: 'Beta', plan: 'starter', memberCount: 2, createdAt: '2026-02-01T00:00:00.000Z' },
-        ],
-      },
+      body: { id: 'org_1', name: 'Acme', slug: 'acme', tier: 'PRO' },
     });
 
     const logSpy = mock((...args: unknown[]) => {});
@@ -150,7 +153,7 @@ describe('admin commands', () => {
     console.log = originalLog;
     const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
     expect(printed.includes('Acme')).toBe(true);
-    expect(printed.includes('Beta')).toBe(true);
+    expect(printed.includes('org_1')).toBe(true);
   });
 
   test('member invite sends correct request and uses default org', async () => {
@@ -310,7 +313,7 @@ describe('admin commands', () => {
   test('shows API failure message on forbidden response', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/v1/admin/orgs', {
+    setRoute('GET', '/v1/orgs/me', {
       status: 403,
       body: { error: { code: 'FORBIDDEN', message: 'forbidden' } },
     });

@@ -177,6 +177,26 @@ export function tailCommand(): Command {
           break;
         } catch (error) {
           if (controller.signal.aborted) break;
+
+          // 401/403 will not become 200 by waiting. Retrying a permission
+          // error five times with backoff buried the actual problem under
+          // "disconnected … attempt 1/5" and took ~30s to reach a verdict the
+          // first response already gave. `/v1/events/stream` calls
+          // requireMaster, and the key `am init` stores is an agent key.
+          if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+            output.error(
+              error.status === 403
+                ? '[am tail] This credential cannot read the event stream.'
+                : '[am tail] Not authenticated.',
+            );
+            output.info(
+              error.status === 403
+                ? 'The stream is master-only. Use a master key (mk_…) — `am init` → "existing API key" — or sign in as an org owner with `am auth login`.'
+                : 'Run `am auth login`, or configure an API key with `am init`.',
+            );
+            process.exit(1);
+          }
+
           attempts += 1;
           const message = error instanceof Error ? error.message : String(error);
           if (attempts > MAX_RECONNECT_ATTEMPTS) {
