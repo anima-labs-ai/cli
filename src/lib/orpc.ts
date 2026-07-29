@@ -30,10 +30,44 @@ export interface OrpcErrorMessages {
   statusMessages?: Record<number, string>;
   /**
    * Message for a specific oRPC error `code` (a non-status condition).
-   * Checked after `statusMessages`, so a status override wins when both match.
+   * Checked BEFORE `statusMessages` — a code identifies the refusal, a status
+   * only describes its shape.
    */
   codeMessages?: Record<string, string>;
 }
+
+/**
+ * Wire codes that say nothing a status does not. Anything outside this set is
+ * a typed refusal the server chose deliberately (MASTER_KEY_REQUIRED,
+ * RECIPIENT_SUPPRESSED, TCPA_GATE_BLOCKED, VERIFICATION_REQUIRED …), and its
+ * message is worth more than a per-command guess keyed on the status.
+ */
+const GENERIC_WIRE_CODES: ReadonlySet<string> = new Set([
+  'BAD_REQUEST',
+  'UNAUTHORIZED',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'CONFLICT',
+  'PAYMENT_REQUIRED',
+  'TOO_MANY_REQUESTS',
+  'NOT_IMPLEMENTED',
+  'SERVICE_UNAVAILABLE',
+  'INTERNAL_SERVER_ERROR',
+]);
+
+/**
+ * Text prepended to a typed refusal, for the ones where the CLI knows a way
+ * out that the API cannot know about.
+ *
+ * MASTER_KEY_REQUIRED gates ~100 endpoints, and the server's message lists
+ * three routes to master capability without saying which is available to
+ * *this* caller — for an org created by `am init`, the answer is none of
+ * them. `am auth elevate` is the CLI's own answer, so it belongs here rather
+ * than repeated at every call site that might hit the wall.
+ */
+const TYPED_CODE_HINTS: Readonly<Record<string, string>> = {
+  MASTER_KEY_REQUIRED: 'This needs admin access. Run `am auth elevate` first.\n',
+};
 
 /**
  * Turn an oRPC failure into a rendered CLI error and a non-zero exit, in one
@@ -41,7 +75,8 @@ export interface OrpcErrorMessages {
  *
  * Message resolution, most specific first: 401 → a fixed "authenticate" hint
  * (always — a `statusMessages` entry for 401 is ignored); then a matching
- * `statusMessages` entry; then a matching `codeMessages` entry; otherwise
+ * `codeMessages` entry; then, for a typed (non-generic) code, the server's own
+ * message; then a matching `statusMessages` entry; otherwise
  * `"${context}: ${error.message}"`.
  *
  * Exits via `output.fatal` (never returns) — `output` is a typed parameter, so
@@ -57,10 +92,27 @@ export function handleOrpcError(
     if (error.status === 401) {
       output.fatal('Not authenticated. Run `anima auth login` to authenticate.');
     }
-    const byStatus = messages?.statusMessages?.[error.status];
-    if (byStatus !== undefined) output.fatal(byStatus);
+
+    // Most specific wins. This used to check `statusMessages` first, which
+    // meant a per-status guess overrode the typed code underneath it: a 403
+    // carrying MASTER_KEY_REQUIRED — "use a master key, or sign in as an org
+    // owner" — was displayed as `identity create`'s "Forbidden: you do not
+    // have access to this organization." That is not just vaguer, it is
+    // false; the caller does have access, and the message sent them looking
+    // for a permissions problem that does not exist.
     const byCode = messages?.codeMessages?.[error.code];
     if (byCode !== undefined) output.fatal(byCode);
+
+    // A typed code means the server said something specific about this
+    // refusal. Its message is then better than any status-shaped guess we
+    // could substitute, so a status message only applies when the code is one
+    // of the generic HTTP-ish ones that carries no extra information.
+    if (!GENERIC_WIRE_CODES.has(error.code)) {
+      output.fatal(`${TYPED_CODE_HINTS[error.code] ?? ''}${error.message}`);
+    }
+
+    const byStatus = messages?.statusMessages?.[error.status];
+    if (byStatus !== undefined) output.fatal(byStatus);
     output.fatal(`${context}: ${error.message}`);
   }
   if (error instanceof Error) output.fatal(`${context}: ${error.message}`);
