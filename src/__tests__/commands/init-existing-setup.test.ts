@@ -41,7 +41,40 @@ mock.module("env-paths", () => ({
 	}),
 }));
 
-const { archiveCurrentSetup, currentSetup } = await import("../../commands/init/index.js");
+const { archiveCurrentSetup, currentSetup, masterCapability } = await import(
+	"../../commands/init/index.js"
+);
+
+/**
+ * Which credentials can create an agent.
+ *
+ * This shipped wrong: "Add another agent to this org" was offered, and
+ * recommended by default, to every configured machine. Sign-up mints both an
+ * `mk_` and an `ak_` for a new org but returns only the `ak_`, so an
+ * init-provisioned machine — the one most likely to want a second agent — is
+ * exactly the one that cannot create one. Users answered two prompts and then
+ * got "Master key required for this operation" from the server.
+ */
+describe("which credentials can create an agent", () => {
+	test("an agent key cannot — this is what init stores", () => {
+		expect(masterCapability("ak_live_abc")).toBe("no");
+	});
+
+	test("a master key can", () => {
+		expect(masterCapability("mk_live_abc")).toBe("yes");
+	});
+
+	test("an OAuth token is unknown — granted scopes are not stored locally", () => {
+		// AuthConfig has no `scope` field, so admin:full cannot be checked
+		// without asking the server. Guessing "no" would block a token that
+		// works; guessing "yes" would restore the two-wasted-prompts bug.
+		expect(masterCapability("oat_live_abc")).toBe("unknown");
+	});
+
+	test("no credential at all is unknown, not a hard no", () => {
+		expect(masterCapability(undefined)).toBe("unknown");
+	});
+});
 
 describe("a second init and the setup already on the machine", () => {
 	beforeEach(() => {

@@ -587,6 +587,46 @@ async function runNonInteractive(
 }
 
 /**
+ * Can the stored credential create an agent?
+ *
+ * Creating an agent needs master capability, and the key `init` stores cannot
+ * have it: sign-up mints both an `mk_` and an `ak_` for the new org but only
+ * ever returns the `ak_`. So the machine most likely to be asking for a second
+ * agent is precisely the one that cannot make one, and offering it the attempt
+ * costs two prompts before a server error explains why.
+ *
+ * `oat_` is OAuth, where the answer depends on whether `admin:full` was
+ * granted — and the granted scopes are not persisted locally (AuthConfig has
+ * no `scope` field), so the honest answer is "unknown" and the only way to
+ * find out is to try.
+ */
+export function masterCapability(
+	apiKey: string | undefined,
+): "yes" | "no" | "unknown" {
+	if (apiKey === undefined) return "unknown";
+	if (apiKey.startsWith("mk_")) return "yes";
+	if (apiKey.startsWith("ak_")) return "no";
+	return "unknown";
+}
+
+/** What to do about it — the same advice from the two places that need it. */
+function masterKeyGuidance(orgId: string): string {
+	return [
+		"Creating an agent needs master credentials. The key `am init` saves is",
+		"an agent key (ak_…), which can send and read as its own agent but",
+		"cannot provision new ones.",
+		"",
+		"To get one:",
+		"  1. Open https://console.useanima.sh and copy your master key (mk_…)",
+		"  2. am init  →  “Configure with an existing API key”",
+		`  3. am identity create --org ${orgId} --name "…" --slug "…"`,
+		"",
+		"An Anima Connect token with the admin:full scope also works, but",
+		"`am auth login` does not request that scope today.",
+	].join("\n");
+}
+
+/**
  * Create another agent inside the org that is already configured.
  *
  * This is the branch the wizard never had. "I already have an org, I just want
@@ -599,6 +639,16 @@ async function createAgentInCurrentOrg(
 	globals: GlobalOptions,
 	output: Output,
 ): Promise<void> {
+	// Check before prompting, not after. Asking for a name and a slug and then
+	// failing on the request wastes the answers and reports the problem as
+	// though the input caused it.
+	const auth = await getAuthConfig();
+	if (masterCapability(auth.apiKey) === "no") {
+		clack.note(masterKeyGuidance(orgId), "This needs a master key");
+		clack.outro("Nothing changed.");
+		return;
+	}
+
 	const name = await clack.text({
 		message: "Agent name:",
 		placeholder: "Shopping Agent",
@@ -656,9 +706,25 @@ async function createAgentInCurrentOrg(
 				: `Done. Use it with:  --agent ${agent.id}`,
 		);
 	} catch (error) {
-		spinner.stop("Could not create the agent.");
-		handleOrpcError(error, output, "Failed to create agent");
-	}
+			spinner.stop("Could not create the agent.");
+
+			// The OAuth case reaches here: scopes aren't stored locally, so the
+			// server is the first thing that can say the token lacks admin:full.
+			// Its message names three ways to get master capability without
+			// saying which applies to you, or that `am auth login` will not
+			// request that scope — so answer the question the user is actually
+			// left with.
+			if (
+				error instanceof Error &&
+				/master key required/i.test(error.message)
+			) {
+				output.error("This credential cannot create agents.");
+				clack.note(masterKeyGuidance(orgId), "This needs a master key");
+				process.exit(1);
+			}
+
+			handleOrpcError(error, output, "Failed to create agent");
+		}
 }
 
 /**
@@ -683,14 +749,29 @@ async function offerExistingSetupChoices(
 		"Current configuration",
 	);
 
+	// Don't recommend what this credential cannot do. An init-provisioned
+	// machine holds an `ak_` key, which cannot create agents, so highlighting
+	// that option by default steers the common case straight into a wall.
+	const canCreateAgents = masterCapability((await getAuthConfig()).apiKey);
+
 	const choice = await clack.select({
 		message: "What would you like to do?",
-		initialValue: "agent" as "agent" | "org" | "existing" | "keep",
+		initialValue: (canCreateAgents === "no" ? "existing" : "agent") as
+			| "agent"
+			| "org"
+			| "existing"
+			| "keep",
 		options: [
 			{
 				value: "agent",
-				label: "Add another agent to this org (recommended)",
-				hint: "New identity + inbox, same org and billing",
+				label:
+					canCreateAgents === "no"
+						? "Add another agent to this org"
+						: "Add another agent to this org (recommended)",
+				hint:
+					canCreateAgents === "no"
+						? "Needs a master key (mk_…) — this machine has an agent key"
+						: "New identity + inbox, same org and billing",
 			},
 			{
 				value: "org",
