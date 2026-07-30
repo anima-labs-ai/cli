@@ -577,8 +577,14 @@ function hasLapsed(iso: string | undefined): boolean {
  * Only session profiles get this treatment. An ordinary profile is a durable
  * identity whose key legitimately has no expiry, and standing those down would
  * lock people out of exactly the credential they chose.
+ *
+ * Exported because `elevation.ts` has to answer the same question when it
+ * decides whether to skip the password dialog. It used to decide for itself,
+ * and reached the opposite conclusion about the case this whole comment is
+ * about — an expiry-less session counted as *live* there while counting as
+ * dead here. One predicate, asked twice, cannot drift.
  */
-function profileCredentialLapsed(name: string, profile: ProfileConfig): boolean {
+export function profileCredentialLapsed(name: string, profile: ProfileConfig): boolean {
   if (hasLapsed(profile.expiresAt)) return true;
   return profile.expiresAt === undefined && isElevatedProfileName(name);
 }

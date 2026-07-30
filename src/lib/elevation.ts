@@ -36,6 +36,7 @@ import {
   ELEVATED_PROFILE_SUFFIX,
   getAuthConfig,
   getConfig,
+  profileCredentialLapsed,
   saveConfig,
   secureStore as store,
 } from './config.js';
@@ -271,6 +272,18 @@ export async function activateSession(
  * This is what makes the flow behave like `sudo` rather than prompting on every
  * command in a sequence: the first admin command in a burst asks for the
  * password, the rest ride the session until it lapses.
+ *
+ * Liveness is decided by `profileCredentialLapsed`, the same predicate the
+ * credential path uses, rather than re-derived here. Re-deriving it is what
+ * this function used to do, and the two answers disagreed on exactly the case
+ * that matters: a session profile with no recorded `expiresAt` — written by a
+ * CLI that did not record one — counted as live here and as dead there. The
+ * effect was the opposite of a missing prompt. The credential path rejected the
+ * profile and sent the agent key, the server answered MASTER_KEY_REQUIRED, and
+ * this function then told the retry logic a session was already running, so no
+ * step-up was attempted and the command failed with nothing the user could act
+ * on. The comment in `elevateForRetry` — "the failing request went out under
+ * it" — was false in precisely that case.
  */
 export async function hasLiveSession(): Promise<boolean> {
   const config = await getConfig();
@@ -278,6 +291,5 @@ export async function hasLiveSession(): Promise<boolean> {
   if (!active) return false;
   const profile = config.profiles?.[active];
   if (!profile?.apiKey || active !== elevatedProfileName(config.defaultOrg)) return false;
-  if (!profile.expiresAt) return true;
-  return Date.parse(profile.expiresAt) > Date.now();
+  return !profileCredentialLapsed(active, profile);
 }

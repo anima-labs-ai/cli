@@ -645,8 +645,26 @@ export function masterCapability(
 	return "unknown";
 }
 
+/**
+ * Can this machine actually provision an agent?
+ *
+ * `masterCapability` answers a narrower question — what the stored key's prefix
+ * implies — and is not sufficient on its own any more. An enrolled machine
+ * holding an `ak_` key can provision: `requireOrpcAuth` steps up on
+ * MASTER_KEY_REQUIRED and retries. Two callers need this answer, and before this
+ * existed they disagreed: the create path had been taught about enrolment while
+ * the menu that offers it had not, so an enrolled machine was told it "needs a
+ * master key (mk_…)" and steered away from the option that would have worked.
+ * One predicate, so the offer and the attempt cannot contradict each other.
+ */
+async function canProvisionAgents(orgId: string | undefined): Promise<boolean> {
+	const auth = await getAuthConfig();
+	if (masterCapability(auth.apiKey) !== "no") return true;
+	return orgId !== undefined && (await enrollmentFor(orgId)) !== undefined;
+}
+
 /** What to do about it — the same advice from the two places that need it. */
-function masterKeyGuidance(orgId: string): string {
+function masterKeyGuidance(): string {
 	return [
 		"Creating an agent needs master credentials. The key `am init` saves is",
 		"an agent key (ak_…), which can send and read as its own agent but",
@@ -680,16 +698,8 @@ async function createAgentInCurrentOrg(
 	// Check before prompting, not after. Asking for a name and a slug and then
 	// failing on the request wastes the answers and reports the problem as
 	// though the input caused it.
-	// Enrolment counts as capability. This used to look only at the key prefix,
-	// which was right when it was written — sign-up never returns an `mk_`, so
-	// an `ak_` meant no route existed at all. An enrolled machine now has one:
-	// `requireOrpcAuth` steps up on MASTER_KEY_REQUIRED and retries. Refusing on
-	// the prefix alone would turn the discoverable path into a dead end while
-	// `am identity create` succeeded, for the same org, on the same machine.
-	const auth = await getAuthConfig();
-	const enrolled = (await enrollmentFor(orgId)) !== undefined;
-	if (!enrolled && masterCapability(auth.apiKey) === "no") {
-		clack.note(masterKeyGuidance(orgId), "This needs a master key");
+	if (!(await canProvisionAgents(orgId))) {
+		clack.note(masterKeyGuidance(), "This needs a master key");
 		clack.outro("Nothing changed.");
 		return;
 	}
@@ -751,25 +761,22 @@ async function createAgentInCurrentOrg(
 				: `Done. Use it with:  --agent ${agent.id}`,
 		);
 	} catch (error) {
-			spinner.stop("Could not create the agent.");
+		spinner.stop("Could not create the agent.");
 
-			// The OAuth case reaches here: scopes aren't stored locally, so the
-			// server is the first thing that can say the token lacks admin:full.
-			// Its message names three ways to get master capability without
-			// saying which applies to you, or that `am auth login` will not
-			// request that scope — so answer the question the user is actually
-			// left with.
-			if (
-				error instanceof Error &&
-				/master key required/i.test(error.message)
-			) {
-				output.error("This credential cannot create agents.");
-				clack.note(masterKeyGuidance(orgId), "This needs a master key");
-				process.exit(1);
-			}
-
-			handleOrpcError(error, output, "Failed to create agent");
+		// The OAuth case reaches here: scopes aren't stored locally, so the
+		// server is the first thing that can say the token lacks admin:full.
+		// Its message names three ways to get master capability without
+		// saying which applies to you, or that `am auth login` will not
+		// request that scope — so answer the question the user is actually
+		// left with.
+		if (error instanceof Error && /master key required/i.test(error.message)) {
+			output.error("This credential cannot create agents.");
+			clack.note(masterKeyGuidance(), "This needs a master key");
+			process.exit(1);
 		}
+
+		handleOrpcError(error, output, "Failed to create agent");
+	}
 }
 
 /**
@@ -794,14 +801,15 @@ async function offerExistingSetupChoices(
 		"Current configuration",
 	);
 
-	// Don't recommend what this credential cannot do. An init-provisioned
-	// machine holds an `ak_` key, which cannot create agents, so highlighting
-	// that option by default steers the common case straight into a wall.
-	const canCreateAgents = masterCapability((await getAuthConfig()).apiKey);
+	// Don't recommend what this machine cannot do. An init-provisioned machine
+	// holds an `ak_` key, so highlighting that option by default would steer the
+	// common case straight into a wall — unless it is enrolled, in which case the
+	// step-up covers it and this is the option to recommend.
+	const canAddAgent = await canProvisionAgents(existing.defaultOrg);
 
 	const choice = await clack.select({
 		message: "What would you like to do?",
-		initialValue: (canCreateAgents === "no" ? "existing" : "agent") as
+		initialValue: (canAddAgent ? "agent" : "existing") as
 			| "agent"
 			| "org"
 			| "existing"
@@ -809,14 +817,12 @@ async function offerExistingSetupChoices(
 		options: [
 			{
 				value: "agent",
-				label:
-					canCreateAgents === "no"
-						? "Add another agent to this org"
-						: "Add another agent to this org (recommended)",
-				hint:
-					canCreateAgents === "no"
-						? "Needs a master key (mk_…) — this machine has an agent key"
-						: "New agent + inbox, same org and billing",
+				label: canAddAgent
+					? "Add another agent to this org (recommended)"
+					: "Add another agent to this org",
+				hint: canAddAgent
+					? "New agent + inbox, same org and billing"
+					: "Needs a master key (mk_…) — this machine has an agent key",
 			},
 			{
 				value: "org",

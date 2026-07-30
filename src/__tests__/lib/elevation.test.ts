@@ -144,6 +144,20 @@ describe('owner grants', () => {
       expect(await elevation.hasLiveSession()).toBe(false);
     });
 
+    test('a session with no recorded expiry is dead, not eternal', async () => {
+      await withSession(undefined);
+
+      // The credential path already treats an expiry-less session profile as
+      // lapsed — they were written by a CLI that did not record one, so their
+      // 15-minute key is long dead. This has to agree, and for the opposite
+      // reason to the expired case above: if it reported "live", the retry
+      // logic would skip the step-up believing the failing request had already
+      // gone out under a privileged key. It had not — the credential path
+      // rejected this profile and sent the agent key — so the user would get a
+      // bare MASTER_KEY_REQUIRED and no prompt, on every command, forever.
+      expect(await elevation.hasLiveSession()).toBe(false);
+    });
+
     test('an ordinary profile is not a privileged session', async () => {
       await config.saveConfig({
         defaultOrg: ORG,
