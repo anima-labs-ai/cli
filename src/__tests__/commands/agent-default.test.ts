@@ -283,3 +283,90 @@ describe('--agent defaults to the configured identity', () => {
     expect(requestBodies.filter((r) => r.body !== null)).toEqual([]);
   });
 });
+
+/**
+ * The same bug, one field over.
+ *
+ * `am identity create` answered `error: required option '--org <orgId>' not
+ * specified` for a user who had just run `am init` — which writes `defaultOrg`
+ * to config.json. `.requiredOption()` is enforced during parse, so once again
+ * no care inside the action body could have helped: the CLI rejected the
+ * command before it could read the value it already had.
+ *
+ * Kept as a whole-tree sweep for the same reason as `--agent`: a future
+ * `.requiredOption('--org …')` has to argue for itself instead of quietly
+ * joining the list.
+ */
+describe('--org defaults to the configured organization', () => {
+  const CONFIGURED_ORG = 'cms5z7mcs00d4s601xdx7184y';
+
+  /** No `--org` should be mandatory: every one of them means "my org". */
+  const EXPECTED_MANDATORY_ORG: readonly string[] = [];
+
+  function collectOrgOptions(cmd: Command, trail: string[] = []): AgentOption[] {
+    const found: AgentOption[] = [];
+    for (const opt of cmd.options as readonly Option[]) {
+      if (/^--org /.test(`${opt.flags} `)) {
+        found.push({
+          label: [...trail, opt.flags].join(' '),
+          mandatory: opt.mandatory,
+          guarded: rejectsEmpty(opt.parseArg),
+        });
+      }
+    }
+    for (const sub of cmd.commands) found.push(...collectOrgOptions(sub, [...trail, sub.name()]));
+    return found;
+  }
+
+  beforeEach(() => {
+    resetPathsCache();
+    setPathsOverride({
+      config: testConfigDir,
+      data: testConfigDir,
+      cache: testConfigDir,
+      log: testConfigDir,
+      temp: testConfigDir,
+    });
+    program = createProgram();
+    if (!existsSync(testConfigDir)) mkdirSync(testConfigDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    delete process.env.ANIMA_DEFAULT_ORG;
+    if (existsSync(testConfigDir)) rmSync(testConfigDir, { recursive: true, force: true });
+  });
+
+  test('no --org option is mandatory', () => {
+    const options = collectOrgOptions(program);
+
+    // Guard the guard: an empty sweep would pass while checking nothing.
+    expect(options.length).toBeGreaterThan(5);
+
+    const mandatory = options.filter((o) => o.mandatory).map((o) => o.label).sort();
+    expect(mandatory).toEqual([...EXPECTED_MANDATORY_ORG].sort());
+  });
+
+  test('`identity create` resolves the org from config', async () => {
+    writeConfig({ defaultOrg: CONFIGURED_ORG });
+    const { resolveOrgId } = await import('../../lib/agent.js');
+    const { Output } = await import('../../lib/output.js');
+
+    expect(await resolveOrgId(undefined, Output.fromGlobals({}))).toBe(CONFIGURED_ORG);
+  });
+
+  test('an explicit --org still wins over config', async () => {
+    writeConfig({ defaultOrg: CONFIGURED_ORG });
+    const { resolveOrgId } = await import('../../lib/agent.js');
+    const { Output } = await import('../../lib/output.js');
+
+    expect(await resolveOrgId('org_explicit', Output.fromGlobals({}))).toBe('org_explicit');
+  });
+
+  test('an explicitly empty --org is a usage error, not a fallback', () => {
+    const orgOption = collectOrgOptions(program).find((o) => o.label.startsWith('identity create'));
+    // `--org ""` is a value the user supplied and got wrong (a `$ORG` that
+    // expanded to nothing). Substituting the configured default would create
+    // the agent somewhere the command line appeared to override.
+    expect(orgOption?.guarded).toBe(true);
+  });
+});

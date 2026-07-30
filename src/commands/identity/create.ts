@@ -1,11 +1,12 @@
 import { Command } from 'commander';
+import { resolveOrgId } from '../../lib/agent.js';
 import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface CreateIdentityOptions {
-  org: string;
+  org?: string;
   name: string;
   slug: string;
   email?: string;
@@ -16,7 +17,10 @@ interface CreateIdentityOptions {
 export function createIdentityCommand(): Command {
   return new Command('create')
     .description('Create an identity')
-    .requiredOption('--org <orgId>', 'Organization ID', requireNonEmptyArg('Organization ID'))
+    // Optional, not required: a mandatory option is enforced during parse, so
+    // `am identity create` rejected the command before its action body could
+    // read the defaultOrg `am init` had already written.
+    .option('--org <orgId>', 'Organization ID (defaults to your current org)', requireNonEmptyArg('Organization ID'))
     .requiredOption('--name <name>', 'Identity name (2-100 chars)')
     .requiredOption('--slug <slug>', 'Identity slug (2-64 chars)')
     .option('--email <email>', 'Identity email')
@@ -27,10 +31,15 @@ export function createIdentityCommand(): Command {
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
+      // Resolved before the try: a `fatal` raised inside it would be caught by
+      // the handler that renders API failures, which rewrites the exit code and
+      // reports missing input as a request that failed.
+      const orgId = await resolveOrgId(opts.org, output);
+
       try {
         const orpc = await requireOrpcAuth(globals);
         const agent = await orpc.agent.create({
-          orgId: opts.org,
+          orgId,
           name: opts.name,
           slug: opts.slug,
           email: opts.email,

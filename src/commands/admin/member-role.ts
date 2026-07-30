@@ -15,9 +15,12 @@ interface MemberRoleOptions {
 export function memberRoleCommand(): Command {
   return new Command('role')
     .description('Change member role')
-    .requiredOption('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
-    .requiredOption('--email <email>', 'Member email address')
-    .requiredOption('--role <role>', 'Role: admin|member|viewer', validateRole)
+    // Optional, because this command always refuses: there is no endpoint to
+    // call. Mandatory flags would only make the user satisfy three of them to
+    // be told the command does not exist.
+    .option('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
+    .option('--email <email>', 'Member email address')
+    .option('--role <role>', 'Role: admin|member|viewer', validateRole)
     .action(async function (this: Command) {
       const output = Output.fromGlobals(this.optsWithGlobals<GlobalOptions>());
 

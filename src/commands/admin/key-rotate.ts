@@ -1,11 +1,12 @@
 import { Command } from 'commander';
+import { resolveOrgId } from '../../lib/agent.js';
 import { requireNonEmptyArg } from '../../lib/args.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import { handleOrpcError, requireOrpcAuth } from '../../lib/orpc.js';
 import { Output } from '../../lib/output.js';
 
 interface KeyRotateOptions {
-  org: string;
+  org?: string;
 }
 
 export function keyRotateCommand(): Command {
@@ -15,15 +16,21 @@ export function keyRotateCommand(): Command {
   // should be.
   return new Command('rotate')
     .description("Rotate the organization's master key")
-    .requiredOption('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
+    // Optional for the same reason as `identity create`: a mandatory option is
+    // enforced during parse, so this demanded an org id the config already had.
+    .option('--org <org>', 'Organization ID (defaults to your current org)', requireNonEmptyArg('Organization ID'))
     .action(async function (this: Command) {
       const opts = this.opts<KeyRotateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
+      // Before the try: a `fatal` inside it would be caught by the API-failure
+      // handler, which rewrites the exit code and mislabels missing input.
+      const orgId = await resolveOrgId(opts.org, output);
+
       try {
         const orpc = await requireOrpcAuth(globals);
-        const result = await orpc.org.rotateKey({ id: opts.org });
+        const result = await orpc.org.rotateKey({ id: orgId });
 
         if (globals.json) {
           output.json(result);
