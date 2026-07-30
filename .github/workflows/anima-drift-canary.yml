@@ -75,10 +75,18 @@ jobs:
         working-directory: cli
         run: bun run typecheck
 
-      # One open issue at a time: if an anima-drift issue is already open,
-      # the repeat failure is visible on it and in the Actions history —
-      # don't spam a new issue per day.
-      - name: File drift issue
+      # One open issue at a time, kept accurate.
+      #
+      # This used to `exit 0` when an anima-drift issue was already open, on the
+      # theory that "the repeat failure is visible on it". It was not: the body
+      # is written once at file time and never updated, so the issue froze at
+      # the first day's drift. This repo lost 6 days to it (#33); the go, node
+      # and python canaries lost two weeks each to the same guard, sitting on
+      # issues that reported the pin as "unreadable" and listed no files.
+      #
+      # Refreshing the body instead costs no new notification, still never opens
+      # a second issue, and means the issue always describes today's drift.
+      - name: File or refresh drift issue
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,16 +97,23 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --description "CLI no longer builds against anima monorepo HEAD" \
             --color D93F0B --force
-          open_count="$(gh issue list --repo "$GITHUB_REPOSITORY" --label anima-drift --state open --json number --jq 'length')"
-          if [ "$open_count" != "0" ]; then
-            echo "An anima-drift issue is already open — not filing another."
-            exit 0
-          fi
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --label anima-drift \
+            --state open --json number,createdAt --jq '.[0] // empty')"
+          existing_num="$(printf '%s' "$existing" | jq -r '.number // empty')"
+          first_seen="$(printf '%s' "$existing" | jq -r '.createdAt // empty')"
           pinned="$(tr -d '[:space:]' < "$PINNED_REF_FILE" || echo 'unreadable')"
+          # Heredocs cannot branch, so the conditional line is built first. It
+          # expands to nothing on the initial filing.
+          first_seen_line=""
+          if [ -n "$first_seen" ]; then
+            first_seen_line="First detected: $first_seen — still failing. Everything below is refreshed on every failing run, so it reflects today, not that date."
+          fi
           cat > "$RUNNER_TEMP/drift-issue.md" <<EOF
           The daily drift canary failed: CLI main no longer typechecks against the anima monorepo's default-branch HEAD.
 
-          Failed run: $RUN_URL
+          $first_seen_line
+
+          Latest failing run: $RUN_URL
           Currently pinned anima commit (.anima-ref): $pinned
 
           What this means: CI and releases still build against the pin, so nothing is broken *yet* — but the next .anima-ref bump (or the next release prepared against fresh contracts) will hit this. Fix it while it's one change, not a pile.
@@ -108,9 +123,17 @@ jobs:
              - Failed at **checkout** with "Bad credentials": ANIMA_REPO_TOKEN expired again — mint a new fine-grained PAT (Contents: Read on anima-labs-ai/anima) and run: gh secret set ANIMA_REPO_TOKEN --repo anima-labs-ai/cli
              - Failed at **typecheck**: a contracts change on anima main is incompatible with the CLI.
           2. For contract drift: fix the CLI against the new contracts and bump .anima-ref to the anima HEAD SHA in the same PR (git ls-remote to find it).
-          3. Close this issue when the canary is green again.
+          3. Close this issue when the canary is green again. Leaving it open no
+             longer suppresses alerts, but it does keep a stale title in
+             everyone's issue list.
           EOF
-          gh issue create --repo "$GITHUB_REPOSITORY" \
-            --title "CLI no longer typechecks against anima HEAD" \
-            --label anima-drift \
-            --body-file "$RUNNER_TEMP/drift-issue.md"
+          if [ -n "$existing_num" ]; then
+            gh issue edit "$existing_num" --repo "$GITHUB_REPOSITORY" \
+              --body-file "$RUNNER_TEMP/drift-issue.md"
+            echo "Refreshed anima-drift issue #$existing_num with this run's drift."
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "CLI no longer typechecks against anima HEAD" \
+              --label anima-drift \
+              --body-file "$RUNNER_TEMP/drift-issue.md"
+          fi
