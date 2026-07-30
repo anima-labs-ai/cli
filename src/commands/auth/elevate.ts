@@ -4,7 +4,7 @@ import { requireNonEmptyArg } from '../../lib/args.js';
 import { type GlobalOptions, resolveApiUrl } from '../../lib/auth.js';
 import { getAuthConfig, getConfig } from '../../lib/config.js';
 import {
-  type ElevateApiResponse,
+  type ElevatedSession,
   NotEnrolledError,
   activateSession,
   canHoldGrant,
@@ -158,7 +158,7 @@ export function elevateCommand(): Command {
         process.exit(1);
       }
 
-      const session: ElevateApiResponse = {
+      const session: ElevatedSession = {
         apiKey: elevated.data.api_key,
         apiKeyId: elevated.data.api_key_id,
         expiresAt: elevated.data.expires_at,

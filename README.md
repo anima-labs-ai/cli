@@ -68,14 +68,34 @@ Primary binary: **`anima`**. Short alias: **`am`**.
 ```bash
 anima auth login          # Authenticate with Anima
 anima auth logout         # Clear stored credentials
-anima auth whoami         # Show current user info
+anima auth whoami         # Show current org, agent, and how each was resolved
+anima auth elevate        # Get temporary admin access for privileged commands
 ```
+
+Some operations — creating an agent, rotating keys, `anima tail` — need admin
+rights that the agent key from `anima init` does not carry. You do not normally
+run `anima auth elevate` yourself: those commands step up on demand, and macOS
+asks for your login password.
+
+The first step-up emails a code to the organization owner and **enrols this
+machine**. Enrolment stores a grant in your keychain behind a human-presence
+gate, so later step-ups need no email — just the password prompt. A step-up
+lasts 15 minutes, like `sudo`, so a run of admin commands only prompts once.
+
+An agent driving the CLI holds the API key and can run every command, but it
+cannot answer a system password dialog. That is the boundary. Note the gate is
+local: it governs release of the grant on this machine, and the server cannot
+verify a human was present.
+
+Enrolment is macOS-only. Elsewhere the CLI refuses to store a grant rather than
+pretend it is protected, and `anima auth elevate` keeps using the emailed code.
 
 ### `identity` — Manage agent identities
 
 ```bash
-anima identity create     # Create a new agent identity
+anima identity create     # Create a new agent identity (in your current org)
 anima identity list       # List all identities
+anima identity use <id>   # Set the default agent for later commands
 anima identity get <id>   # Get identity details
 anima identity update     # Update identity properties
 anima identity delete     # Delete an identity
@@ -186,7 +206,10 @@ anima vault totp          # Generate TOTP code
 anima config set <key> <value>   # Set a config value
 anima config get <key>           # Get a config value
 anima config list                # List all config values
-anima config profile             # Manage named profiles
+anima config profile list        # List profiles
+anima config profile use <name>  # Switch to a profile
+anima config profile clear       # Stop using any profile (back to top-level config)
+anima config profile delete <n>  # Delete a profile
 ```
 
 ### `setup-mcp` — Configure MCP server for AI clients
@@ -266,8 +289,13 @@ The CLI reads configuration in this priority order:
 
 1. **CLI flags** (`--token`, `--api-url`, `--json`, `--debug`)
 2. **Environment variables** (`ANIMA_API_URL`, `ANIMA_API_KEY`, `ANIMA_DEFAULT_ORG`, `ANIMA_DEFAULT_IDENTITY`, `ANIMA_OUTPUT_FORMAT`)
-3. **Active profile** (set via `anima config profile use <name>`)
+3. **Active profile** (set via `anima config profile use <name>`, cleared with `anima config profile clear`)
 4. **Default config** (set via `anima config set` or `anima init`)
+
+`--org` and `--agent` fall back through the same order, so once `anima init` has
+written a default you rarely pass either. A command that names *another* agent
+(`anima a2a send --agent`) still requires it: defaulting a destination to
+yourself would succeed at the wrong thing.
 
 Configuration files are stored in:
 - **macOS**: `~/Library/Preferences/anima/`

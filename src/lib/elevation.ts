@@ -52,11 +52,6 @@ export interface ElevatedSession {
   expiresAt: string;
 }
 
-export interface ElevateApiResponse extends ElevatedSession {
-  grant?: string;
-  grantExpiresAt?: string;
-}
-
 /** Raised when elevation cannot even be attempted, with the way forward. */
 export class NotEnrolledError extends Error {
   constructor(message: string) {
