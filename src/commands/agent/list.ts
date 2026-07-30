@@ -1,5 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
-import { validateLimit } from '../../lib/args.js';
+import { requireNonEmptyArg, validateLimit } from '../../lib/args.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
@@ -18,11 +18,12 @@ interface ListIdentitiesOptions {
 export function listIdentitiesCommand(): Command {
   return new Command('list')
     .description(
-      'List identities. Defaults to all orgs you belong to; pass --org or set a default with `am org switch` to filter.',
+      'List agents. Defaults to all orgs you belong to; pass --org or set a default with `am org switch` to filter.',
     )
     .option(
       '--org <orgId>',
       'Filter to one organization (omit to list across all your orgs)',
+      requireNonEmptyArg('Organization ID'),
     )
     .option('--limit <number>', 'Page size (1-100, default 20)', validateLimit)
     .option('--cursor <cursor>', 'Pagination cursor')
@@ -89,7 +90,7 @@ export function listIdentitiesCommand(): Command {
           },
         );
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to list identities', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.' }, codeMessages: { USER_AUTH_REQUIRED: 'Cross-org listing requires user authentication (Clerk session or OAuth). Run `am auth login --web`, or pass --org explicitly when using an API key.' } });
+        handleOrpcError(error, output, 'Failed to list agents', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.' }, codeMessages: { USER_AUTH_REQUIRED: 'Cross-org listing needs a signed-in user or an OAuth token. Run `am auth login --web`, or pass --org explicitly when using an API key.' } });
       }
     });
 }

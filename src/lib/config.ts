@@ -24,6 +24,7 @@ function getPaths(): ReturnType<typeof envPaths> {
 export function resetPathsCache(): void {
   _paths = null;
   _pathsOverride = null;
+  _warnedExpiredProfiles.clear();
   // Also clear the implicit in-memory keychain that setPathsOverride installs
   // for tests — otherwise leftover credentials could leak between specs.
   setSecureStoreOverride(null);
@@ -71,6 +72,22 @@ export interface AppConfig {
   outputFormat?: 'table' | 'json' | 'yaml';
   activeProfile?: string;
   profiles?: Record<string, ProfileConfig>;
+  /**
+   * Orgs this machine has been enrolled for, keyed by org id.
+   *
+   * A non-secret marker only — the grant itself lives in the keychain behind a
+   * human-presence gate. It exists because "are we enrolled?" has to be
+   * answerable *without* prompting: reading the grant is what raises the
+   * password dialog, so probing the keychain to decide whether a dialog is
+   * warranted would raise one every time, including when the answer is no.
+   */
+  enrollments?: Record<string, EnrollmentRecord>;
+}
+
+export interface EnrollmentRecord {
+  enrolledAt: string;
+  /** When the grant lapses and enrolling again costs another emailed code. */
+  grantExpiresAt: string;
 }
 
 export interface ProfileConfig {
@@ -79,14 +96,46 @@ export interface ProfileConfig {
   defaultOrg?: string;
   defaultIdentity?: string;
   outputFormat?: 'table' | 'json' | 'yaml';
+  /**
+   * When this profile's credential stops working, ISO-8601. Only set for
+   * profiles holding a short-lived key (`am auth elevate` mints a 15-minute
+   * one); a durable profile leaves it undefined and never expires.
+   */
+  expiresAt?: string;
 }
 
 /**
- * Layered config resolution: flags > env > profile > defaults
+ * Which layer a resolved value came from. `flag` and `env` name themselves;
+ * `profile` carries the profile's name, because "from a profile" is not
+ * actionable when you have three of them and want to know which one just
+ * decided who you are sending as.
  */
-export async function resolveConfigValue(key: keyof ProfileConfig, flagValue?: string): Promise<string | undefined> {
+export type ConfigSource =
+  | { layer: 'flag' }
+  | { layer: 'env'; variable: string }
+  | { layer: 'profile'; name: string }
+  | { layer: 'config' };
+
+/**
+ * Layered config resolution: flags > env > profile > defaults, reporting which
+ * layer answered.
+ *
+ * Split out from [[resolveConfigValue]] rather than duplicated beside it: the
+ * value and its provenance are read from the same four checks in the same
+ * order, so a second implementation would eventually disagree with the first
+ * and mislabel where a value came from — the failure mode being a caller that
+ * tells you the identity came from your config file while it actually came
+ * from a stale `ANIMA_DEFAULT_IDENTITY` in the shell. `resolveConfigValue`
+ * delegates here for exactly that reason.
+ */
+export async function resolveConfigValueWithSource(
+  key: keyof ProfileConfig,
+  flagValue?: string,
+): Promise<{ value: string; source: ConfigSource } | undefined> {
   // 1. CLI flag (highest priority)
-  if (flagValue !== undefined && flagValue !== '') return flagValue;
+  if (flagValue !== undefined && flagValue !== '') {
+    return { value: flagValue, source: { layer: 'flag' } };
+  }
 
   // 2. Environment variable
   const envMap: Record<string, string> = {
@@ -99,21 +148,34 @@ export async function resolveConfigValue(key: keyof ProfileConfig, flagValue?: s
   const envKey = envMap[key];
   if (envKey) {
     const envVal = process.env[envKey];
-    if (envVal !== undefined && envVal !== '') return envVal;
+    if (envVal !== undefined && envVal !== '') {
+      return { value: envVal, source: { layer: 'env', variable: envKey } };
+    }
   }
 
   // 3. Active profile
   const config = await getConfig();
   if (config.activeProfile && config.profiles?.[config.activeProfile]) {
     const profileVal = config.profiles[config.activeProfile][key];
-    if (profileVal !== undefined) return profileVal;
+    if (profileVal !== undefined) {
+      return { value: profileVal, source: { layer: 'profile', name: config.activeProfile } };
+    }
   }
 
   // 4. Top-level defaults
   const topLevel = config[key as keyof AppConfig];
-  if (topLevel !== undefined && typeof topLevel === 'string') return topLevel;
+  if (topLevel !== undefined && typeof topLevel === 'string') {
+    return { value: topLevel, source: { layer: 'config' } };
+  }
 
   return undefined;
+}
+
+/**
+ * Layered config resolution: flags > env > profile > defaults
+ */
+export async function resolveConfigValue(key: keyof ProfileConfig, flagValue?: string): Promise<string | undefined> {
+  return (await resolveConfigValueWithSource(key, flagValue))?.value;
 }
 
 export async function getActiveProfile(): Promise<{ name: string; config: ProfileConfig } | null> {
@@ -129,6 +191,21 @@ export async function setActiveProfile(name: string): Promise<void> {
   }
   config.activeProfile = name;
   await saveConfig(config);
+}
+
+/**
+ * Stop using any profile, without deleting it.
+ *
+ * The counterpart `setActiveProfile` never had. "No profile" is a real state —
+ * `activeProfile` unset, so top-level config answers — but the only way to
+ * reach it was `deleteProfile`, which destroys the credential too. A user who
+ * elevated and wanted their ordinary identity back had to throw away the
+ * session to get it.
+ */
+export async function clearActiveProfile(): Promise<void> {
+  const config = await getConfig();
+  if (config.activeProfile === undefined) return;
+  await saveConfig({ ...config, activeProfile: undefined });
 }
 
 export async function deleteProfile(name: string): Promise<void> {
@@ -198,6 +275,18 @@ function secretsBlobPath(account: string): string {
 
 function store(): SecureStore {
   return getSecureStore(secretsBlobPath);
+}
+
+/**
+ * The same secure store this module uses, for callers outside it.
+ *
+ * Exported rather than letting them call `getSecureStore()` themselves: the
+ * Windows backend needs `secretsBlobPath` to know where its encrypted blob
+ * lives, and a bare call would silently select a different location. One
+ * accessor keeps every caller on one backend and one path.
+ */
+export function secureStore(): SecureStore {
+  return store();
 }
 
 /**
@@ -415,7 +504,139 @@ export async function getAuthConfig(): Promise<AuthConfig> {
     // 401 from the API and tell the user to run `anima auth login`.
   }
 
+  // 4. An active profile's credential outranks auth.json's. See
+  //    `activeProfileCredential` for why this has to happen here.
+  const fromProfile = await activeProfileCredential();
+  if (fromProfile) {
+    return {
+      ...metadata,
+      ...secrets,
+      apiKey: fromProfile.apiKey,
+      // A profile credential is only valid against the host it was issued
+      // for, so the URL has to travel with it. Without this, elevating on a
+      // staging profile would send a staging key to production.
+      apiUrl: fromProfile.apiUrl ?? metadata.apiUrl,
+      // auth.json's OAuth session does not carry over to a profile identity.
+      // Leaving it would let `ensureFreshOAuthToken` refresh, and
+      // `ensureAuthHeaders` prefer, a token the profile did not select.
+      token: undefined,
+      refreshToken: undefined,
+    };
+  }
+
   return { ...metadata, ...secrets };
+}
+
+/**
+ * Suffix marking a profile as a privileged *session* rather than an identity.
+ *
+ * Only `am auth elevate` writes one. Lives here rather than in elevation.ts
+ * because `activeProfileCredential` has to recognise one, and elevation.ts
+ * already depends on this module — the other direction would be a cycle.
+ */
+export const ELEVATED_PROFILE_SUFFIX = 'elevated';
+
+/**
+ * Is this profile a privileged session rather than a durable identity?
+ *
+ * Matches both names `elevatedProfileName` can produce: `<orgId>-elevated`,
+ * and the bare `elevated` used when no default org is set. Exported so the two
+ * are decided in one place — a predicate that missed the bare form would leave
+ * exactly the org-less setup unable to recover from a stale session.
+ */
+export function isElevatedProfileName(name: string): boolean {
+  return name === ELEVATED_PROFILE_SUFFIX || name.endsWith(`-${ELEVATED_PROFILE_SUFFIX}`);
+}
+
+/** Session profiles already warned about, so the notice is emitted once per run. */
+const _warnedExpiredProfiles = new Set<string>();
+
+/** True when `iso` names a moment already past. Absent/unparseable → not expired. */
+function hasLapsed(iso: string | undefined): boolean {
+  if (!iso) return false;
+  const at = Date.parse(iso);
+  return Number.isFinite(at) && at <= Date.now();
+}
+
+/**
+ * Has this profile's credential stopped working?
+ *
+ * A session profile with no recorded expiry is treated as lapsed rather than
+ * as eternal. Sessions last minutes, and `expiresAt` is absent only on ones
+ * written before the CLI recorded it — so by the time anything reads such a
+ * profile, its key is certainly dead.
+ *
+ * That case is a real migration, not a hypothetical: elevating with the
+ * previous CLI left an active `<org>-elevated` profile holding a 15-minute key
+ * and no expiry. Nothing read profiles then, so it was inert. The moment
+ * profiles began supplying the credential it became the *selected* one, and
+ * every command started failing with "Session expired. Run `am auth login`" —
+ * advice that is wrong twice over, since the agent key underneath is fine and
+ * `auth login` is not how this profile is refreshed.
+ *
+ * Only session profiles get this treatment. An ordinary profile is a durable
+ * identity whose key legitimately has no expiry, and standing those down would
+ * lock people out of exactly the credential they chose.
+ *
+ * Exported because `elevation.ts` has to answer the same question when it
+ * decides whether to skip the password dialog. It used to decide for itself,
+ * and reached the opposite conclusion about the case this whole comment is
+ * about — an expiry-less session counted as *live* there while counting as
+ * dead here. One predicate, asked twice, cannot drift.
+ */
+export function profileCredentialLapsed(name: string, profile: ProfileConfig): boolean {
+  if (hasLapsed(profile.expiresAt)) return true;
+  return profile.expiresAt === undefined && isElevatedProfileName(name);
+}
+
+/**
+ * The active profile's credential, when it has one that still works.
+ *
+ * Profiles were always meant to switch identity — `am init` writes one per
+ * org and `am config profile show` prints its API key — but nothing in the
+ * credential path ever read one back. `getAuthConfig` sourced the key solely
+ * from auth.json, so `am config profile use X` and `am auth elevate` both
+ * changed which profile was *marked* active while every request kept going
+ * out under auth.json's key. `am tail` after a successful elevate still got
+ * "master key required" for exactly this reason: the master key was sitting
+ * in the keychain under `profile:<name>`, which no caller read.
+ *
+ * Fixing it here rather than in `ensureAuthHeaders` keeps one source of truth
+ * — `resolveApiUrl` and the oRPC link both come through `getAuthConfig`, and
+ * patching only the header path would have left them disagreeing about which
+ * host the request belongs to. `ANIMA_API_KEY` still wins, because
+ * `ensureAuthHeaders` applies it above whatever this returns.
+ */
+async function activeProfileCredential(): Promise<{ apiKey: string; apiUrl?: string } | null> {
+  let active: { name: string; config: ProfileConfig } | null;
+  try {
+    active = await getActiveProfile();
+  } catch {
+    // config.json unreadable — auth.json stays authoritative rather than
+    // locking the user out of every command.
+    return null;
+  }
+  if (!active?.config.apiKey) return null;
+
+  // A short-lived profile has to stop being used the moment it lapses.
+  // Silently sending the dead key would turn an expected 15-minute expiry
+  // into an unexplained 401 on every later command, and the user would have
+  // no reason to connect the two.
+  if (profileCredentialLapsed(active.name, active.config)) {
+    // Once per process. `getAuthConfig` is called for each URL and header
+    // resolution, so a bare write repeated the same line four times before a
+    // single command's output — enough noise to read as four separate faults.
+    if (!_warnedExpiredProfiles.has(active.name)) {
+      _warnedExpiredProfiles.add(active.name);
+      process.stderr.write(
+        `[anima] admin session "${active.name}" has expired; using your default credential instead. ` +
+          'Run `am auth elevate` when you next need admin access.\n',
+      );
+    }
+    return null;
+  }
+
+  return { apiKey: active.config.apiKey, apiUrl: active.config.apiUrl };
 }
 
 export async function saveAuthConfig(config: AuthConfig): Promise<void> {

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth, type AnimaClient } from '../../lib/orpc.js';
@@ -16,7 +17,7 @@ export function searchCommand(): Command {
   return new Command('search')
     .description('Semantic search across voice call transcripts')
     .argument('<query>', 'Search query')
-    .option('--agent <id>', 'Filter by agent ID')
+    .option('--agent <id>', 'Filter by agent ID', requireNonEmptyArg('Agent ID'))
     .option('--limit <n>', 'Max results (default: 10)')
     .option('--threshold <n>', 'Similarity threshold 0-1 (default: 0.7)')
     .option('--from <date>', 'Filter from date (ISO 8601)')

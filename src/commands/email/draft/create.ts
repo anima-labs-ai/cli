@@ -1,12 +1,13 @@
 import { Command } from 'commander';
-import { requireNonEmptyArg } from '../../../lib/args.js';
+import { collectNonEmpty, requireNonEmptyArg } from '../../../lib/args.js';
+import { resolveAgentId } from '../../../lib/agent.js';
 import { Output } from '../../../lib/output.js';
 import { type GlobalOptions } from '../../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../../lib/orpc.js';
 import { formatDraftDetails } from './format.js';
 
 interface CreateDraftOptions {
-  agent: string;
+  agent?: string;
   to: string[];
   cc: string[];
   bcc: string[];
@@ -26,25 +27,32 @@ function collect(value: string, previous: string[]): string[] {
 export function createDraftCommand(): Command {
   return new Command('create')
     .description('Create an email draft (drafts may be incomplete — only --agent is required)')
-    .requiredOption('--agent <id>', 'Owning agent ID', requireNonEmptyArg('Owning agent ID'))
+    .option('--agent <id>', 'Owning agent ID (defaults to your configured identity)', requireNonEmptyArg('Owning agent ID'))
     .option('--to <email>', 'Recipient email (repeatable)', collect, [])
     .option('--cc <email>', 'CC recipient email (repeatable)', collect, [])
     .option('--bcc <email>', 'BCC recipient email (repeatable)', collect, [])
     .option('--subject <subject>', 'Subject line')
     .option('--body <body>', 'Plain-text body')
     .option('--html <html>', 'HTML body')
-    .option('--from-identity <id>', 'EmailIdentity ID to send from (must belong to the agent and be verified)')
-    .option('--in-reply-to <messageId>', 'In-Reply-To Message-ID for threading on send')
-    .option('--reference <messageId>', 'References chain Message-ID for threading (repeatable)', collect, [])
+    .option('--from-identity <id>', 'EmailIdentity ID to send from (must belong to the agent and be verified)', requireNonEmptyArg('Identity ID'))
+    .option('--in-reply-to <messageId>', 'In-Reply-To Message-ID for threading on send', requireNonEmptyArg('Message ID'))
+    .option(
+      '--reference <messageId>',
+      'References chain Message-ID for threading (repeatable)',
+      collectNonEmpty('Message ID'),
+      [],
+    )
     .action(async function (this: Command) {
       const opts = this.opts<CreateDraftOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const orpc = await requireOrpcAuth(globals);
         const draft = await orpc.emailDraft.create({
-          agentId: opts.agent,
+          agentId,
           fromIdentityId: opts.fromIdentity,
           to: opts.to,
           cc: opts.cc.length > 0 ? opts.cc : undefined,

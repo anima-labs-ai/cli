@@ -402,4 +402,119 @@ describe('config', () => {
       expect(stat.mode & 0o777).toBe(0o600);
     });
   });
+
+  // The bug these lock down: profiles carried a credential that nothing in the
+  // request path ever read. `am auth elevate` stored a working master key under
+  // `profile:<name>`, marked that profile active, and every later command still
+  // authenticated as the agent — so `am tail` reported "master key required"
+  // immediately after a successful elevation. Any of these failing means the
+  // active profile has gone back to being decorative.
+  describe('active profile drives the credential', () => {
+    const ISO_PAST = '2020-01-01T00:00:00.000Z';
+    const ISO_FUTURE = '2999-01-01T00:00:00.000Z';
+
+    async function withElevatedProfile(expiresAt?: string) {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master', expiresAt },
+        },
+      });
+    }
+
+    test('sends the active profile key, not auth.json’s', async () => {
+      await withElevatedProfile(ISO_FUTURE);
+      expect((await config.getAuthConfig()).apiKey).toBe('sk_live_master');
+    });
+
+    test('falls back to auth.json once the profile has expired', async () => {
+      await withElevatedProfile(ISO_PAST);
+      // Not 'sk_live_master': a lapsed key must not go out. Sending it would
+      // surface as an unexplained 401 rather than a recognisable expiry.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
+    });
+
+    test('an admin session with no recorded expiry is treated as dead, not eternal', async () => {
+      await withElevatedProfile(undefined);
+      // The migration case, and a regression this fix caused before it was
+      // caught: elevating with the previous CLI left an active
+      // `<org>-elevated` profile holding a 15-minute key and no expiry.
+      // Nothing read profiles then, so it sat inert. The moment profiles began
+      // supplying the credential it became the *selected* one, and every
+      // command failed with "Session expired. Run `am auth login`" — wrong
+      // twice over, since the agent key underneath is fine and `auth login` is
+      // not how this profile refreshes.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
+    });
+
+    test('an ordinary profile without an expiry is a durable identity and still works', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: { work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' } },
+      });
+      // Only *sessions* are stood down for a missing expiry. Applying it to
+      // every profile would lock people out of the credential they chose.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_work');
+    });
+
+    test('the org-less session name is recognised too', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'elevated',
+        profiles: { elevated: { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' } },
+      });
+      // `elevatedProfileName(undefined)` produces a bare `elevated`, which a
+      // plain `-elevated` suffix check would miss — leaving exactly the
+      // org-less setup unable to recover from a stale session.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
+    });
+
+    test('auth.json still wins when no profile is active', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        profiles: { 'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' } },
+      });
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
+    });
+
+    test('the profile’s apiUrl travels with its key', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'staging',
+        profiles: { staging: { apiUrl: 'https://api.staging.useanima.sh', apiKey: 'sk_live_staging' } },
+      });
+      const auth = await config.getAuthConfig();
+      // Both must move together — pairing a staging key with the production
+      // host would ship the credential to the wrong server.
+      expect(auth.apiKey).toBe('sk_live_staging');
+      expect(auth.apiUrl).toBe('https://api.staging.useanima.sh');
+    });
+
+    test('an active profile drops auth.json’s OAuth session', async () => {
+      await config.saveAuthConfig({
+        apiUrl: 'https://api.useanima.sh',
+        token: 'oauth_session_token',
+        refreshToken: 'oauth_refresh',
+      });
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          // Needs a live expiry: a session profile without one is treated as
+          // dead, and the overlay under test would correctly never run.
+          'org-elevated': {
+            apiUrl: 'https://api.useanima.sh',
+            apiKey: 'sk_live_master',
+            expiresAt: ISO_FUTURE,
+          },
+        },
+      });
+      const auth = await config.getAuthConfig();
+      // `ensureAuthHeaders` prefers `token` over `apiKey`, so a leftover OAuth
+      // session would silently outrank the profile the user just selected.
+      expect(auth.token).toBeUndefined();
+      expect(auth.apiKey).toBe('sk_live_master');
+    });
+  });
 });

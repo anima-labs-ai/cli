@@ -50,6 +50,26 @@ export interface SecureStore {
   deleteSecret(account: string): Promise<void>;
   /** Human-readable backend name surfaced in error messages. */
   readonly name: string;
+  /**
+   * Whether this backend can make the OS refuse to release a secret until a
+   * human proves they are present.
+   *
+   * This is the difference between encryption at rest and an actual gate. Every
+   * backend here encrypts; only macOS can stop a process running as the user —
+   * an agent driving the CLI, say — from reading a secret back without a person
+   * answering a system dialog. Callers branch on this rather than on
+   * `process.platform`, so the fallback path is chosen by capability.
+   */
+  readonly humanPresenceGate: boolean;
+  /**
+   * Store a secret the OS will not hand back without a human present.
+   *
+   * Throws {@link SecureStoreUnavailableError} when `humanPresenceGate` is
+   * false: silently degrading to an ordinary write would leave the caller
+   * believing a gate exists where none does, which is the one failure mode
+   * this whole mechanism cannot afford.
+   */
+  setGatedSecret(account: string, secret: string): Promise<void>;
 }
 
 export class SecureStoreUnavailableError extends Error {
@@ -118,6 +138,39 @@ class MacOSKeychainStore implements SecureStore {
       { encoding: 'utf8' },
     );
   }
+
+  readonly humanPresenceGate = true;
+
+  async setGatedSecret(account: string, secret: string): Promise<void> {
+    // Delete-then-add rather than `-U`. Updating in place is itself an
+    // authorised read of the existing item, so `-U` against an already-gated
+    // entry raises the very prompt this is trying to arm — measured, not
+    // assumed: `add -U` on a gated item blocks, while `delete` returns
+    // immediately because removing an item is not a read of its secret.
+    await this.deleteSecret(account);
+
+    const r = spawnSync(
+      'security',
+      [
+        'add-generic-password',
+        '-s', SERVICE_NAME,
+        '-a', account,
+        '-w', secret,
+        // An empty trusted-application list. Without it the creating program
+        // is added to the ACL and reads straight back with no prompt, which is
+        // how every other entry this module writes behaves. With it, no
+        // program — `security` included — can read the secret until the OS has
+        // asked a human for the login password.
+        '-T', '',
+      ],
+      { encoding: 'utf8' },
+    );
+    if (r.status !== 0) {
+      throw new Error(
+        `security add-generic-password (gated) failed (status ${r.status}): ${r.stderr.trim()}`,
+      );
+    }
+  }
 }
 
 // ── Linux ───────────────────────────────────────────────────────────────────
@@ -165,6 +218,28 @@ class LinuxSecretToolStore implements SecureStore {
       { encoding: 'utf8' },
     );
   }
+
+  readonly humanPresenceGate = false;
+
+  async setGatedSecret(): Promise<void> {
+    noHumanPresenceGate('linux', this.name);
+  }
+}
+
+/**
+ * Shared refusal for backends that encrypt at rest but cannot gate a read.
+ *
+ * One function rather than a message per backend, because the distinction that
+ * matters is identical in both cases and must not drift: the secret is safe on
+ * disk, and completely available to anything already running as this user.
+ */
+function noHumanPresenceGate(platform: NodeJS.Platform, backend: string): never {
+  throw new SecureStoreUnavailableError(
+    platform,
+    `${backend} encrypts secrets at rest, but cannot require a human to be present before releasing one.`,
+    'Storing an owner grant here would look protected while being readable by anything running as you. ' +
+      'Use `am auth elevate` with the emailed code on this platform instead.',
+  );
 }
 
 function ensureSecretToolAvailable(): void {
@@ -246,6 +321,14 @@ class WindowsDpapiStore implements SecureStore {
       }
     }
   }
+
+  readonly humanPresenceGate = false;
+
+  async setGatedSecret(): Promise<void> {
+    // DPAPI CurrentUser decrypts for any process running as this user, with no
+    // prompt. Windows Hello could gate it, but not through this backend.
+    noHumanPresenceGate('win32', this.name);
+  }
 }
 
 // ── Memory backend (tests + bypass for `--no-keychain` future flag) ─────────
@@ -254,16 +337,40 @@ export class InMemorySecureStore implements SecureStore {
   readonly name = 'in-memory (test)';
   private readonly entries = new Map<string, string>();
 
+  /**
+   * Which accounts were written through {@link setGatedSecret}.
+   *
+   * Exposed because "was this stored behind a gate?" is the one property tests
+   * of the grant flow actually need to assert, and it is invisible in the
+   * stored value. A test that only checked the secret round-trips would pass
+   * just as happily against an ungated write.
+   */
+  readonly gatedAccounts = new Set<string>();
+
+  /** Settable so a test can exercise the no-gate fallback path. */
+  humanPresenceGate = true;
+
   async getSecret(account: string): Promise<string | null> {
     return this.entries.get(account) ?? null;
   }
 
   async setSecret(account: string, secret: string): Promise<void> {
     this.entries.set(account, secret);
+    // An ordinary write over a gated account clears the gate, mirroring the
+    // real backend, where `add-generic-password` without `-T ''` re-admits the
+    // creating program to the ACL.
+    this.gatedAccounts.delete(account);
   }
 
   async deleteSecret(account: string): Promise<void> {
     this.entries.delete(account);
+    this.gatedAccounts.delete(account);
+  }
+
+  async setGatedSecret(account: string, secret: string): Promise<void> {
+    if (!this.humanPresenceGate) noHumanPresenceGate('linux', this.name);
+    this.entries.set(account, secret);
+    this.gatedAccounts.add(account);
   }
 }
 

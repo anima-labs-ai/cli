@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { resolveConfigValue } from '../../lib/config.js';
@@ -11,7 +12,7 @@ interface ScanOptions {
 export function securityScanCommand(): Command {
   return new Command('scan')
     .description('Show scanner health status')
-    .option('--org <orgId>', 'Organization ID (defaults to configured default org)')
+    .option('--org <orgId>', 'Organization ID (defaults to configured default org)', requireNonEmptyArg('Organization ID'))
     .action(async function (this: Command) {
       const opts = this.opts<ScanOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

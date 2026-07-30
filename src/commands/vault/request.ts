@@ -108,7 +108,7 @@ interface RequestCreateOptions {
 function requestCreateCommand(): Command {
   return new Command('create')
     .description('Ask a human for a credential the agent never sees (returns a fill URL)')
-    .option('--agent <id>', 'Agent ID (optional with an agent-bound key)')
+    .option('--agent <id>', 'Agent ID (optional with an agent-bound key)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--type <type>', `Credential type: ${CREDENTIAL_TYPES.join(', ')}`, validateType)
     .requiredOption('--name <name>', 'Display name for the credential to be created')
     .requiredOption('--reason <reason>', 'Why the credential is needed (shown to the owner)')

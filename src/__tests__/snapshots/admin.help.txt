@@ -9,5 +9,5 @@ Commands:
   org              Organization management
   member           Team member management
   key              Organization API key management
-  usage [options]  Show usage summary
+  usage [options]  Show usage summary for the current billing period
   help [command]   display help for command

@@ -1,8 +1,6 @@
 import { Command, InvalidArgumentError } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
-import { getApiClient, requireAuth } from '../../lib/auth.js';
 import type { GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
 import { Output } from '../../lib/output.js';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
@@ -13,45 +11,33 @@ interface MemberRoleOptions {
   role: MemberRole;
 }
 
-interface MemberRoleResponse {
-  email?: string;
-  role?: string;
-}
 
 export function memberRoleCommand(): Command {
   return new Command('role')
     .description('Change member role')
-    .requiredOption('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
-    .requiredOption('--email <email>', 'Member email address')
-    .requiredOption('--role <role>', 'Role: admin|member|viewer', validateRole)
+    // Optional, because this command always refuses: there is no endpoint to
+    // call. Mandatory flags would only make the user satisfy three of them to
+    // be told the command does not exist.
+    .option('--org <org>', 'Organization ID', requireNonEmptyArg('Organization ID'))
+    .option('--email <email>', 'Member email address')
+    .option('--role <role>', 'Role: admin|member|viewer', validateRole)
     .action(async function (this: Command) {
-      const opts = this.opts<MemberRoleOptions>();
-      const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      const output = Output.fromGlobals(this.optsWithGlobals<GlobalOptions>());
 
-      try {
-        await requireAuth(globals);
-        const api = await getApiClient(globals);
-
-        const result = await api.put<MemberRoleResponse>(
-          `/v1/admin/orgs/${encodeURIComponent(opts.org)}/members/${encodeURIComponent(opts.email)}`,
-          { role: opts.role },
-        );
-
-        if (globals.json) {
-          output.json(result);
-          return;
-        }
-
-        output.success(`Updated ${result.email ?? opts.email} role to ${result.role ?? opts.role} in ${opts.org}`);
-      } catch (err: unknown) {
-        if (err instanceof ApiError) {
-          output.error(err.message);
-        } else {
-          output.error(err instanceof Error ? err.message : String(err));
-        }
-        process.exit(1);
-      }
+      // Member management has no API to call. `/v1/admin/orgs/{org}/members`
+      // does not exist — there is no /v1/admin/* namespace — and the contract
+      // exposes only `GET /orgs/{id}/members`, no writes. Membership lives in
+      // Clerk, so invites and role changes happen in the console; there is
+      // nothing for the CLI to POST to.
+      //
+      // Failing here rather than issuing the request keeps the reason
+      // ("this is console-only") from arriving as "Route not found", which
+      // reads as a broken CLI.
+      output.error('Changing member roles is not available from the CLI.');
+      output.info(
+        'Organization membership is managed in the console. Change roles at https://console.useanima.sh/settings/members.',
+      );
+      process.exit(1);
     });
 }
 

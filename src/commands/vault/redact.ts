@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -55,7 +56,7 @@ export function redactCommand(): Command {
     .description(
       'Redact vault secrets from stdin. Fetches all credentials for the agent and replaces any matching secret values with [REDACTED].'
     )
-    .option('--agent <id>', 'Agent ID whose credentials to use for redaction')
+    .option('--agent <id>', 'Agent ID whose credentials to use for redaction', requireNonEmptyArg('Agent ID'))
     .option('--pattern <values...>', 'Additional literal strings to redact')
     .action(async function (this: Command) {
       const opts = this.opts<RedactOptions>();

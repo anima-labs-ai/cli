@@ -34,6 +34,7 @@ describe('admin commands', () => {
   let mockServer: ReturnType<typeof Bun.serve> | null = null;
   let serverPort = 0;
   const routes: Record<string, RouteResponse> = {};
+  const requestLog: string[] = [];
 
   beforeEach(() => {
     resetPathsCache();
@@ -54,6 +55,7 @@ describe('admin commands', () => {
     for (const key of Object.keys(routes)) {
       delete routes[key];
     }
+    requestLog.length = 0;
     if (existsSync(testConfigDir)) {
       rmSync(testConfigDir, { recursive: true, force: true });
     }
@@ -75,6 +77,7 @@ describe('admin commands', () => {
       port: 0,
       async fetch(req) {
         const url = new URL(req.url);
+        requestLog.push(`${req.method} ${url.pathname}`);
         const route = routes[`${req.method} ${url.pathname}`];
         if (!route) {
           return new Response(JSON.stringify({ error: { message: 'Not found' } }), {
@@ -128,17 +131,20 @@ describe('admin commands', () => {
     }
   }
 
-  test('org list displays organizations', async () => {
+  /**
+   * `admin org list` used to GET /v1/admin/orgs, and this test used to mock
+   * exactly that. The route does not exist in the API — there is no
+   * `/v1/admin/*` namespace at all — so the command answered "Route not found"
+   * for every real user while the suite stayed green against an endpoint the
+   * mock had invented. Pointing the mock at the endpoint the CLI actually
+   * calls is the part that makes this test worth having.
+   */
+  test('org list displays the org the credential is scoped to', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/v1/admin/orgs', {
+    setRoute('GET', '/v1/orgs/me', {
       status: 200,
-      body: {
-        orgs: [
-          { name: 'Acme', plan: 'pro', memberCount: 6, createdAt: '2026-01-10T00:00:00.000Z' },
-          { name: 'Beta', plan: 'starter', memberCount: 2, createdAt: '2026-02-01T00:00:00.000Z' },
-        ],
-      },
+      body: { id: 'org_1', name: 'Acme', slug: 'acme', tier: 'PRO' },
     });
 
     const logSpy = mock((...args: unknown[]) => {});
@@ -150,91 +156,61 @@ describe('admin commands', () => {
     console.log = originalLog;
     const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
     expect(printed.includes('Acme')).toBe(true);
-    expect(printed.includes('Beta')).toBe(true);
+    expect(printed.includes('org_1')).toBe(true);
   });
 
-  test('member invite sends correct request and uses default org', async () => {
+  /**
+   * Membership is Clerk's, not ours. `/v1/admin/orgs/{org}/members` never
+   * existed, and the contract exposes only `GET /orgs/{id}/members` — no
+   * writes at all. These tests used to mock the POST and pass, which is how
+   * two commands that could only ever answer "Route not found" survived.
+   */
+  test('member invite refuses locally and points at the console', async () => {
     startMockServer();
     setupAuthConfig();
     writeDefaultOrgConfig('org_default');
-    setRoute('POST', '/v1/admin/orgs/org_default/members', {
-      status: 200,
-      body: { email: 'dev@acme.test', role: 'admin', invited: true },
-      assert: ({ body }) => {
-        expect(body).toEqual({ email: 'dev@acme.test', role: 'admin' });
-      },
-    });
 
-    const logSpy = mock((...args: unknown[]) => {});
-    const originalLog = console.log;
-    console.log = logSpy;
+    const errorSpy = mock((...args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorSpy;
 
-    await runProgram(['admin', 'member', 'invite', '--email', 'dev@acme.test', '--role', 'admin']);
-
-    console.log = originalLog;
-    const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(printed.includes('Invited dev@acme.test')).toBe(true);
-  });
-
-  test('member invite honors ANIMA_DEFAULT_ORG when no --org or config default', async () => {
-    startMockServer();
-    setupAuthConfig();
-    process.env.ANIMA_DEFAULT_ORG = 'org_env';
-    setRoute('POST', '/v1/admin/orgs/org_env/members', {
-      status: 200,
-      body: { email: 'dev@acme.test', role: 'admin', invited: true },
-    });
-
-    const logSpy = mock((...args: unknown[]) => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    try {
-      await runProgram(['admin', 'member', 'invite', '--email', 'dev@acme.test', '--role', 'admin']);
-      const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-      expect(printed.includes('Invited dev@acme.test')).toBe(true);
-    } finally {
-      console.log = originalLog;
-      delete process.env.ANIMA_DEFAULT_ORG;
-    }
-  });
-
-  test('member role change sends correct request', async () => {
-    startMockServer();
-    setupAuthConfig();
-    setRoute('PUT', '/v1/admin/orgs/org_1/members/dev%40acme.test', {
-      status: 200,
-      body: { email: 'dev@acme.test', role: 'viewer' },
-      assert: ({ body }) => {
-        expect(body).toEqual({ role: 'viewer' });
-      },
-    });
-
-    const logSpy = mock((...args: unknown[]) => {});
-    const originalLog = console.log;
-    console.log = logSpy;
-
-    await runProgram([
-      'admin', 'member', 'role',
-      '--org', 'org_1',
-      '--email', 'dev@acme.test',
-      '--role', 'viewer',
+    const exitCode = await runProgram([
+      'admin', 'member', 'invite', '--email', 'dev@acme.test', '--role', 'admin',
     ]);
 
-    console.log = originalLog;
-    const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(printed.includes('Updated dev@acme.test role to viewer')).toBe(true);
+    console.error = originalError;
+    const printed = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(exitCode).toBe(1);
+    expect(printed.includes('not available from the CLI')).toBe(true);
+    // The point of failing locally: no doomed request goes out.
+    expect(requestLog.length).toBe(0);
+  });
+
+  test('member role change refuses locally and points at the console', async () => {
+    startMockServer();
+    setupAuthConfig();
+
+    const errorSpy = mock((...args: unknown[]) => {});
+    const originalError = console.error;
+    console.error = errorSpy;
+
+    const exitCode = await runProgram([
+      'admin', 'member', 'role', '--org', 'org_1', '--email', 'dev@acme.test', '--role', 'viewer',
+    ]);
+
+    console.error = originalError;
+    const printed = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
+    expect(exitCode).toBe(1);
+    expect(printed.includes('not available from the CLI')).toBe(true);
+    expect(requestLog.length).toBe(0);
   });
 
   test('key rotate shows new key', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('POST', '/v1/admin/keys/rotate', {
+    setRoute('POST', '/v1/orgs/org_1/rotate-key', {
       status: 200,
-      body: { keyId: 'key_2', key: 'sk_live_rotated_123' },
-      assert: ({ body }) => {
-        expect(body).toEqual({ org: 'org_1' });
-      },
+      body: { masterKey: 'mk_live_rotated_123' },
     });
 
     const logSpy = mock((...args: unknown[]) => {});
@@ -244,20 +220,17 @@ describe('admin commands', () => {
     await runProgram(['--json', 'admin', 'key', 'rotate', '--org', 'org_1']);
 
     console.log = originalLog;
-    const jsonOutput = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0))) as { key: string; keyId: string };
-    expect(jsonOutput.key).toBe('sk_live_rotated_123');
-    expect(jsonOutput.keyId).toBe('key_2');
+    const jsonOutput = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0))) as { masterKey: string };
+    expect(jsonOutput.masterKey).toBe('mk_live_rotated_123');
   });
 
   test('key revoke sends correct request', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('POST', '/v1/admin/keys/revoke', {
+    // The id is now part of the path, not the body — DELETE /api-keys/{id}.
+    setRoute('DELETE', '/v1/api-keys/key_1', {
       status: 200,
-      body: { revoked: true, keyId: 'key_1' },
-      assert: ({ body }) => {
-        expect(body).toEqual({ keyId: 'key_1' });
-      },
+      body: { success: true },
     });
 
     const logSpy = mock((...args: unknown[]) => {});
@@ -271,46 +244,56 @@ describe('admin commands', () => {
     expect(printed.includes('Revoked API key key_1')).toBe(true);
   });
 
-  test('usage displays summary', async () => {
+  test('usage displays the period rollup', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/v1/admin/orgs/org_1/usage', {
+    // `/orgs/me/usage` returns an open record of counters, not the fixed
+    // identities/emails/storage triple the dead /v1/admin route was mocked to.
+    setRoute('GET', '/v1/orgs/me/usage', {
       status: 200,
-      body: { identities: 8, emails: 121, storage: '2.1 GB' },
+      body: {
+        period: '2026-07',
+        updatedAt: '2026-07-29T10:00:00.000Z',
+        totals: { emails_sent: 121, agents: 8 },
+      },
     });
 
     const logSpy = mock((...args: unknown[]) => {});
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runProgram(['admin', 'usage', '--org', 'org_1']);
+    await runProgram(['admin', 'usage']);
 
     console.log = originalLog;
     const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
     expect(printed.includes('121')).toBe(true);
-    expect(printed.includes('2.1 GB')).toBe(true);
+    expect(printed.includes('2026-07')).toBe(true);
   });
 
-  test('errors when no org specified and no default', async () => {
+  test('usage refuses an --org that is not the one this credential is scoped to', async () => {
     startMockServer();
     setupAuthConfig();
+    writeDefaultOrgConfig('org_default');
 
     const errorSpy = mock((...args: unknown[]) => {});
     const originalError = console.error;
     console.error = errorSpy;
 
-    const exitCode = await runProgram(['admin', 'member', 'invite', '--email', 'dev@acme.test']);
+    // The endpoint derives the org from the credential, so a different --org
+    // cannot be honored. Saying so beats silently reporting the wrong org's
+    // numbers under the heading the caller asked for.
+    const exitCode = await runProgram(['admin', 'usage', '--org', 'org_other']);
 
     console.error = originalError;
     const printed = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(exitCode).toBe(1);
-    expect(printed.includes("No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'")).toBe(true);
+    expect(exitCode).toBe(2);
+    expect(printed.includes('org_default')).toBe(true);
   });
 
   test('shows API failure message on forbidden response', async () => {
     startMockServer();
     setupAuthConfig();
-    setRoute('GET', '/v1/admin/orgs', {
+    setRoute('GET', '/v1/orgs/me', {
       status: 403,
       body: { error: { code: 'FORBIDDEN', message: 'forbidden' } },
     });

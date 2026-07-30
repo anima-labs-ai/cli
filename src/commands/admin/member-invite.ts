@@ -1,8 +1,6 @@
 import { Command, InvalidArgumentError } from 'commander';
-import { getApiClient, requireAuth } from '../../lib/auth.js';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import type { GlobalOptions } from '../../lib/auth.js';
-import { ApiError } from '../../lib/api-client.js';
-import { resolveConfigValue } from '../../lib/config.js';
 import { Output } from '../../lib/output.js';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
@@ -13,47 +11,30 @@ interface MemberInviteOptions {
   role: MemberRole;
 }
 
-interface MemberInviteResponse {
-  email?: string;
-  role?: string;
-  invited?: boolean;
-}
 
 export function memberInviteCommand(): Command {
   return new Command('invite')
     .description('Invite a team member')
-    .option('--org <org>', 'Organization ID (overrides configured default org)')
+    .option('--org <org>', 'Organization ID (overrides configured default org)', requireNonEmptyArg('Organization ID'))
     .requiredOption('--email <email>', 'Member email address')
     .option('--role <role>', 'Role: admin|member|viewer', validateRole, 'member')
     .action(async function (this: Command) {
-      const opts = this.opts<MemberInviteOptions>();
-      const globals = this.optsWithGlobals<GlobalOptions>();
-      const output = Output.fromGlobals(globals);
+      const output = Output.fromGlobals(this.optsWithGlobals<GlobalOptions>());
 
-      try {
-        await requireAuth(globals);
-        const api = await getApiClient(globals);
-        const org = await resolveOrg(opts.org);
-
-        const result = await api.post<MemberInviteResponse>(`/v1/admin/orgs/${encodeURIComponent(org)}/members`, {
-          email: opts.email,
-          role: opts.role,
-        });
-
-        if (globals.json) {
-          output.json(result);
-          return;
-        }
-
-        output.success(`Invited ${result.email ?? opts.email} to ${org} as ${result.role ?? opts.role}`);
-      } catch (err: unknown) {
-        if (err instanceof ApiError) {
-          output.error(err.message);
-        } else {
-          output.error(err instanceof Error ? err.message : String(err));
-        }
-        process.exit(1);
-      }
+      // Member management has no API to call. `/v1/admin/orgs/{org}/members`
+      // does not exist — there is no /v1/admin/* namespace — and the contract
+      // exposes only `GET /orgs/{id}/members`, no writes. Membership lives in
+      // Clerk, so invites and role changes happen in the console; there is
+      // nothing for the CLI to POST to.
+      //
+      // Failing here rather than issuing the request keeps the reason
+      // ("this is console-only") from arriving as "Route not found", which
+      // reads as a broken CLI.
+      output.error('Inviting members is not available from the CLI.');
+      output.info(
+        'Organization membership is managed in the console. Send invitations at https://console.useanima.sh/settings/members.',
+      );
+      process.exit(1);
     });
 }
 
@@ -64,12 +45,3 @@ function validateRole(value: string): MemberRole {
   throw new InvalidArgumentError('role must be one of: admin, member, viewer');
 }
 
-async function resolveOrg(flagOrg?: string): Promise<string> {
-  // Resolve via the standard precedence — --org flag, then the ANIMA_DEFAULT_ORG
-  // env var, the active profile, and the top-level configured default org.
-  const orgId = await resolveConfigValue('defaultOrg', flagOrg);
-  if (!orgId) {
-    throw new Error("No org specified. Use --org <org> or set default with 'anima config set defaultOrg <org>'");
-  }
-  return orgId;
-}

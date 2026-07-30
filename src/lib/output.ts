@@ -324,6 +324,43 @@ export class Output {
     console.log(`${pc.blue('i')} ${message}`);
   }
 
+  /**
+   * Tell the caller about a decision the CLI made on its behalf — currently
+   * "which agent am I acting as", when `--agent` was omitted and the value
+   * came from config.
+   *
+   * On stderr, and in *every* format, which is what separates it from
+   * `info()`. `info()` is human-only decoration on stdout; this is a fact the
+   * caller may need to act on. An agent driving the CLI with `--format agent`
+   * has more use for "you are sending as cms5z7…" than a human does, because
+   * it never saw the config file — and swallowing it for machine formats is
+   * how you get an email sent from the wrong identity after a profile switch,
+   * with nothing in the transcript to explain it.
+   *
+   * stderr rather than stdout so `am email send | jq` keeps parsing: the
+   * payload contract on stdout stays exactly one document, whatever this
+   * prints.
+   */
+  notice(message: string): void {
+    if (this.format === 'agent' || this.format === 'jsonl') {
+      console.error(compactJson({ status: 'notice', message }));
+      return;
+    }
+    if (this.format === 'json') {
+      console.error(prettyJson({ status: 'notice', message }));
+      return;
+    }
+    if (this.format === 'yaml') {
+      console.error(toYaml({ status: 'notice', message }));
+      return;
+    }
+    if (this.format === 'md') {
+      console.error(`**NOTE** — ${message}`);
+      return;
+    }
+    console.error(`${pc.blue('i')} ${message}`);
+  }
+
   debug(message: string): void {
     if (!this.debugMode) return;
     const ts = new Date().toISOString();

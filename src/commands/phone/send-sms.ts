@@ -1,11 +1,12 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface SendSmsOptions {
-  agent: string;
+  agent?: string;
   to: string;
   body: string;
   mediaUrl?: string[];
@@ -29,7 +30,7 @@ function validateBody(body: string): string {
 export function sendSmsCommand(): Command {
   return new Command('send-sms')
     .description('Send an SMS from an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--to <number>', 'Destination phone number')
     .requiredOption('--body <message>', 'SMS message body')
     .option('--media-url <url>', 'Media URL (repeatable)', (value: string, previous: string[] = []) => {
@@ -42,6 +43,8 @@ export function sendSmsCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const to = validateTo(opts.to);
         const body = validateBody(opts.body);
 
@@ -51,7 +54,7 @@ export function sendSmsCommand(): Command {
           body: string;
           mediaUrls?: string[];
         } = {
-          agentId: opts.agent,
+          agentId,
           to,
           body,
         };

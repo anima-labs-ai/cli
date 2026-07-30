@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -13,7 +14,7 @@ type A2ATaskStatus =
   | 'canceled';
 
 interface TasksOptions {
-  agent: string;
+  agent?: string;
   status?: string;
   cursor?: string;
   limit?: string;
@@ -22,7 +23,7 @@ interface TasksOptions {
 export function listTasksCommand(): Command {
   return new Command('tasks')
     .description('List A2A tasks for an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured agent)', requireNonEmptyArg('Agent ID'))
     .option('--status <status>', 'Filter by status (submitted, working, input_required, completed, failed, canceled)')
     .option('--cursor <cursor>', 'Pagination cursor')
     .option('--limit <number>', 'Page size (1-100, default 20)')
@@ -32,6 +33,8 @@ export function listTasksCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         let limit: number | undefined;
         if (opts.limit) {
           const parsedLimit = Number.parseInt(opts.limit, 10);
@@ -43,7 +46,7 @@ export function listTasksCommand(): Command {
 
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.a2a.listTasks({
-          agentId: opts.agent,
+          agentId,
           status: opts.status as A2ATaskStatus | undefined,
           cursor: opts.cursor,
           limit: limit ?? 20,

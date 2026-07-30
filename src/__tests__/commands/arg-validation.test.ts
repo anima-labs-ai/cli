@@ -105,8 +105,16 @@ function collectIdInputs(cmd: Command, trail: string[] = []): IdInput[] {
     }
   }
 
+  // Optional id options count too, and used not to. Optional is permission to
+  // omit the flag, never permission to pass it empty: `--agent "$AGENT"` with
+  // an unset AGENT supplies `""` just as surely as a mandatory flag would, and
+  // reaches the same collapsed request path. Restricting this to
+  // `opt.mandatory` left 44 of them unguarded — every `--agent` on the vault
+  // subcommands, `--org` on security/admin, `--cred` on `vault exec` — which is
+  // to say most of the id options in the CLI were exempt from the rule this
+  // file exists to enforce.
   for (const opt of cmd.options as readonly Option[]) {
-    if (opt.mandatory && namesAnId(opt.description, placeholderOf(opt.flags))) {
+    if (namesAnId(opt.description, placeholderOf(opt.flags))) {
       found.push({ command: here.join(' '), input: opt.flags, guarded: rejectsEmpty(opt.parseArg) });
     }
   }
@@ -159,16 +167,26 @@ describe('empty id inputs', () => {
     if (existsSync(testConfigDir)) rmSync(testConfigDir, { recursive: true, force: true });
   });
 
-  test('every required id input in the CLI — positional or option — rejects an empty value', () => {
+  test('every id input in the CLI — positional or option, required or not — rejects an empty value', () => {
     const inputs = collectIdInputs(program);
     const positionals = inputs.filter((i) => i.input.startsWith('<'));
     const options = inputs.filter((i) => i.input.startsWith('-'));
 
     // Guard the guard. Without these the assertion below passes while checking
     // nothing, which is how the first version of this test told the truth about
-    // positionals and said nothing at all about options. 28/36 today.
+    // positionals and said nothing at all about options. 29/80 today.
+    //
+    // The option count jumped from 36 when the sweep stopped skipping optional
+    // ones. Both numbers are floors, not targets — they exist to catch a
+    // `collectIdInputs` that has quietly stopped finding things, so raise them
+    // only when the real counts move well past.
+    //
+    // Nothing here changed when `--agent` learned to fall back to the
+    // configured `defaultIdentity`, even though that made 17 mandatory id
+    // options optional: the sweep no longer cares which they are, so the
+    // guarantee follows them across.
     expect(positionals.length).toBeGreaterThan(20);
-    expect(options.length).toBeGreaterThan(30);
+    expect(options.length).toBeGreaterThan(70);
 
     const unguarded = inputs.filter((i) => !i.guarded).map((i) => `${i.command} ${i.input}`);
     expect(unguarded).toEqual([]);

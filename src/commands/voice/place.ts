@@ -20,6 +20,7 @@
  */
 
 import { Command } from "commander";
+import { requireNonEmptyArg } from "../../lib/args.js";
 import { type GlobalOptions } from "../../lib/auth.js";
 import { ORPCError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
@@ -43,6 +44,7 @@ export function placeCallCommand(): Command {
     .option(
       "--agent <id>",
       "Agent identity ID (defaults to the agent of the API key in use)",
+      requireNonEmptyArg("Agent ID"),
     )
     .option("--greeting <text>", "Opening line spoken when the call connects")
     .option(

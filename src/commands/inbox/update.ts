@@ -17,7 +17,7 @@ export function updateInboxCommand(): Command {
     .argument('<id>', 'Inbox ID', requireNonEmptyArg('Inbox ID'))
     .option('--display-name <name>', 'New display name (max 128 characters)')
     .option('--clear-display-name', 'Clear the display name')
-    .option('--agent <id>', 'Agent ID to associate with the inbox')
+    .option('--agent <id>', 'Agent ID to associate with the inbox', requireNonEmptyArg('Agent ID'))
     .option('--unlink-agent', 'Remove the agent association')
     .action(async function (this: Command, id: string) {
       const opts = this.opts<UpdateInboxOptions>();

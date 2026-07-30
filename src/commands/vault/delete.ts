@@ -12,7 +12,7 @@ export function deleteCommand(): Command {
   return new Command('delete')
     .description('Delete credential')
     .argument('<credentialId>', 'Credential ID', requireNonEmptyArg('Credential ID'))
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command, credentialId: string) {
       const opts = this.opts<DeleteOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

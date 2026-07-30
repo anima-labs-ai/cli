@@ -1,44 +1,50 @@
-import { Command, InvalidArgumentError } from 'commander';
+import { Command } from 'commander';
+import { resolveOrgId } from '../../lib/agent.js';
 import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
-type IdentityStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
-
-interface UpdateIdentityOptions {
-  id: string;
-  name?: string;
-  slug?: string;
-  status?: IdentityStatus;
+interface CreateIdentityOptions {
+  org?: string;
+  name: string;
+  slug: string;
+  email?: string;
+  provisionPhone?: boolean;
   metadata?: string;
 }
 
-export function updateIdentityCommand(): Command {
-  return new Command('update')
-    .description('Update an identity')
-    .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
-    .option('--name <name>', 'Identity name (2-100 chars)')
-    .option('--slug <slug>', 'Identity slug (2-64 chars)')
-    .option('--status <status>', 'Identity status (ACTIVE|SUSPENDED|DELETED)', validateStatus)
+export function createIdentityCommand(): Command {
+  return new Command('create')
+    .description('Create an agent')
+    // Optional, not required: a mandatory option is enforced during parse, so
+    // `am identity create` rejected the command before its action body could
+    // read the defaultOrg `am init` had already written.
+    .option('--org <orgId>', 'Organization ID (defaults to your current org)', requireNonEmptyArg('Organization ID'))
+    .requiredOption('--name <name>', 'Identity name (2-100 chars)')
+    .requiredOption('--slug <slug>', 'Identity slug (2-64 chars)')
+    .option('--email <email>', 'Identity email')
+    .option('--provision-phone', 'Provision a phone number')
     .option('--metadata <json>', 'JSON metadata object')
     .action(async function (this: Command) {
-      const opts = this.opts<UpdateIdentityOptions>();
+      const opts = this.opts<CreateIdentityOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
-      if (!opts.name && !opts.slug && !opts.status && !opts.metadata) {
-        output.fatal('Provide at least one field to update: --name, --slug, --status, or --metadata');
-      }
+      // Resolved before the try: a `fatal` raised inside it would be caught by
+      // the handler that renders API failures, which rewrites the exit code and
+      // reports missing input as a request that failed.
+      const orgId = await resolveOrgId(opts.org, output);
 
       try {
         const orpc = await requireOrpcAuth(globals);
-        const agent = await orpc.agent.update({
-          id: opts.id,
+        const agent = await orpc.agent.create({
+          orgId,
           name: opts.name,
           slug: opts.slug,
-          status: opts.status,
-          metadata: opts.metadata ? parseMetadata(opts.metadata) : undefined,
+          email: opts.email,
+          provisionPhone: opts.provisionPhone,
+          metadata: opts.metadata ? parseMetadata(opts.metadata) : {},
         });
 
         if (globals.json) {
@@ -58,12 +64,12 @@ export function updateIdentityCommand(): Command {
           ['API Key Prefix', agent.apiKeyPrefix ?? '-'],
           ['Primary Email', primaryEmail ?? '-'],
           ['Primary Phone', primaryPhone ?? '-'],
-          ['Updated At', agent.updatedAt],
+          ['Created At', agent.createdAt],
           ['Metadata', Object.keys(agent.metadata).length > 0 ? JSON.stringify(agent.metadata) : '-'],
         ]);
-        output.success(`Identity updated: ${agent.id}`);
+        output.success(`Identity created: ${agent.id}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to update identity', { statusMessages: { 404: 'Identity not found.' } });
+        handleOrpcError(error, output, 'Failed to create identity', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.', 404: 'Organization not found.' } });
       }
     });
 }
@@ -81,11 +87,4 @@ function parseMetadata(raw: string): Record<string, unknown> {
   }
 
   return parsed as Record<string, unknown>;
-}
-
-function validateStatus(value: string): IdentityStatus {
-  if (value === 'ACTIVE' || value === 'SUSPENDED' || value === 'DELETED') {
-    return value;
-  }
-  throw new InvalidArgumentError('status must be one of ACTIVE, SUSPENDED, DELETED');
 }

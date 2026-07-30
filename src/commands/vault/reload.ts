@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -20,7 +21,7 @@ interface ReloadOptions {
 export function reloadCommand(): Command {
   return new Command('reload')
     .description('Reload vault snapshots on the server (use after rotating a secret at the provider)')
-    .option('--agent <id>', 'Agent ID (optional with agent API key)')
+    .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<ReloadOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

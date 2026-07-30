@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -87,7 +88,7 @@ export function injectCommand(): Command {
     .description(
       'Detect vault references (vtk_ tokens and {{vault:...}} templates) in stdin, exchange them for real credentials, and output the injected text'
     )
-    .option('--agent <id>', 'Agent ID (used for template credential lookups)')
+    .option('--agent <id>', 'Agent ID (used for template credential lookups)', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<InjectOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

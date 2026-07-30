@@ -1,11 +1,12 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
 interface SendEmailOptions {
-  agent: string;
+  agent?: string;
   to: string[];
   cc: string[];
   bcc: string[];
@@ -22,7 +23,7 @@ function collect(value: string, previous: string[]): string[] {
 export function sendEmailCommand(): Command {
   return new Command('send')
     .description('Send an email')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--to <email>', 'Recipient email', collect, [])
     .requiredOption('--subject <subject>', 'Email subject')
     .requiredOption('--body <body>', 'Email body text')
@@ -39,9 +40,10 @@ export function sendEmailCommand(): Command {
           output.fatal('Subject must be between 1 and 998 characters.');
         }
 
+        const agentId = await resolveAgentId(opts.agent, output);
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.email.send({
-          agentId: opts.agent,
+          agentId,
           to: opts.to,
           cc: opts.cc.length > 0 ? opts.cc : undefined,
           bcc: opts.bcc.length > 0 ? opts.bcc : undefined,

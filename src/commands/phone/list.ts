@@ -1,25 +1,28 @@
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
+import { resolveAgentId } from '../../lib/agent.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface ListOptions {
-  agent: string;
+  agent?: string;
 }
 
 export function listPhoneNumbersCommand(): Command {
   return new Command('list')
     .description('List provisioned phone numbers for an agent')
-    .requiredOption('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command) {
       const opts = this.opts<ListOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
+        const agentId = await resolveAgentId(opts.agent, output);
+
         const orpc = await requireOrpcAuth(globals);
-        const response = await orpc.phone.list({ agentId: opts.agent });
+        const response = await orpc.phone.list({ agentId });
 
         if (globals.json) {
           output.json(response);

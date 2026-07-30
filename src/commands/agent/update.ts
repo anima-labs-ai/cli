@@ -1,41 +1,44 @@
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
-interface CreateIdentityOptions {
-  org: string;
-  name: string;
-  slug: string;
-  email?: string;
-  provisionPhone?: boolean;
+type IdentityStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
+
+interface UpdateIdentityOptions {
+  id: string;
+  name?: string;
+  slug?: string;
+  status?: IdentityStatus;
   metadata?: string;
 }
 
-export function createIdentityCommand(): Command {
-  return new Command('create')
-    .description('Create an identity')
-    .requiredOption('--org <orgId>', 'Organization ID', requireNonEmptyArg('Organization ID'))
-    .requiredOption('--name <name>', 'Identity name (2-100 chars)')
-    .requiredOption('--slug <slug>', 'Identity slug (2-64 chars)')
-    .option('--email <email>', 'Identity email')
-    .option('--provision-phone', 'Provision a phone number')
+export function updateIdentityCommand(): Command {
+  return new Command('update')
+    .description('Update an agent')
+    .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
+    .option('--name <name>', 'Identity name (2-100 chars)')
+    .option('--slug <slug>', 'Identity slug (2-64 chars)')
+    .option('--status <status>', 'Identity status (ACTIVE|SUSPENDED|DELETED)', validateStatus)
     .option('--metadata <json>', 'JSON metadata object')
     .action(async function (this: Command) {
-      const opts = this.opts<CreateIdentityOptions>();
+      const opts = this.opts<UpdateIdentityOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
+      if (!opts.name && !opts.slug && !opts.status && !opts.metadata) {
+        output.fatal('Provide at least one field to update: --name, --slug, --status, or --metadata');
+      }
+
       try {
         const orpc = await requireOrpcAuth(globals);
-        const agent = await orpc.agent.create({
-          orgId: opts.org,
+        const agent = await orpc.agent.update({
+          id: opts.id,
           name: opts.name,
           slug: opts.slug,
-          email: opts.email,
-          provisionPhone: opts.provisionPhone,
-          metadata: opts.metadata ? parseMetadata(opts.metadata) : {},
+          status: opts.status,
+          metadata: opts.metadata ? parseMetadata(opts.metadata) : undefined,
         });
 
         if (globals.json) {
@@ -55,12 +58,12 @@ export function createIdentityCommand(): Command {
           ['API Key Prefix', agent.apiKeyPrefix ?? '-'],
           ['Primary Email', primaryEmail ?? '-'],
           ['Primary Phone', primaryPhone ?? '-'],
-          ['Created At', agent.createdAt],
+          ['Updated At', agent.updatedAt],
           ['Metadata', Object.keys(agent.metadata).length > 0 ? JSON.stringify(agent.metadata) : '-'],
         ]);
-        output.success(`Identity created: ${agent.id}`);
+        output.success(`Identity updated: ${agent.id}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to create identity', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.', 404: 'Organization not found.' } });
+        handleOrpcError(error, output, 'Failed to update identity', { statusMessages: { 404: 'Identity not found.' } });
       }
     });
 }
@@ -78,4 +81,11 @@ function parseMetadata(raw: string): Record<string, unknown> {
   }
 
   return parsed as Record<string, unknown>;
+}
+
+function validateStatus(value: string): IdentityStatus {
+  if (value === 'ACTIVE' || value === 'SUSPENDED' || value === 'DELETED') {
+    return value;
+  }
+  throw new InvalidArgumentError('status must be one of ACTIVE, SUSPENDED, DELETED');
 }

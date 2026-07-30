@@ -126,3 +126,21 @@ export function parseBoundedInt(
 export function collectValue(value: string, previous: string[]): string[] {
   return previous.concat([value]);
 }
+
+/**
+ * [[collectValue]] and [[requireNonEmptyArg]] in one parser, for a repeatable
+ * option that names a resource by id — `--cred a --cred b`.
+ *
+ * A repeatable flag can't simply take `requireNonEmptyArg` as its parser: the
+ * parser slot is already spoken for by the reducer that accumulates the array,
+ * so the two have to compose or the flag gets one or the other. Composing was
+ * the difference between `--cred "$ID" --as TOKEN` rejecting an unset `ID` and
+ * quietly resolving `['']` — a credential list one entry longer than the names
+ * meant to pair with it, which silently misaligns every `--as` after it.
+ *
+ * Rejects first, then accumulates, so an empty entry never enters the array.
+ */
+export function collectNonEmpty(label: string) {
+  const validate = requireNonEmptyArg(label);
+  return (value: string, previous: string[] = []): string[] => previous.concat([validate(value)]);
+}
