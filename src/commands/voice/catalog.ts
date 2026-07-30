@@ -23,7 +23,6 @@ export function voiceCatalogCommand(): Command {
       try {
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.voice.catalog({
-          tier: opts.tier,
           gender: opts.gender,
           language: opts.language,
         });
@@ -38,15 +37,15 @@ export function voiceCatalogCommand(): Command {
           ? 'No voices found matching filters'
           : `${voices.length} voice(s) found`;
         output.table(
-          ['ID', 'Name', 'Provider', 'Tier', 'Gender', 'Language', 'Style'],
+          ['ID', 'Name', 'Gender', 'Language', 'Accent', 'Age', 'Sounds like'],
           voices.map((v) => [
             v.id,
             v.name,
-            v.provider,
-            v.tier,
-            v.gender ?? '-',
+            v.gender,
             v.language,
-            v.style ?? '-',
+            v.accent ?? '-',
+            v.age ?? '-',
+            v.descriptors.length > 0 ? v.descriptors.join(', ') : '-',
           ]),
           { summary },
         );

@@ -53,14 +53,13 @@ export function listCallsCommand(): Command {
           ? 'No calls found'
           : `${calls.length} of ${response.total} call(s)`;
         output.table(
-          ['ID', 'Direction', 'State', 'From', 'To', 'Tier', 'Duration', 'Started'],
+          ['ID', 'Direction', 'State', 'From', 'To', 'Duration', 'Started'],
           calls.map((c) => [
             c.id.slice(0, 8),
             c.direction,
             c.state,
             c.from,
             c.to,
-            c.tier,
             formatDuration(c.durationSeconds),
             formatDate(c.startedAt),
           ]),
