@@ -79,6 +79,12 @@ export interface ProfileConfig {
   defaultOrg?: string;
   defaultIdentity?: string;
   outputFormat?: 'table' | 'json' | 'yaml';
+  /**
+   * When this profile's credential stops working, ISO-8601. Only set for
+   * profiles holding a short-lived key (`am auth elevate` mints a 15-minute
+   * one); a durable profile leaves it undefined and never expires.
+   */
+  expiresAt?: string;
 }
 
 /**
@@ -454,7 +460,78 @@ export async function getAuthConfig(): Promise<AuthConfig> {
     // 401 from the API and tell the user to run `anima auth login`.
   }
 
+  // 4. An active profile's credential outranks auth.json's. See
+  //    `activeProfileCredential` for why this has to happen here.
+  const fromProfile = await activeProfileCredential();
+  if (fromProfile) {
+    return {
+      ...metadata,
+      ...secrets,
+      apiKey: fromProfile.apiKey,
+      // A profile credential is only valid against the host it was issued
+      // for, so the URL has to travel with it. Without this, elevating on a
+      // staging profile would send a staging key to production.
+      apiUrl: fromProfile.apiUrl ?? metadata.apiUrl,
+      // auth.json's OAuth session does not carry over to a profile identity.
+      // Leaving it would let `ensureFreshOAuthToken` refresh, and
+      // `ensureAuthHeaders` prefer, a token the profile did not select.
+      token: undefined,
+      refreshToken: undefined,
+    };
+  }
+
   return { ...metadata, ...secrets };
+}
+
+/** True when `iso` names a moment already past. Absent/unparseable → not expired. */
+function hasLapsed(iso: string | undefined): boolean {
+  if (!iso) return false;
+  const at = Date.parse(iso);
+  return Number.isFinite(at) && at <= Date.now();
+}
+
+/**
+ * The active profile's credential, when it has one that still works.
+ *
+ * Profiles were always meant to switch identity — `am init` writes one per
+ * org and `am config profile show` prints its API key — but nothing in the
+ * credential path ever read one back. `getAuthConfig` sourced the key solely
+ * from auth.json, so `am config profile use X` and `am auth elevate` both
+ * changed which profile was *marked* active while every request kept going
+ * out under auth.json's key. `am tail` after a successful elevate still got
+ * "master key required" for exactly this reason: the master key was sitting
+ * in the keychain under `profile:<name>`, which no caller read.
+ *
+ * Fixing it here rather than in `ensureAuthHeaders` keeps one source of truth
+ * — `resolveApiUrl` and the oRPC link both come through `getAuthConfig`, and
+ * patching only the header path would have left them disagreeing about which
+ * host the request belongs to. `ANIMA_API_KEY` still wins, because
+ * `ensureAuthHeaders` applies it above whatever this returns.
+ */
+async function activeProfileCredential(): Promise<{ apiKey: string; apiUrl?: string } | null> {
+  let active: { name: string; config: ProfileConfig } | null;
+  try {
+    active = await getActiveProfile();
+  } catch {
+    // config.json unreadable — auth.json stays authoritative rather than
+    // locking the user out of every command.
+    return null;
+  }
+  if (!active?.config.apiKey) return null;
+
+  // A short-lived profile has to stop being used the moment it lapses.
+  // Silently sending the dead key would turn an expected 15-minute expiry
+  // into an unexplained 401 on every later command, and the user would have
+  // no reason to connect the two.
+  if (hasLapsed(active.config.expiresAt)) {
+    process.stderr.write(
+      `[anima] profile "${active.name}" expired at ${active.config.expiresAt}; ` +
+        `falling back to your default credential. Re-run \`am auth elevate\` for admin access.\n`,
+    );
+    return null;
+  }
+
+  return { apiKey: active.config.apiKey, apiUrl: active.config.apiUrl };
 }
 
 export async function saveAuthConfig(config: AuthConfig): Promise<void> {

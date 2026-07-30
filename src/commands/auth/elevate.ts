@@ -160,6 +160,10 @@ export function elevateCommand(): Command {
             defaultOrg: config.defaultOrg,
             defaultIdentity: config.defaultIdentity,
             outputFormat: config.outputFormat,
+            // Recorded so `getAuthConfig` can stand this profile down the
+            // moment it lapses. Without it the CLI would keep sending a dead
+            // key and report an unexplained 401 rather than an expiry.
+            expiresAt: elevated.data.expires_at,
           },
         },
       });
