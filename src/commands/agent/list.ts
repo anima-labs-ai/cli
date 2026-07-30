@@ -18,7 +18,7 @@ interface ListIdentitiesOptions {
 export function listIdentitiesCommand(): Command {
   return new Command('list')
     .description(
-      'List identities. Defaults to all orgs you belong to; pass --org or set a default with `am org switch` to filter.',
+      'List agents. Defaults to all orgs you belong to; pass --org or set a default with `am org switch` to filter.',
     )
     .option(
       '--org <orgId>',

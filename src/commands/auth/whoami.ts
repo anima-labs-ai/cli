@@ -113,7 +113,7 @@ export function whoamiCommand(): Command {
           [
             'Agent',
             agent === undefined
-              ? 'none configured — pass --agent, or `am identity use <id>`'
+              ? 'none configured — pass --agent, or `am agent use <id>`'
               : `${agent.value}  (from ${agentSource})`,
           ],
           ['Auth Method', authMethod],

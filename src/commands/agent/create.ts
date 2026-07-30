@@ -16,7 +16,7 @@ interface CreateIdentityOptions {
 
 export function createIdentityCommand(): Command {
   return new Command('create')
-    .description('Create an identity')
+    .description('Create an agent')
     // Optional, not required: a mandatory option is enforced during parse, so
     // `am identity create` rejected the command before its action body could
     // read the defaultOrg `am init` had already written.

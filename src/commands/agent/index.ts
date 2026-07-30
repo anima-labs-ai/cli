@@ -10,10 +10,14 @@ import { getDidCommand } from './did.js';
 import { listCredentialsCommand } from './credentials.js';
 import { getAgentCardCommand } from './card.js';
 
-export function identityCommands(): Command {
-  const cmd = new Command('identity')
-    .alias('id')
-    .description('Manage agent identities');
+export function agentCommands(): Command {
+  // `identity` and `id` stay as aliases. The command was `identity` through
+  // 0.6.x and is in published docs, skill manifests and users' scripts;
+  // dropping the old name to fix a naming inconsistency would break those for
+  // no benefit they can see.
+  const cmd = new Command('agent')
+    .aliases(['identity', 'id'])
+    .description('Manage agents');
 
   cmd.addCommand(createIdentityCommand());
   cmd.addCommand(listIdentitiesCommand());

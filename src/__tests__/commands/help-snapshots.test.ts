@@ -7,7 +7,7 @@ const snapshotDir = join(import.meta.dir, '..', 'snapshots');
 
 const commandGroups = [
   'auth',
-  'identity',
+  'agent',
   'email',
   'phone',
   'vault',

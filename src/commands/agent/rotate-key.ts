@@ -4,31 +4,36 @@ import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { requireOrpcAuth, handleOrpcError } from '../../lib/orpc.js';
 
-interface DeleteIdentityOptions {
+interface RotateIdentityKeyOptions {
   id: string;
 }
 
-export function deleteIdentityCommand(): Command {
-  return new Command('delete')
-    .description('Delete an identity')
+export function rotateIdentityKeyCommand(): Command {
+  return new Command('rotate-key')
+    .description("Rotate an agent's API key")
     .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
     .action(async function (this: Command) {
-      const opts = this.opts<DeleteIdentityOptions>();
+      const opts = this.opts<RotateIdentityKeyOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output = Output.fromGlobals(globals);
 
       try {
         const orpc = await requireOrpcAuth(globals);
-        const result = await orpc.agent.delete({ id: opts.id });
+        const result = await orpc.agent.rotateKey({ id: opts.id });
 
         if (globals.json) {
           output.json(result);
           return;
         }
 
-        output.success(`Identity deleted: ${opts.id}`);
+        output.details([
+          ['ID', opts.id],
+          ['API Key', result.apiKey],
+          ['Key Prefix', result.apiKeyPrefix],
+        ]);
+        output.success(`API key rotated for identity: ${opts.id}`);
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to delete identity', { statusMessages: { 404: 'Identity not found.' } });
+        handleOrpcError(error, output, 'Failed to rotate identity API key', { statusMessages: { 404: 'Identity not found.' } });
       }
     });
 }

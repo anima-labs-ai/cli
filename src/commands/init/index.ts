@@ -308,7 +308,7 @@ async function runInteractiveNew(
 					"",
 					"  Already have your API key?   am init  →  “existing API key”",
 					"  Lost it?                     https://console.useanima.sh",
-					"  Wanted a second agent?       am identity create --name … --slug …",
+					"  Wanted a second agent?       am agent create --name … --slug …",
 					"",
 					"Signing up again needs a different owner email, which creates a",
 					"separate organization.",
@@ -431,7 +431,7 @@ async function runInteractiveNew(
 		);
 	}
 
-	clack.note(lines.join("\n"), "Your new agent identity");
+	clack.note(lines.join("\n"), "Your new agent");
 
 	// Verification is the next required step: until the owner submits the
 	// OTP the agent is `agent_unverified` and may only email its own owner.
@@ -469,7 +469,7 @@ async function runInteractiveNew(
 		[
 			"Welcome aboard. ✸  Try:",
 			'  am email send --to friend@example.com --subject "Hi" --body "I am alive"',
-			"  am identity list          (every agent in your org)",
+			"  am agent list             (every agent in your org)",
 			"  am auth whoami            (which agent you are acting as)",
 			"  Dashboard: https://console.useanima.sh",
 		].join("\n"),
@@ -660,7 +660,7 @@ function masterKeyGuidance(orgId: string): string {
 		"Or, if you already have a master key:",
 		"  1. Open https://console.useanima.sh and copy your master key (mk_…)",
 		"  2. am init  →  “Configure with an existing API key”",
-		'  3. am identity create --name "…" --slug "…"',
+		'  3. am agent create --name "…" --slug "…"',
 	].join("\n");
 }
 
@@ -816,7 +816,7 @@ async function offerExistingSetupChoices(
 				hint:
 					canCreateAgents === "no"
 						? "Needs a master key (mk_…) — this machine has an agent key"
-						: "New identity + inbox, same org and billing",
+						: "New agent + inbox, same org and billing",
 			},
 			{
 				value: "org",
@@ -889,7 +889,7 @@ export async function runInteractiveInit(
 		options: [
 			{
 				value: "new",
-				label: "Create a fresh agent identity (recommended)",
+				label: "Create a fresh agent (recommended)",
 				hint: "Provisions org + agent + email inbox in one flow",
 			},
 			{

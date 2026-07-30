@@ -10,7 +10,7 @@ interface GetIdentityOptions {
 
 export function getIdentityCommand(): Command {
   return new Command('get')
-    .description('Get an identity by ID')
+    .description('Get an agent by ID')
     .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
     .action(async function (this: Command) {
       const opts = this.opts<GetIdentityOptions>();

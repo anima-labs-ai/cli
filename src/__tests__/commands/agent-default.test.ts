@@ -49,9 +49,9 @@ const CONFIGURED_AGENT = 'cms5z7mfm00d6s6014danhnao';
  * configured", so these resolve from `defaultIdentity`.
  */
 const ACTS_AS_SELF: readonly string[] = [
-  'identity card --agent <id>',
-  'identity did --agent <id>',
-  'identity credentials --agent <id>',
+  'agent card --agent <id>',
+  'agent did --agent <id>',
+  'agent credentials --agent <id>',
   'a2a tasks --agent <id>',
   'address validate --agent <agentId>',
   'address list --agent <id>',
@@ -363,7 +363,7 @@ describe('--org defaults to the configured organization', () => {
   });
 
   test('an explicitly empty --org is a usage error, not a fallback', () => {
-    const orgOption = collectOrgOptions(program).find((o) => o.label.startsWith('identity create'));
+    const orgOption = collectOrgOptions(program).find((o) => o.label.startsWith('agent create'));
     // `--org ""` is a value the user supplied and got wrong (a `$ORG` that
     // expanded to nothing). Substituting the configured default would create
     // the agent somewhere the command line appeared to override.

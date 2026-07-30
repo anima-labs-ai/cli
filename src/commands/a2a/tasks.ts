@@ -23,7 +23,7 @@ interface TasksOptions {
 export function listTasksCommand(): Command {
   return new Command('tasks')
     .description('List A2A tasks for an agent')
-    .option('--agent <id>', 'Agent ID (defaults to your configured identity)', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Agent ID (defaults to your configured agent)', requireNonEmptyArg('Agent ID'))
     .option('--status <status>', 'Filter by status (submitted, working, input_required, completed, failed, canceled)')
     .option('--cursor <cursor>', 'Pagination cursor')
     .option('--limit <number>', 'Page size (1-100, default 20)')

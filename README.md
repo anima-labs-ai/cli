@@ -90,17 +90,23 @@ verify a human was present.
 Enrolment is macOS-only. Elsewhere the CLI refuses to store a grant rather than
 pretend it is protected, and `anima auth elevate` keeps using the emailed code.
 
-### `identity` — Manage agent identities
+### `agent` — Manage agents
 
 ```bash
-anima identity create     # Create a new agent identity (in your current org)
-anima identity list       # List all identities
-anima identity use <id>   # Set the default agent for later commands
-anima identity get <id>   # Get identity details
-anima identity update     # Update identity properties
-anima identity delete     # Delete an identity
-anima identity rotate-key # Rotate identity signing key
+anima agent create        # Create a new agent (in your current org)
+anima agent list          # List agents
+anima agent use <id>      # Set the default agent for later commands
+anima agent get <id>      # Get agent details
+anima agent update        # Update agent properties
+anima agent delete        # Delete an agent
+anima agent rotate-key    # Rotate the agent's API key
+anima agent did           # Get the agent's DID document
+anima agent credentials   # List the agent's verifiable credentials
+anima agent card          # Get the public agent card
 ```
+
+Previously `anima identity`. Both `identity` and the short `id` still work as
+aliases, so existing scripts are unaffected.
 
 ### `email` — Send and manage emails
 

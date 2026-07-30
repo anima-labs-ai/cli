@@ -154,7 +154,7 @@ export function tailCommand(): Command {
   return new Command('tail')
     .description('Stream agent activity (email, SMS, voice, vault) in real time')
     .option('--filter <channel>', 'Restrict to one channel: email|sms|voice|vault')
-    .option('--agent <id>', 'Restrict to a single agent identity ID', requireNonEmptyArg('Agent ID'))
+    .option('--agent <id>', 'Restrict to a single agent ID', requireNonEmptyArg('Agent ID'))
     .option('--raw', 'Emit raw JSON per event instead of formatted line')
     .action(async function (this: Command) {
       const opts = this.opts<TailOptions>();

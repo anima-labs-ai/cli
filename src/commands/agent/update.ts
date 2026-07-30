@@ -16,7 +16,7 @@ interface UpdateIdentityOptions {
 
 export function updateIdentityCommand(): Command {
   return new Command('update')
-    .description('Update an identity')
+    .description('Update an agent')
     .requiredOption('--id <id>', 'Identity ID', requireNonEmptyArg('Identity ID'))
     .option('--name <name>', 'Identity name (2-100 chars)')
     .option('--slug <slug>', 'Identity slug (2-64 chars)')

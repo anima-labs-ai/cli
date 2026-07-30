@@ -46,7 +46,7 @@ export async function resolveAgentId(
     // remedy is a different command line (or a one-off `config set`).
     output.fatal(
       [
-        'No agent specified, and no default identity is configured.',
+        'No agent specified, and no default agent is configured.',
         '',
         '  Pass one explicitly:   --agent <id>',
         '  Or set a default:      am config set defaultIdentity <id>',

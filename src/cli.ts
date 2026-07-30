@@ -11,7 +11,7 @@ import { doctorCommand } from "./commands/doctor/index.js";
 import { emailCommands } from "./commands/email/index.js";
 import { extensionCommands } from "./commands/extension/index.js";
 import { generateCommand } from "./commands/generate/index.js";
-import { identityCommands } from "./commands/identity/index.js";
+import { agentCommands } from "./commands/agent/index.js";
 import { inboxCommands } from "./commands/inbox/index.js";
 import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
@@ -72,7 +72,7 @@ export function createProgram(): Command {
 
 	program.addCommand(addressCommands());
 	program.addCommand(authCommands());
-	program.addCommand(identityCommands());
+	program.addCommand(agentCommands());
 	program.addCommand(emailCommands());
 	program.addCommand(inboxCommands());
 	program.addCommand(phoneCommands());
