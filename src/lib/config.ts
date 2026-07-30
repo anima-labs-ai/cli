@@ -71,6 +71,22 @@ export interface AppConfig {
   outputFormat?: 'table' | 'json' | 'yaml';
   activeProfile?: string;
   profiles?: Record<string, ProfileConfig>;
+  /**
+   * Orgs this machine has been enrolled for, keyed by org id.
+   *
+   * A non-secret marker only — the grant itself lives in the keychain behind a
+   * human-presence gate. It exists because "are we enrolled?" has to be
+   * answerable *without* prompting: reading the grant is what raises the
+   * password dialog, so probing the keychain to decide whether a dialog is
+   * warranted would raise one every time, including when the answer is no.
+   */
+  enrollments?: Record<string, EnrollmentRecord>;
+}
+
+export interface EnrollmentRecord {
+  enrolledAt: string;
+  /** When the grant lapses and enrolling again costs another emailed code. */
+  grantExpiresAt: string;
 }
 
 export interface ProfileConfig {
@@ -243,6 +259,18 @@ function secretsBlobPath(account: string): string {
 
 function store(): SecureStore {
   return getSecureStore(secretsBlobPath);
+}
+
+/**
+ * The same secure store this module uses, for callers outside it.
+ *
+ * Exported rather than letting them call `getSecureStore()` themselves: the
+ * Windows backend needs `secretsBlobPath` to know where its encrypted blob
+ * lives, and a bare call would silently select a different location. One
+ * accessor keeps every caller on one backend and one path.
+ */
+export function secureStore(): SecureStore {
+  return store();
 }
 
 /**

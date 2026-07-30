@@ -2,33 +2,38 @@ import * as clack from '@clack/prompts';
 import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
 import { type GlobalOptions, resolveApiUrl } from '../../lib/auth.js';
+import { getAuthConfig, getConfig } from '../../lib/config.js';
 import {
-  getActiveProfile,
-  getAuthConfig,
-  getConfig,
-  saveConfig,
-  setActiveProfile,
-} from '../../lib/config.js';
+  type ElevateApiResponse,
+  NotEnrolledError,
+  activateSession,
+  canHoldGrant,
+  elevateWithGrant,
+  enrollmentFor,
+  post,
+  recordEnrollment,
+} from '../../lib/elevation.js';
 import { Output } from '../../lib/output.js';
 
 /**
- * `am auth elevate` — trade a code from the owner's inbox for a short-lived
- * key that can do master work.
+ * `am auth elevate` — get admin access for a while.
  *
- * The key `am init` stores is agent-scoped, and an org created that way has no
- * other route to master capability: `clerkOrgId` is null, so the Clerk and
- * OAuth paths are closed, and the org's master key is returned by no endpoint.
- * That left creating an agent, reading the event stream and managing keys
- * permanently out of reach — the wall this session kept hitting.
+ * Two paths, and which one runs is not a flag the user has to think about:
  *
- * The factor is the inbox, which is what makes this a boundary rather than a
- * prompt: whatever is driving the CLI already holds the API key, so asking it
- * for a local password would prove nothing. Only the human reads the owner's
- * mail.
+ *   not enrolled → an emailed code, spent once, which also enrols this machine
+ *   enrolled     → the OS asks for the login password, no email at all
+ *
+ * The emailed code is deliberately demoted to an enrolment step. As a recurring
+ * factor it is weak here — Anima sells agents with mailbox access, so the thing
+ * being gated may be able to read the gate — and it takes the human out of the
+ * terminal every time. Enrolment converts it into something an agent cannot
+ * satisfy at all: a system password dialog it has no way to answer.
+ *
+ * See lib/elevation.ts for what that gate is and is not worth.
  *
  * Called over raw fetch, like `init`'s sign-up call, because these endpoints
- * are agent-self-service and the CLI's contract pin (.anima-ref) does not
- * carry them yet.
+ * are agent-self-service and the CLI's contract pin (.anima-ref) does not carry
+ * them yet.
  */
 
 interface ElevateRequestResponse {
@@ -36,55 +41,28 @@ interface ElevateRequestResponse {
   expires_at: string;
 }
 
-interface ElevateResponse {
+interface ElevateWireResponse {
   api_key: string;
   api_key_id: string;
   expires_at: string;
-}
-
-/** The profile a privileged session lands in. */
-function elevatedProfileName(orgId: string | undefined): string {
-  return orgId ? `${orgId}-elevated` : 'elevated';
-}
-
-async function post<T>(
-  apiUrl: string,
-  path: string,
-  credential: string,
-  body: Record<string, unknown>,
-): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string }> {
-  const response = await fetch(`${apiUrl}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${credential}` },
-    body: JSON.stringify(body),
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    // The API answers with either the oRPC envelope or `{ error: {...} }`;
-    // both carry a message worth showing verbatim, since these are the
-    // rate-limit and wrong-code cases the user needs to act on.
-    let message = text.slice(0, 300);
-    try {
-      const parsed = JSON.parse(text) as { message?: string; error?: { message?: string } };
-      message = parsed.error?.message ?? parsed.message ?? message;
-    } catch {
-      // Non-JSON body — the truncated text is the best available.
-    }
-    return { ok: false, status: response.status, message };
-  }
-  return { ok: true, data: JSON.parse(text) as T };
+  grant?: string;
+  grant_expires_at?: string;
 }
 
 export function elevateCommand(): Command {
   return new Command('elevate')
-    .description('Get temporary admin access using a code emailed to the org owner')
+    .description('Get temporary admin access, using this machine or a code emailed to the owner')
     .option(
       '--code <otp>',
       'The 6-digit code, to skip the prompt (for scripts)',
       requireNonEmptyArg('Code'),
     )
+    .option(
+      '--email',
+      'Force the emailed-code path, re-enrolling this machine (use after revoking a grant)',
+    )
     .action(async function (this: Command) {
-      const opts = this.opts<{ code?: string }>();
+      const opts = this.opts<{ code?: string; email?: boolean }>();
       const globals = this.optsWithGlobals<GlobalOptions>();
       const output: Output = Output.fromGlobals(globals);
 
@@ -94,8 +72,41 @@ export function elevateCommand(): Command {
         output.fatal('Not authenticated. Run `am init` or `am auth login` first.');
       }
       const apiUrl = resolveApiUrl(globals);
+      const orgId = (await getConfig()).defaultOrg;
 
-      // ── Ask for a code ──
+      // ── Enrolled already? Then no email, just the machine. ──
+      const enrolled = orgId !== undefined && (await enrollmentFor(orgId)) !== undefined;
+      if (enrolled && opts.email !== true && opts.code === undefined) {
+        try {
+          const session = await elevateWithGrant(globals);
+          const { profile, previous } = await activateSession(session, apiUrl);
+          if (globals.json) {
+            output.json({
+              status: 'elevated',
+              via: 'machine',
+              profile,
+              expires_at: session.expiresAt,
+              api_key_id: session.apiKeyId,
+              previous_profile: previous ?? null,
+            });
+            return;
+          }
+          output.success(`Admin access active until ${session.expiresAt}.`);
+          output.info(backToNormal(profile, previous));
+          return;
+        } catch (err: unknown) {
+          if (err instanceof NotEnrolledError) {
+            // The grant went stale (revoked, expired, or removed). Say so, then
+            // fall through to the emailed code rather than dead-ending on a
+            // command the user has to re-run by hand.
+            output.warn(err.message);
+          } else {
+            output.fatal(err instanceof Error ? err.message : String(err));
+          }
+        }
+      }
+
+      // ── Emailed code. Also enrols this machine when it can hold a grant. ──
       const requested = await post<ElevateRequestResponse>(
         apiUrl,
         '/v1/agent/elevate/request',
@@ -112,9 +123,10 @@ export function elevateCommand(): Command {
         process.exit(1);
       }
 
-      output.info(`Code sent to ${requested.data.sent_to}. It expires at ${requested.data.expires_at}.`);
+      output.info(
+        `Code sent to ${requested.data.sent_to}. It expires at ${requested.data.expires_at}.`,
+      );
 
-      // ── Exchange it ──
       let code = opts.code;
       if (code === undefined) {
         const answer = await clack.text({
@@ -131,60 +143,73 @@ export function elevateCommand(): Command {
         code = (answer as string).trim();
       }
 
-      const elevated = await post<ElevateResponse>(apiUrl, '/v1/agent/elevate', credential, {
+      // Only ask for a grant when this machine can actually gate one. On a
+      // backend without a human-presence gate the grant would be a 90-day
+      // credential sitting in storage that anything running as the user can
+      // read — strictly worse than the emailed code it would replace.
+      const wantGrant = canHoldGrant() && orgId !== undefined;
+
+      const elevated = await post<ElevateWireResponse>(apiUrl, '/v1/agent/elevate', credential, {
         otp_code: code,
+        ...(wantGrant ? { enroll: true } : {}),
       });
       if (!elevated.ok) {
         output.error(`Step-up failed: ${elevated.message}`);
         process.exit(1);
       }
 
-      // ── Park it in its own profile ──
-      //
-      // Not written over the active credential: this key expires in minutes,
-      // and overwriting the agent key with it would leave the machine with a
-      // dead credential and no obvious way back. A profile keeps both, and
-      // `saveConfig` puts the secret in the OS keychain rather than
-      // config.json.
-      const config = await getConfig();
-      const previous = (await getActiveProfile())?.name;
-      const name = elevatedProfileName(config.defaultOrg);
+      const session: ElevateApiResponse = {
+        apiKey: elevated.data.api_key,
+        apiKeyId: elevated.data.api_key_id,
+        expiresAt: elevated.data.expires_at,
+      };
 
-      await saveConfig({
-        ...config,
-        profiles: {
-          ...config.profiles,
-          [name]: {
-            apiUrl,
-            apiKey: elevated.data.api_key,
-            defaultOrg: config.defaultOrg,
-            defaultIdentity: config.defaultIdentity,
-            outputFormat: config.outputFormat,
-            // Recorded so `getAuthConfig` can stand this profile down the
-            // moment it lapses. Without it the CLI would keep sending a dead
-            // key and report an unexplained 401 rather than an expiry.
-            expiresAt: elevated.data.expires_at,
-          },
-        },
-      });
-      await setActiveProfile(name);
+      let enrolledNow = false;
+      if (wantGrant && elevated.data.grant && elevated.data.grant_expires_at) {
+        try {
+          await recordEnrollment(
+            orgId as string,
+            elevated.data.grant,
+            elevated.data.grant_expires_at,
+          );
+          enrolledNow = true;
+        } catch (err: unknown) {
+          // Enrolment is an optimisation on top of a step-up that already
+          // worked. Losing it costs another email next time, which is worth
+          // far less than throwing away the session the user just earned.
+          output.warn(
+            `Admin access is active, but this machine could not be enrolled: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+
+      const { profile, previous } = await activateSession(session, apiUrl);
 
       if (globals.json) {
         output.json({
           status: 'elevated',
-          profile: name,
-          expires_at: elevated.data.expires_at,
-          api_key_id: elevated.data.api_key_id,
+          via: 'email',
+          enrolled: enrolledNow,
+          profile,
+          expires_at: session.expiresAt,
+          api_key_id: session.apiKeyId,
           previous_profile: previous ?? null,
         });
         return;
       }
 
-      output.success(`Admin access active until ${elevated.data.expires_at}.`);
-      output.info(
-        previous
-          ? `Switched to profile "${name}". Back to normal:  am config profile use ${previous}`
-          : `Switched to profile "${name}". Back to normal:  am config profile use default`,
-      );
+      output.success(`Admin access active until ${session.expiresAt}.`);
+      if (enrolledNow) {
+        output.info(
+          'This machine is now enrolled. Next time `am auth elevate` asks for your login password instead of emailing a code.',
+        );
+      }
+      output.info(backToNormal(profile, previous));
     });
+}
+
+function backToNormal(profile: string, previous: string | undefined): string {
+  return `Switched to profile "${profile}". Back to normal:  am config profile use ${previous ?? 'default'}`;
 }

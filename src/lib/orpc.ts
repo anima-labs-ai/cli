@@ -20,6 +20,7 @@ import { OpenAPILink } from '@orpc/openapi-client/fetch';
 
 import { type GlobalOptions, ensureAuthHeaders, resolveApiUrl } from './auth.js';
 import { getAuthConfig } from './config.js';
+import { activateSession, elevateWithGrant, hasLiveSession } from './elevation.js';
 import type { Output } from './output.js';
 
 export { ORPCError };
@@ -66,7 +67,11 @@ const GENERIC_WIRE_CODES: ReadonlySet<string> = new Set([
  * than repeated at every call site that might hit the wall.
  */
 const TYPED_CODE_HINTS: Readonly<Record<string, string>> = {
-  MASTER_KEY_REQUIRED: 'This needs admin access. Run `am auth elevate` first.\n',
+  // Reaching this means auto-elevation did not run or did not help: the
+  // machine is not enrolled, its grant was refused, or this is a pipe/CI where
+  // a password dialog cannot be answered. Enrolling is the fix for all three.
+  MASTER_KEY_REQUIRED:
+    'This needs admin access. Run `am auth elevate` once to enrol this machine.\n',
 };
 
 /**
@@ -164,12 +169,107 @@ export function createOrpcClient(opts: GlobalOptions): AnimaClient {
  * Like `requireAuth` but returns the typed oRPC client. Throws if there's
  * no usable credential — matches the existing `requireAuth` contract so
  * callers can swap in place.
+ *
+ * The returned client elevates on demand: see {@link withAutoElevation}.
  */
 export async function requireOrpcAuth(opts: GlobalOptions): Promise<AnimaClient> {
   // Force a header check now so missing-auth errors surface before the
   // first network call (matches requireAuth's eager behavior).
   await ensureAuthHeaders(opts, { requireToken: true });
-  return createOrpcClient(opts);
+  const client = createOrpcClient(opts);
+
+  // A GUI password dialog cannot be answered by a pipeline or a CI job, where
+  // it would hang until timeout rather than fail outright. Interactive use is
+  // the only place the prompt is a question rather than a stall — so the
+  // decision to wrap lives here, and the wrapper itself stays pure.
+  if (!process.stderr.isTTY) return client;
+  return withAutoElevation(client, opts);
+}
+
+/** Does this failure mean "you need master", whatever shape it arrived in? */
+function isMasterKeyRequired(error: unknown): boolean {
+  return error instanceof ORPCError && error.code === 'MASTER_KEY_REQUIRED';
+}
+
+/**
+ * Step up, once, in response to a refusal — or report that we cannot.
+ *
+ * Bails when a privileged session is already live: the failing request went out
+ * under it and was still refused, so this is a genuine permissions answer and
+ * elevating again would only add a password prompt to a command that is going
+ * to fail anyway.
+ */
+async function elevateForRetry(opts: GlobalOptions): Promise<boolean> {
+  if (await hasLiveSession()) return false;
+  try {
+    const session = await elevateWithGrant(opts);
+    const auth = await getAuthConfig();
+    await activateSession(session, resolveApiUrl(opts, auth.apiUrl));
+    return true;
+  } catch {
+    // Not enrolled, grant revoked, exchange refused — all end the same way for
+    // the caller: they see the server's own MASTER_KEY_REQUIRED message, which
+    // already points at `am auth elevate`.
+    return false;
+  }
+}
+
+/**
+ * Wrap a client so a master-gated call elevates and retries instead of failing.
+ *
+ * This is what makes privileged commands feel like `sudo`: run `am identity
+ * create`, the OS asks for your login password, the command proceeds. Nothing
+ * per-command is needed — the wrapper keys off the server's typed
+ * MASTER_KEY_REQUIRED, so the ~100 gated endpoints are covered by construction
+ * and a newly-gated one is covered the day it ships. A hardcoded list of
+ * privileged commands would have started drifting immediately.
+ *
+ * Retrying on the same client is deliberate and safe: `OpenAPILink` resolves
+ * `url()` and `headers()` per request, so the second attempt reads the freshly
+ * written profile and goes out under the elevated key. Rebuilding the client
+ * would work too, and would only obscure that.
+ *
+ * The retry is not itself wrapped, so a command can prompt at most once.
+ */
+export function withAutoElevation(
+  client: AnimaClient,
+  opts: GlobalOptions,
+  // Injected so a test can drive the retry logic without a keychain, a server,
+  // or a `mock.module` on elevation.js — wholesale-mocking a module in this
+  // repo silently drops the test file the moment that module gains an export.
+  elevate: (opts: GlobalOptions) => Promise<boolean> = elevateForRetry,
+): AnimaClient {
+  const wrap = <T extends object>(target: T): T =>
+    new Proxy(target, {
+      get(obj, prop, receiver) {
+        const value = Reflect.get(obj, prop, receiver) as unknown;
+
+        if (typeof value === 'function') {
+          const call = value as (...args: unknown[]) => Promise<unknown>;
+          return async (...args: unknown[]) => {
+            try {
+              return await call.apply(obj, args);
+            } catch (error: unknown) {
+              if (!isMasterKeyRequired(error)) throw error;
+              process.stderr.write('This needs admin access — authenticating…\n');
+              if (!(await elevate(opts))) throw error;
+              // Deliberately `call`, not the wrapped member: a second refusal
+              // under the elevated key is a real answer, and re-entering the
+              // wrapper here would prompt in a loop against a server that has
+              // already said no.
+              return call.apply(obj, args);
+            }
+          };
+        }
+
+        // The contract client is nested namespaces (`orpc.agent.create`), so
+        // the wrapper has to follow them down to reach the callable leaves.
+        if (value !== null && typeof value === 'object') return wrap(value as object);
+        return value;
+      },
+    });
+
+  return wrap(client);
 }
 
 /**

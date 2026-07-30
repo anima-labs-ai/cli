@@ -36,6 +36,7 @@ import { requireNonEmptyArg } from '../../lib/args.js';
 import { ApiError } from '../../lib/api-client.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { getAuthConfig } from '../../lib/config.js';
+import { activateSession, elevateWithGrant } from '../../lib/elevation.js';
 import { Output } from '../../lib/output.js';
 
 interface StreamEvent {
@@ -155,6 +156,13 @@ export function tailCommand(): Command {
       }
       const apiUrl = auth.apiUrl ?? 'https://api.useanima.sh';
 
+      // Reassignable because a mid-stream step-up swaps the credential. The
+      // oRPC commands get this for free — their link re-reads config per
+      // request — but `tail` holds one long-lived connection and passes the
+      // key by hand, so it has to carry the new one across the reconnect.
+      let credential = apiKey;
+      let elevationAttempted = false;
+
       const controller = new AbortController();
       const onSigint = () => {
         output.info('\n[am tail] disconnecting…');
@@ -172,7 +180,7 @@ export function tailCommand(): Command {
       let backoff = INITIAL_BACKOFF_MS;
       while (!controller.signal.aborted) {
         try {
-          await streamOnce(apiUrl, apiKey, opts, controller.signal, output);
+          await streamOnce(apiUrl, credential, opts, controller.signal, output);
           // streamOnce only returns by abort or throw; reaching here is unexpected.
           break;
         } catch (error) {
@@ -184,6 +192,27 @@ export function tailCommand(): Command {
           // first response already gave. `/v1/events/stream` calls
           // requireMaster, and the key `am init` stores is an agent key.
           if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+            // The stream is master-only, and the key `am init` stores is an
+            // agent key — so 403 is the expected first answer here, not an
+            // anomaly. Step up and reconnect rather than reporting a dead end.
+            // Once only: a second 403 under an elevated key is a real refusal.
+            if (error.status === 403 && !elevationAttempted && process.stderr.isTTY) {
+              elevationAttempted = true;
+              output.info('[am tail] The stream needs admin access — authenticating…');
+              try {
+                const session = await elevateWithGrant(globals);
+                await activateSession(session, apiUrl);
+                credential = session.apiKey;
+                // Straight back into the loop: this is a fresh credential, not
+                // a flaky connection, so the backoff would only add delay.
+                continue;
+              } catch (elevationError: unknown) {
+                output.warn(
+                  elevationError instanceof Error ? elevationError.message : String(elevationError),
+                );
+              }
+            }
+
             output.error(
               error.status === 403
                 ? '[am tail] This credential cannot read the event stream.'
@@ -191,7 +220,7 @@ export function tailCommand(): Command {
             );
             output.info(
               error.status === 403
-                ? 'The stream is master-only. Use a master key (mk_…) — `am init` → "existing API key" — or sign in as an org owner with `am auth login`.'
+                ? 'The stream is master-only. Run `am auth elevate` once to enrol this machine, or use a master key (mk_…) via `am init` → "existing API key".'
                 : 'Run `am auth login`, or configure an API key with `am init`.',
             );
             process.exit(1);

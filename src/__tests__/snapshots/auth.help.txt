@@ -10,6 +10,6 @@ Commands:
                      pass --api-key for non-interactive use
   logout             Clear stored authentication credentials
   whoami             Display current authentication status
-  elevate [options]  Get temporary admin access using a code emailed to the org
-                     owner
+  elevate [options]  Get temporary admin access, using this machine or a code
+                     emailed to the owner
   help [command]     display help for command
