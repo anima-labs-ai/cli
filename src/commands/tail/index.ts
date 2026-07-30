@@ -68,10 +68,27 @@ function formatLine(event: StreamEvent): string {
   return `[${ts}] ${ch} | ${agent} | ${evType} ${detail}`;
 }
 
-function buildStreamUrl(apiUrl: string, options: TailOptions): string {
-  const url = new URL('/v1/events/stream', apiUrl);
+/**
+ * Exported for testing. The parameter names here are a wire contract with
+ * `routes/handlers/events-stream.ts`, and getting one wrong fails silently in
+ * the worst direction — see `agent_id` below.
+ */
+export function buildStreamUrl(apiUrl: string, options: TailOptions): string {
+  // Concatenated, not `new URL('/v1/…', apiUrl)`. A root-relative path replaces
+  // the base's own path, so an apiUrl of `https://host/api` produced
+  // `https://host/v1/events/stream` and lost the `/api` mount — while every
+  // oRPC command builds `${base}/v1` and keeps it. Only `tail` would have
+  // broken, and only against a path-mounted deployment.
+  const url = new URL(`${apiUrl.replace(/\/$/, '')}/v1/events/stream`);
   if (options.filter) url.searchParams.set('channel', options.filter);
-  if (options.agent) url.searchParams.set('agentId', options.agent);
+  // `agent_id`, not `agentId`. The server reads `request.query.agent_id`, so
+  // the camelCase spelling this used to send was dropped as an unknown
+  // parameter and the filter never applied. Nothing surfaced: `--agent` was
+  // accepted, the header line printed the agent back, and the stream then
+  // showed every agent in the org. Silently showing more than was asked for is
+  // the wrong way for a filter to fail — someone watching one agent would have
+  // read the whole org's activity as that agent's.
+  if (options.agent) url.searchParams.set('agent_id', options.agent);
   return url.toString();
 }
 
