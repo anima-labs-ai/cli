@@ -242,30 +242,63 @@ export function withAutoElevation(
   const wrap = <T extends object>(target: T): T =>
     new Proxy(target, {
       get(obj, prop, receiver) {
+        // `then` must not look callable, or this proxy is a thenable.
+        //
+        // `requireOrpcAuth` is async and returns this, so the async machinery
+        // probes `.then` on every command. oRPC's client is a path-building
+        // proxy where *every* access yields a callable, so the probe found one,
+        // the wrapper turned it into an ordinary async function, and JS invoked
+        // it for real — sending `then` down the wire as a procedure name and
+        // killing every command with "expect a contract procedure at
+        // then.apply" before it reached the network.
+        //
+        // Returning undefined makes `await` treat this as a plain value and
+        // resolve to the wrapper. Passing oRPC's own guarded `then` through
+        // instead would also stop the crash, but its apply-trap resolves to
+        // *oRPC's* client rather than this one — auto-elevation would vanish
+        // silently, which is worse than a crash. No contract procedure is
+        // named `then`; oRPC assumes the same in `preventNativeAwait`.
+        if (prop === 'then') return undefined;
+
         const value = Reflect.get(obj, prop, receiver) as unknown;
 
-        if (typeof value === 'function') {
-          const call = value as (...args: unknown[]) => Promise<unknown>;
-          return async (...args: unknown[]) => {
-            try {
-              return await call.apply(obj, args);
-            } catch (error: unknown) {
-              if (!isMasterKeyRequired(error)) throw error;
-              process.stderr.write('This needs admin access — authenticating…\n');
-              if (!(await elevate(opts))) throw error;
-              // Deliberately `call`, not the wrapped member: a second refusal
-              // under the elevated key is a real answer, and re-entering the
-              // wrapper here would prompt in a loop against a server that has
-              // already said no.
-              return call.apply(obj, args);
-            }
-          };
-        }
+        // Symbols are protocol hooks (`Symbol.toPrimitive`, inspection, async
+        // iteration), never contract procedures. Wrapping them would change
+        // how the object behaves in language-level operations.
+        if (typeof prop === 'symbol') return value;
 
-        // The contract client is nested namespaces (`orpc.agent.create`), so
-        // the wrapper has to follow them down to reach the callable leaves.
-        if (value !== null && typeof value === 'object') return wrap(value as object);
+        // Anything traversable gets wrapped and nothing is replaced.
+        //
+        // An oRPC path node is BOTH callable and traversable — `orpc.agent` is
+        // a function *and* the way to reach `orpc.agent.create`. Returning a
+        // plain async function for it, as this used to, satisfied the call
+        // case and destroyed the traversal: `orpc.agent.create` came back
+        // undefined. Nothing caught it, because the test fixture was a plain
+        // object whose `agent` is not callable, so it took the recursive
+        // branch that real usage never reached.
+        //
+        // Keeping the node itself as the proxy target preserves both: `get`
+        // walks the path, and the `apply` trap below handles the call.
+        if (value !== null && (typeof value === 'object' || typeof value === 'function')) {
+          return wrap(value as object);
+        }
         return value;
+      },
+
+      async apply(obj, thisArg, args) {
+        const call = obj as unknown as (...a: unknown[]) => Promise<unknown>;
+        try {
+          return await Reflect.apply(call, thisArg, args);
+        } catch (error: unknown) {
+          if (!isMasterKeyRequired(error)) throw error;
+          process.stderr.write('This needs admin access — authenticating…\n');
+          if (!(await elevate(opts))) throw error;
+          // Deliberately the raw target, not the wrapped member: a second
+          // refusal under the elevated key is a real answer, and re-entering
+          // the wrapper here would prompt in a loop against a server that has
+          // already said no.
+          return Reflect.apply(call, thisArg, args);
+        }
       },
     });
 

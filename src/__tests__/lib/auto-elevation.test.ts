@@ -23,6 +23,23 @@ function fakeClient(create: () => Promise<unknown>) {
   return { agent: { create } } as unknown as AnimaClient;
 }
 
+/**
+ * A stand-in for what oRPC actually hands us: a path-building Proxy where
+ * *every* property access yields a callable, including `then`.
+ *
+ * The plain object above cannot reproduce the failure this guards, because a
+ * plain object simply has no `then`. That is how the bug shipped: five green
+ * tests against a fixture that was missing the one property that mattered.
+ */
+function pathProxyClient(onCall: (path: string[]) => Promise<unknown>): AnimaClient {
+  const build = (path: string[]): unknown =>
+    new Proxy(() => {}, {
+      get: (_t, prop) => (typeof prop === 'string' ? build([...path, prop]) : undefined),
+      apply: () => onCall(path),
+    });
+  return build([]) as AnimaClient;
+}
+
 describe('withAutoElevation', () => {
   test('elevates once and retries when the server demands master', async () => {
     let calls = 0;
@@ -90,6 +107,54 @@ describe('withAutoElevation', () => {
     // A 404 is not an authorisation problem; prompting for a password here
     // would train users to type it at unrelated failures.
     expect(elevations).toBe(0);
+  });
+
+  test('the wrapped client survives being awaited', async () => {
+    // `requireOrpcAuth` is async and returns this proxy, so the async
+    // machinery probes it for `.then` on every single command. Against oRPC's
+    // path-building proxy that probe yields a callable, the wrapper turned it
+    // into a plain async function, and JS then invoked it as a real thenable —
+    // sending `then` down the wire as a procedure name. Every command died
+    // with "expect a contract procedure at then.apply" before reaching the
+    // network.
+    const wrapped = withAutoElevation(
+      pathProxyClient(async (path) => ({ path })),
+      OPTS,
+      async () => true,
+    );
+
+    const resolved = await (async () => wrapped)();
+
+    // Must resolve to the wrapper itself. Passing `then` through untouched
+    // would also stop the crash, but oRPC's own guard resolves to *its*
+    // client — auto-elevation would silently disappear instead.
+    expect(await resolved.agent.create({} as never)).toEqual({
+      path: ['agent', 'create'],
+    } as never);
+  });
+
+  test('elevate-and-retry works against a path-building client too', async () => {
+    // The same contract as the first test, but through the proxy shape oRPC
+    // actually returns. Running it only against a plain object is what let a
+    // wrapper that broke `orpc.agent.create` pass five tests.
+    let calls = 0;
+    const client = pathProxyClient(async (path) => {
+      calls += 1;
+      if (calls === 1) throw masterRequired();
+      return { path };
+    });
+
+    let elevations = 0;
+    const wrapped = withAutoElevation(client, OPTS, async () => {
+      elevations += 1;
+      return true;
+    });
+
+    expect(await wrapped.agent.create({} as never)).toEqual({
+      path: ['agent', 'create'],
+    } as never);
+    expect(calls).toBe(2);
+    expect(elevations).toBe(1);
   });
 
   test('a successful call never elevates', async () => {
