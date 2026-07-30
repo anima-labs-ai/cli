@@ -34,7 +34,7 @@ import { Command } from 'commander';
 import { requireNonEmptyArg } from '../../lib/args.js';
 
 import { ApiError } from '../../lib/api-client.js';
-import { type GlobalOptions } from '../../lib/auth.js';
+import { type GlobalOptions, resolveApiUrl } from '../../lib/auth.js';
 import { getAuthConfig } from '../../lib/config.js';
 import { activateSession, elevateWithGrant } from '../../lib/elevation.js';
 import { Output } from '../../lib/output.js';
@@ -171,7 +171,11 @@ export function tailCommand(): Command {
       if (!apiKey) {
         output.fatal('Not authenticated. Run `anima auth login` or set an API key first.');
       }
-      const apiUrl = auth.apiUrl ?? 'https://api.useanima.sh';
+      // `resolveApiUrl`, not `auth.apiUrl` directly: reading the stored value
+      // ignored the global `--api-url` flag and ANIMA_API_URL, so `am tail`
+      // was the one command that could not be pointed at a local or staging
+      // server — it silently went to whatever the config said, i.e. production.
+      const apiUrl = resolveApiUrl(globals, auth.apiUrl);
 
       // Reassignable because a mid-stream step-up swaps the credential. The
       // oRPC commands get this for free — their link re-reads config per
