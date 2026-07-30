@@ -435,9 +435,40 @@ describe('config', () => {
       expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
     });
 
-    test('a profile without an expiry never lapses', async () => {
+    test('an admin session with no recorded expiry is treated as dead, not eternal', async () => {
       await withElevatedProfile(undefined);
-      expect((await config.getAuthConfig()).apiKey).toBe('sk_live_master');
+      // The migration case, and a regression this fix caused before it was
+      // caught: elevating with the previous CLI left an active
+      // `<org>-elevated` profile holding a 15-minute key and no expiry.
+      // Nothing read profiles then, so it sat inert. The moment profiles began
+      // supplying the credential it became the *selected* one, and every
+      // command failed with "Session expired. Run `am auth login`" — wrong
+      // twice over, since the agent key underneath is fine and `auth login` is
+      // not how this profile refreshes.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
+    });
+
+    test('an ordinary profile without an expiry is a durable identity and still works', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: { work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' } },
+      });
+      // Only *sessions* are stood down for a missing expiry. Applying it to
+      // every profile would lock people out of the credential they chose.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_work');
+    });
+
+    test('the org-less session name is recognised too', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'elevated',
+        profiles: { elevated: { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' } },
+      });
+      // `elevatedProfileName(undefined)` produces a bare `elevated`, which a
+      // plain `-elevated` suffix check would miss — leaving exactly the
+      // org-less setup unable to recover from a stale session.
+      expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
     });
 
     test('auth.json still wins when no profile is active', async () => {
@@ -469,7 +500,15 @@ describe('config', () => {
       });
       await config.saveConfig({
         activeProfile: 'org-elevated',
-        profiles: { 'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' } },
+        profiles: {
+          // Needs a live expiry: a session profile without one is treated as
+          // dead, and the overlay under test would correctly never run.
+          'org-elevated': {
+            apiUrl: 'https://api.useanima.sh',
+            apiKey: 'sk_live_master',
+            expiresAt: ISO_FUTURE,
+          },
+        },
       });
       const auth = await config.getAuthConfig();
       // `ensureAuthHeaders` prefers `token` over `apiKey`, so a leftover OAuth

@@ -32,7 +32,13 @@
  */
 
 import { type GlobalOptions, resolveApiUrl } from './auth.js';
-import { getAuthConfig, getConfig, saveConfig, secureStore as store } from './config.js';
+import {
+  ELEVATED_PROFILE_SUFFIX,
+  getAuthConfig,
+  getConfig,
+  saveConfig,
+  secureStore as store,
+} from './config.js';
 
 /** Keychain account holding an org's grant. Namespaced so it cannot collide
  *  with auth.json's host-keyed accounts or `profile:<name>` entries. */
@@ -226,7 +232,7 @@ export async function elevateWithGrant(opts: GlobalOptions): Promise<ElevatedSes
 
 /** The profile a privileged session lands in. */
 export function elevatedProfileName(orgId: string | undefined): string {
-  return orgId ? `${orgId}-elevated` : 'elevated';
+  return orgId ? `${orgId}-${ELEVATED_PROFILE_SUFFIX}` : ELEVATED_PROFILE_SUFFIX;
 }
 
 /**

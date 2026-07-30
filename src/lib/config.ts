@@ -24,6 +24,7 @@ function getPaths(): ReturnType<typeof envPaths> {
 export function resetPathsCache(): void {
   _paths = null;
   _pathsOverride = null;
+  _warnedExpiredProfiles.clear();
   // Also clear the implicit in-memory keychain that setPathsOverride installs
   // for tests — otherwise leftover credentials could leak between specs.
   setSecureStoreOverride(null);
@@ -511,11 +512,60 @@ export async function getAuthConfig(): Promise<AuthConfig> {
   return { ...metadata, ...secrets };
 }
 
+/**
+ * Suffix marking a profile as a privileged *session* rather than an identity.
+ *
+ * Only `am auth elevate` writes one. Lives here rather than in elevation.ts
+ * because `activeProfileCredential` has to recognise one, and elevation.ts
+ * already depends on this module — the other direction would be a cycle.
+ */
+export const ELEVATED_PROFILE_SUFFIX = 'elevated';
+
+/**
+ * Is this profile a privileged session rather than a durable identity?
+ *
+ * Matches both names `elevatedProfileName` can produce: `<orgId>-elevated`,
+ * and the bare `elevated` used when no default org is set. Exported so the two
+ * are decided in one place — a predicate that missed the bare form would leave
+ * exactly the org-less setup unable to recover from a stale session.
+ */
+export function isElevatedProfileName(name: string): boolean {
+  return name === ELEVATED_PROFILE_SUFFIX || name.endsWith(`-${ELEVATED_PROFILE_SUFFIX}`);
+}
+
+/** Session profiles already warned about, so the notice is emitted once per run. */
+const _warnedExpiredProfiles = new Set<string>();
+
 /** True when `iso` names a moment already past. Absent/unparseable → not expired. */
 function hasLapsed(iso: string | undefined): boolean {
   if (!iso) return false;
   const at = Date.parse(iso);
   return Number.isFinite(at) && at <= Date.now();
+}
+
+/**
+ * Has this profile's credential stopped working?
+ *
+ * A session profile with no recorded expiry is treated as lapsed rather than
+ * as eternal. Sessions last minutes, and `expiresAt` is absent only on ones
+ * written before the CLI recorded it — so by the time anything reads such a
+ * profile, its key is certainly dead.
+ *
+ * That case is a real migration, not a hypothetical: elevating with the
+ * previous CLI left an active `<org>-elevated` profile holding a 15-minute key
+ * and no expiry. Nothing read profiles then, so it was inert. The moment
+ * profiles began supplying the credential it became the *selected* one, and
+ * every command started failing with "Session expired. Run `am auth login`" —
+ * advice that is wrong twice over, since the agent key underneath is fine and
+ * `auth login` is not how this profile is refreshed.
+ *
+ * Only session profiles get this treatment. An ordinary profile is a durable
+ * identity whose key legitimately has no expiry, and standing those down would
+ * lock people out of exactly the credential they chose.
+ */
+function profileCredentialLapsed(name: string, profile: ProfileConfig): boolean {
+  if (hasLapsed(profile.expiresAt)) return true;
+  return profile.expiresAt === undefined && isElevatedProfileName(name);
 }
 
 /**
@@ -551,11 +601,17 @@ async function activeProfileCredential(): Promise<{ apiKey: string; apiUrl?: str
   // Silently sending the dead key would turn an expected 15-minute expiry
   // into an unexplained 401 on every later command, and the user would have
   // no reason to connect the two.
-  if (hasLapsed(active.config.expiresAt)) {
-    process.stderr.write(
-      `[anima] profile "${active.name}" expired at ${active.config.expiresAt}; ` +
-        `falling back to your default credential. Re-run \`am auth elevate\` for admin access.\n`,
-    );
+  if (profileCredentialLapsed(active.name, active.config)) {
+    // Once per process. `getAuthConfig` is called for each URL and header
+    // resolution, so a bare write repeated the same line four times before a
+    // single command's output — enough noise to read as four separate faults.
+    if (!_warnedExpiredProfiles.has(active.name)) {
+      _warnedExpiredProfiles.add(active.name);
+      process.stderr.write(
+        `[anima] admin session "${active.name}" has expired; using your default credential instead. ` +
+          'Run `am auth elevate` when you next need admin access.\n',
+      );
+    }
     return null;
   }
 
