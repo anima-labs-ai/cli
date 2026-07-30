@@ -210,6 +210,15 @@ export function elevateCommand(): Command {
     });
 }
 
-function backToNormal(profile: string, previous: string | undefined): string {
-  return `Switched to profile "${profile}". Back to normal:  am config profile use ${previous ?? 'default'}`;
+/**
+ * How to get back, in a command that exists.
+ *
+ * This used to fall back to `am config profile use default` when there was no
+ * previous profile — and there is no profile named `default`. "Normal" is
+ * `activeProfile` being unset, so the sign-off pointed every first-time user
+ * at a command that could only answer `Profile "default" does not exist`.
+ */
+export function backToNormal(profile: string, previous: string | undefined): string {
+  const undo = previous ? `am config profile use ${previous}` : 'am config profile clear';
+  return `Switched to profile "${profile}". Back to normal:  ${undo}`;
 }

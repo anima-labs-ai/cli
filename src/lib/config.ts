@@ -193,6 +193,21 @@ export async function setActiveProfile(name: string): Promise<void> {
   await saveConfig(config);
 }
 
+/**
+ * Stop using any profile, without deleting it.
+ *
+ * The counterpart `setActiveProfile` never had. "No profile" is a real state —
+ * `activeProfile` unset, so top-level config answers — but the only way to
+ * reach it was `deleteProfile`, which destroys the credential too. A user who
+ * elevated and wanted their ordinary identity back had to throw away the
+ * session to get it.
+ */
+export async function clearActiveProfile(): Promise<void> {
+  const config = await getConfig();
+  if (config.activeProfile === undefined) return;
+  await saveConfig({ ...config, activeProfile: undefined });
+}
+
 export async function deleteProfile(name: string): Promise<void> {
   const config = await getConfig();
   if (!config.profiles?.[name]) {

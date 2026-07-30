@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { Output } from '../../lib/output.js';
 import type { GlobalOptions } from '../../lib/auth.js';
 import {
+  clearActiveProfile,
   setActiveProfile,
   deleteProfile,
   listProfiles,
@@ -23,6 +24,35 @@ export function configProfileCommand(): Command {
         try {
           await setActiveProfile(name);
           output.success(`Switched to profile "${name}"`);
+        } catch (err: unknown) {
+          output.fatal(err instanceof Error ? err.message : String(err));
+        }
+      }),
+  );
+
+  cmd.addCommand(
+    new Command('clear')
+      .description('Stop using any profile and fall back to your top-level config')
+      .action(async function (this: Command) {
+        const globals = this.optsWithGlobals<GlobalOptions>();
+        const output = Output.fromGlobals(globals);
+
+        // There was no way back. `use` requires a profile that exists, and
+        // "normal" is not a profile called `default` — it is `activeProfile`
+        // being unset, which only `delete` produced, and only by destroying
+        // the profile. `am auth elevate` consequently signed off with
+        // `am config profile use default`, a command that always failed.
+        const active = await getActiveProfile();
+        if (!active) {
+          output.success('No profile was active — already using your top-level config.');
+          return;
+        }
+
+        try {
+          await clearActiveProfile();
+          // Named, because the point of the command is usually "get me off
+          // whatever elevate switched me to" and the answer is worth seeing.
+          output.success(`Stopped using profile "${active.name}". Now on your top-level config.`);
         } catch (err: unknown) {
           output.fatal(err instanceof Error ? err.message : String(err));
         }
