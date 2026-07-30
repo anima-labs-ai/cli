@@ -43,6 +43,7 @@ import {
 	saveAuthConfig,
 	saveConfig,
 } from "../../lib/config.js";
+import { enrollmentFor } from "../../lib/elevation.js";
 import { handleOrpcError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
 
@@ -659,7 +660,7 @@ function masterKeyGuidance(orgId: string): string {
 		"Or, if you already have a master key:",
 		"  1. Open https://console.useanima.sh and copy your master key (mk_…)",
 		"  2. am init  →  “Configure with an existing API key”",
-		`  3. am identity create --org ${orgId} --name "…" --slug "…"`,
+		'  3. am identity create --name "…" --slug "…"',
 	].join("\n");
 }
 
@@ -679,8 +680,15 @@ async function createAgentInCurrentOrg(
 	// Check before prompting, not after. Asking for a name and a slug and then
 	// failing on the request wastes the answers and reports the problem as
 	// though the input caused it.
+	// Enrolment counts as capability. This used to look only at the key prefix,
+	// which was right when it was written — sign-up never returns an `mk_`, so
+	// an `ak_` meant no route existed at all. An enrolled machine now has one:
+	// `requireOrpcAuth` steps up on MASTER_KEY_REQUIRED and retries. Refusing on
+	// the prefix alone would turn the discoverable path into a dead end while
+	// `am identity create` succeeded, for the same org, on the same machine.
 	const auth = await getAuthConfig();
-	if (masterCapability(auth.apiKey) === "no") {
+	const enrolled = (await enrollmentFor(orgId)) !== undefined;
+	if (!enrolled && masterCapability(auth.apiKey) === "no") {
 		clack.note(masterKeyGuidance(orgId), "This needs a master key");
 		clack.outro("Nothing changed.");
 		return;
