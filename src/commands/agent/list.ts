@@ -90,7 +90,7 @@ export function listIdentitiesCommand(): Command {
           },
         );
       } catch (error: unknown) {
-        handleOrpcError(error, output, 'Failed to list identities', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.' }, codeMessages: { USER_AUTH_REQUIRED: 'Cross-org listing requires user authentication (Clerk session or OAuth). Run `am auth login --web`, or pass --org explicitly when using an API key.' } });
+        handleOrpcError(error, output, 'Failed to list agents', { statusMessages: { 403: 'Forbidden: you do not have access to this organization.' }, codeMessages: { USER_AUTH_REQUIRED: 'Cross-org listing needs a signed-in user or an OAuth token. Run `am auth login --web`, or pass --org explicitly when using an API key.' } });
       }
     });
 }

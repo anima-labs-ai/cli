@@ -82,7 +82,7 @@ function buildAgentResponse(overrides: Record<string, unknown> = {}): Record<str
   };
 }
 
-describe('identity commands', () => {
+describe('agent commands', () => {
   beforeEach(() => {
     resetPathsCache();
     setPathsOverride({
@@ -430,7 +430,7 @@ describe('identity commands', () => {
     process.exit = originalExit;
 
     const output = errorSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes('Failed to list identities: Too many requests')).toBe(true);
+    expect(output.includes('Failed to list agents: Too many requests')).toBe(true);
     expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
   });
 });

@@ -32,7 +32,7 @@ export function memberInviteCommand(): Command {
       // reads as a broken CLI.
       output.error('Inviting members is not available from the CLI.');
       output.info(
-        'Organization membership is managed in Clerk. Send invitations at https://console.useanima.sh/settings/members.',
+        'Organization membership is managed in the console. Send invitations at https://console.useanima.sh/settings/members.',
       );
       process.exit(1);
     });

@@ -35,7 +35,7 @@ export function memberRoleCommand(): Command {
       // reads as a broken CLI.
       output.error('Changing member roles is not available from the CLI.');
       output.info(
-        'Organization membership is managed in Clerk. Change roles at https://console.useanima.sh/settings/members.',
+        'Organization membership is managed in the console. Change roles at https://console.useanima.sh/settings/members.',
       );
       process.exit(1);
     });
