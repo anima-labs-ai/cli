@@ -86,15 +86,18 @@ function buildCallResponse(overrides: Record<string, unknown> = {}): Record<stri
 }
 
 // Build a complete VoiceSchema-shaped catalog entry.
+// Mirrors VoiceSchema. The catalog is deliberately vendor-neutral — it carries
+// no provider or tier, so neither does this.
 function buildVoice(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'v1',
     name: 'Aria',
-    provider: 'elevenlabs',
-    tier: 'premium',
     gender: 'female',
     language: 'en-US',
-    style: 'warm',
+    accent: 'american',
+    age: 'young',
+    descriptors: ['warm', 'conversational'],
+    useCases: ['support'],
     ...overrides,
   };
 }
@@ -209,12 +212,14 @@ describe('voice commands', () => {
         status: 200,
         body: {
           voices: [
-            buildVoice({ id: 'v1', name: 'Aria', provider: 'elevenlabs', tier: 'premium' }),
-            buildVoice({ id: 'v2', name: 'Marcus', provider: 'telnyx', tier: 'basic', gender: 'male', style: 'neutral' }),
+            buildVoice({ id: 'v1', name: 'Aria' }),
+            buildVoice({ id: 'v2', name: 'Marcus', gender: 'male', descriptors: ['neutral'] }),
           ],
         },
         assert: ({ url }) => {
-          expect(url.searchParams.get('tier')).toBe('premium');
+          // `--gender`/`--language` are the filters the catalog still accepts;
+          // `--tier` went when the schema stopped exposing a tier at all.
+          expect(url.searchParams.get('gender')).toBe('female');
         },
       });
 
@@ -223,7 +228,7 @@ describe('voice commands', () => {
       console.log = logSpy;
 
       try {
-        await runProgram(['voice', 'catalog', '--tier', 'premium']);
+        await runProgram(['voice', 'catalog', '--gender', 'female']);
       } finally {
         console.log = originalLog;
       }

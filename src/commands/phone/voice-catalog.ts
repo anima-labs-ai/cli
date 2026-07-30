@@ -4,7 +4,6 @@ import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
 
 interface VoiceCatalogOptions {
-  tier?: 'basic' | 'premium';
   gender?: 'male' | 'female' | 'neutral';
   language?: string;
 }
@@ -12,7 +11,6 @@ interface VoiceCatalogOptions {
 export function voiceCatalogCommand(): Command {
   return new Command('voices')
     .description('List available voices for AI agent phone calls')
-    .option('--tier <tier>', 'Filter by tier (basic or premium)')
     .option('--gender <gender>', 'Filter by gender (male, female, neutral)')
     .option('--language <lang>', 'Filter by language code (e.g. en, en-US, fr-FR)')
     .action(async function (this: Command) {
@@ -24,11 +22,9 @@ export function voiceCatalogCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
 
         const input: {
-          tier?: 'basic' | 'premium';
           gender?: 'male' | 'female' | 'neutral';
           language?: string;
         } = {};
-        if (opts.tier) input.tier = opts.tier;
         if (opts.gender) input.gender = opts.gender;
         if (opts.language) input.language = opts.language;
 
@@ -45,16 +41,15 @@ export function voiceCatalogCommand(): Command {
         }
 
         output.table(
-          ['ID', 'Name', 'Provider', 'Tier', 'Gender', 'Language', 'Style', 'Description'],
+          ['ID', 'Name', 'Gender', 'Language', 'Accent', 'Age', 'Sounds like'],
           response.voices.map((v) => [
             v.id,
             v.name,
-            v.provider,
-            v.tier,
-            v.gender ?? '-',
+            v.gender,
             v.language,
-            v.style ?? '-',
-            v.description ? (v.description.length > 40 ? `${v.description.slice(0, 40)}...` : v.description) : '-',
+            v.accent ?? '-',
+            v.age ?? '-',
+            v.descriptors.length > 0 ? v.descriptors.join(', ') : '-',
           ]),
         );
 

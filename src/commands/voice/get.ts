@@ -35,7 +35,6 @@ export function getCallCommand(): Command {
           ['State', call.state],
           ['From', call.from],
           ['To', call.to],
-          ['Tier', call.tier],
           ['Duration', formatDuration(call.durationSeconds)],
           ['Started', new Date(call.startedAt).toLocaleString()],
           ['Ended', call.endedAt ? new Date(call.endedAt).toLocaleString() : '-'],
