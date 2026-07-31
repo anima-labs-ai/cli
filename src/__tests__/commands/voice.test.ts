@@ -727,12 +727,14 @@ describe('voice commands', () => {
       process.exit = mock(() => {}) as unknown as typeof process.exit;
 
       try {
-        // `--human` on purpose: tests force the `agent` format (see
-        // resolveFormat), and `output.info` is deliberately suppressed
-        // there, so the remedy line under test would never render. It has
-        // to precede the subcommand — the program sets
-        // enablePositionalOptions().
-        await runProgram(['--human', 'voice', 'place', '--to', '+14155550142']);
+        // No `--human`: tests force the `agent` format (see resolveFormat),
+        // which is the format an agent driving the CLI actually gets. The
+        // remedies go through `output.notice`, which renders in EVERY format
+        // — so asserting here proves the guidance reaches the caller that
+        // most needs it. (These previously passed `--human` to work around
+        // `output.info` being human-only, which meant the machine path was
+        // never covered by the tests that existed to cover it.)
+        await runProgram(['voice', 'place', '--to', '+14155550142']);
       } finally {
         console.error = originalError;
         console.log = originalLog;
@@ -770,6 +772,40 @@ describe('voice commands', () => {
       const all = [...errors, ...infos].join('\n');
       expect(all).toContain('next cycle');
       expect(all).not.toContain('Metered overage');
+    });
+
+    /**
+     * The remedy is the only part of a 402 that tells the caller what to DO,
+     * and it used to be the one part an agent could not see: `output.error`
+     * renders in every format, `output.info` renders only for humans. So a
+     * script hitting the spend ceiling got "payment required" and nothing
+     * else — no mention of the setting that would clear it.
+     *
+     * Asserted as PARSED JSON rather than a substring, because reaching the
+     * caller is not enough: an agent has to be able to read it off stderr
+     * without scraping prose.
+     */
+    test('the remedy is machine-readable, not human-only decoration', async () => {
+      const { errors } = await place402({
+        error: {
+          code: 'PAYMENT_REQUIRED',
+          message: "Your plan's included voice minutes are used up.",
+          details: { resource: 'voice', overageUsedCents: 0, overageCapCents: 0 },
+        },
+      });
+
+      const notices = errors
+        .map((line) => {
+          try {
+            return JSON.parse(line) as { status?: string; message?: string };
+          } catch {
+            return null;
+          }
+        })
+        .filter((doc): doc is { status: string; message: string } => doc?.status === 'notice');
+
+      expect(notices).toHaveLength(1);
+      expect(notices[0]?.message).toContain('overage');
     });
   });
 });

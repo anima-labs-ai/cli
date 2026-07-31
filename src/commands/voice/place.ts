@@ -112,13 +112,13 @@ export function placeCallCommand(): Command {
           // useful message rather than a generic stack trace.
           if (error.status === 503) {
             output.error(`Voice unavailable: ${error.message}`);
-            output.info(
+            output.notice(
               "If this is a fresh deploy, the phone feature may not be enabled yet, or the voice-provider credentials are missing.",
             );
           } else if (error.status === 451) {
             // TCPA consent gate — the org has not attested outbound consent.
             output.error(`Outbound not enabled: ${error.message}`);
-            output.info(
+            output.notice(
               "Complete the one-time consent attestation in the console: Settings → Outbound Calling & SMS (Starter plan and above).",
             );
           } else if (error.status === 402) {
@@ -130,14 +130,14 @@ export function placeCallCommand(): Command {
             const details = error.data as Record<string, unknown> | undefined;
             if (details?.resource === 'voice') {
               output.error(error.message);
-              output.info(
+              output.notice(
                 'Enable metered overage or raise your spend limit in the console: Billing → Metered overage.',
               );
             } else {
               output.error(
                 error.message || 'Per-plan call cap reached for this billing period.',
               );
-              output.info(
+              output.notice(
                 'Upgrade at https://console.useanima.sh/billing or wait for the next cycle.',
               );
             }
