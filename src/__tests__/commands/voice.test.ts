@@ -703,4 +703,73 @@ describe('voice commands', () => {
       expect(exitSpy.mock.calls.length).toBeGreaterThan(0);
     });
   });
+
+  /**
+   * Two different walls answer 402 and their remedies are opposite. The
+   * monthly call-count cap clears on its own next cycle; the voice spend
+   * ceiling never does — it clears when someone raises a dollar limit.
+   * Telling a blocked caller to "wait for the next cycle" when they need
+   * to change a setting sends them away for a month, so the branch has to
+   * read `details.resource` rather than assume.
+   */
+  describe('voice place — the two 402s say different things', () => {
+    async function place402(body: unknown): Promise<{ errors: string[]; infos: string[] }> {
+      setAuthenticatedConfig(serverPort);
+      setRoute('POST', '/v1/voice/calls', { status: 402, body });
+
+      const errors: string[] = [];
+      const infos: string[] = [];
+      const originalError = console.error;
+      const originalLog = console.log;
+      const originalExit = process.exit;
+      console.error = (...args: unknown[]) => { errors.push(args.join(' ')); };
+      console.log = (...args: unknown[]) => { infos.push(args.join(' ')); };
+      process.exit = mock(() => {}) as unknown as typeof process.exit;
+
+      try {
+        // `--human` on purpose: tests force the `agent` format (see
+        // resolveFormat), and `output.info` is deliberately suppressed
+        // there, so the remedy line under test would never render. It has
+        // to precede the subcommand — the program sets
+        // enablePositionalOptions().
+        await runProgram(['--human', 'voice', 'place', '--to', '+14155550142']);
+      } finally {
+        console.error = originalError;
+        console.log = originalLog;
+        process.exit = originalExit;
+      }
+      return { errors, infos };
+    }
+
+    test('the spend ceiling points at the overage setting, never at next cycle', async () => {
+      const { errors, infos } = await place402({
+        error: {
+          code: 'PAYMENT_REQUIRED',
+          message: "Your plan's included voice minutes are used up.",
+          details: { resource: 'voice', overageUsedCents: 0, overageCapCents: 0 },
+        },
+      });
+
+      const all = [...errors, ...infos].join('\n');
+      expect(all).toContain('overage');
+      // The whole point: this remedy is wrong here and must not appear.
+      expect(all).not.toContain('next cycle');
+      // The server's own wording survives rather than being overwritten.
+      expect(all).toContain('included voice minutes');
+    });
+
+    test('the call-count cap still points at upgrade-or-wait', async () => {
+      const { errors, infos } = await place402({
+        error: {
+          code: 'VOICE_MONTHLY_CAP_EXCEEDED',
+          message: 'Monthly outbound-call cap reached.',
+          details: { current: 250, cap: 250 },
+        },
+      });
+
+      const all = [...errors, ...infos].join('\n');
+      expect(all).toContain('next cycle');
+      expect(all).not.toContain('Metered overage');
+    });
+  });
 });
