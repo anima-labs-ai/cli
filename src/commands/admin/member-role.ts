@@ -34,7 +34,7 @@ export function memberRoleCommand(): Command {
       // ("this is console-only") from arriving as "Route not found", which
       // reads as a broken CLI.
       output.error('Changing member roles is not available from the CLI.');
-      output.info(
+      output.notice(
         'Organization membership is managed in the console. Change roles at https://console.useanima.sh/settings/members.',
       );
       process.exit(1);

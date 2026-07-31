@@ -319,7 +319,7 @@ async function runInteractiveNew(
 		}
 
 		output.error(error instanceof Error ? error.message : String(error));
-		output.info(
+		output.notice(
 			"Common causes: the username may be taken (try a variation), or the Anima API URL may be unreachable.",
 		);
 		process.exit(1);
@@ -851,7 +851,7 @@ async function offerExistingSetupChoices(
 			output.error(
 				"No default organization is configured, so there is no org to add an agent to.",
 			);
-			output.info("Set one with `am org switch <orgId>`, or run `am org list`.");
+			output.notice("Set one with `am org switch <orgId>`, or run `am org list`.");
 			process.exit(1);
 		}
 		await createAgentInCurrentOrg(existing.defaultOrg, globals, output);

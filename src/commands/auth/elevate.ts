@@ -116,7 +116,7 @@ export function elevateCommand(): Command {
       if (!requested.ok) {
         output.error(`Could not request a step-up code: ${requested.message}`);
         if (requested.status === 404) {
-          output.info(
+          output.notice(
             'This API does not offer step-up yet. Use a master key (mk_…) via `am init` → "existing API key".',
           );
         }
