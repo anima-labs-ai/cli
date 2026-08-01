@@ -37,7 +37,7 @@ export function extensionConnectCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.extension.connect(input);
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

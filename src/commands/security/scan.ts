@@ -32,7 +32,7 @@ export function securityScanCommand(): Command {
         }
         const result = await orpc.security.scannerStatus({ orgId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

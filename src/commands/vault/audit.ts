@@ -214,7 +214,7 @@ export function auditCommand(): Command {
           }
         }
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json({ findings, refIssues, scanned: roots, configPath });
         } else {
           if (findings.length === 0 && refIssues.length === 0) {

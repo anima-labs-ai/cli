@@ -14,7 +14,7 @@ export function listDomainsCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.domain.list({});
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

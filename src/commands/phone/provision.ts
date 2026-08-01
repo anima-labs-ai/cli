@@ -86,7 +86,7 @@ export function provisionPhoneNumberCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.phone.provision(body);
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }

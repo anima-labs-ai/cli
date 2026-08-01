@@ -17,7 +17,7 @@ export function getDraftCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const draft = await orpc.emailDraft.get({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(draft);
           return;
         }

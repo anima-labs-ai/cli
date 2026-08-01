@@ -25,15 +25,17 @@ export function transcriptCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.voice.getTranscript({ callId });
 
-        if (globals.json) {
-          output.json(response);
+        // Filtered BEFORE the format branch. `--speaker` used to be applied
+        // only on the human path, so a caller who asked for one speaker and
+        // read the structured output got both — the filter silently ignored
+        // for exactly the callers who cannot eyeball the result.
+        const segments = opts.speaker
+          ? response.segments.filter((s) => s.speaker === opts.speaker)
+          : response.segments;
+
+        if (output.isMachineFormat()) {
+          output.json({ ...response, segments });
           return;
-        }
-
-        let segments = response.segments;
-
-        if (opts.speaker) {
-          segments = segments.filter((s) => s.speaker === opts.speaker);
         }
 
         if (segments.length === 0) {

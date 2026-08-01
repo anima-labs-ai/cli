@@ -40,7 +40,7 @@ export function dispatchCommand(): Command {
           input: parsedInput,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

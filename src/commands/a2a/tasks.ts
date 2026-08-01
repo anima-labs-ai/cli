@@ -52,7 +52,7 @@ export function listTasksCommand(): Command {
           limit: limit ?? 20,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

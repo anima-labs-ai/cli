@@ -54,7 +54,7 @@ export function updateInboxCommand(): Command {
         }
         const inbox = await orpc.inbox.update(payload);
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(inbox);
           return;
         }

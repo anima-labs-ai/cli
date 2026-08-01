@@ -21,7 +21,7 @@ export function lookupAgentCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const entry = await orpc.registry.lookup({ did: opts.did });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(entry);
           return;
         }

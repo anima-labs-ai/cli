@@ -70,7 +70,7 @@ export function createAddressCommand(): Command {
           country: opts.country.toUpperCase(),
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }

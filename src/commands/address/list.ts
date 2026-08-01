@@ -53,7 +53,7 @@ export function listAddressesCommand(): Command {
           type: typeFilter,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(items);
           return;
         }

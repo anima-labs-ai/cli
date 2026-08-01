@@ -120,7 +120,7 @@ export function statusMcpCommand(): Command {
         };
       });
 
-      if (globals.json) {
+      if (output.isMachineFormat()) {
         output.json({ clients: rows });
         return;
       }

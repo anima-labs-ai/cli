@@ -21,7 +21,7 @@ export function listCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.list({ agentId: opts.agent });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

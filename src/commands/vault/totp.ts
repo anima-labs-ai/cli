@@ -22,7 +22,7 @@ export function totpCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.getTotp({ id: credentialId, agentId: opts.agent });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

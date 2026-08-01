@@ -36,7 +36,7 @@ export function reloadCommand(): Command {
           previousVersion: number | null;
         }>('/vault/reload', { agentId: opts.agent });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

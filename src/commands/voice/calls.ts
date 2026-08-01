@@ -43,7 +43,7 @@ export function listCallsCommand(): Command {
           offset: opts.offset ? Number(opts.offset) : 0,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }

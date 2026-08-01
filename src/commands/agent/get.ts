@@ -21,7 +21,7 @@ export function getIdentityCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const agent = await orpc.agent.get({ id: opts.id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(agent);
           return;
         }

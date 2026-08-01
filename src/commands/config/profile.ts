@@ -90,7 +90,7 @@ export function configProfileCommand(): Command {
           return;
         }
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(profiles);
           return;
         }
@@ -122,7 +122,7 @@ export function configProfileCommand(): Command {
           return;
         }
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(active);
           return;
         }

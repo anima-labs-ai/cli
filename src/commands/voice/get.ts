@@ -23,7 +23,7 @@ export function getCallCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const call = await orpc.voice.getCall({ callId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(call);
           return;
         }

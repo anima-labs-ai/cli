@@ -16,7 +16,7 @@ export function getMessageCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const message = await orpc.message.get({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(message);
           return;
         }

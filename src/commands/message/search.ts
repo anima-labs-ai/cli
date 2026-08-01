@@ -62,7 +62,7 @@ export function searchMessagesCommand(): Command {
           },
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

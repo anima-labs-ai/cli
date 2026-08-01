@@ -26,7 +26,7 @@ export function configListCommand(): Command {
           return;
         }
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(profiles);
           return;
         }
@@ -51,7 +51,7 @@ export function configListCommand(): Command {
           resolved[key] = await resolveConfigValue(key as keyof ProfileConfig);
         }
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(resolved);
           return;
         }
@@ -65,7 +65,7 @@ export function configListCommand(): Command {
 
       const config = await getConfig();
 
-      if (globals.json) {
+      if (output.isMachineFormat()) {
         output.json(config);
         return;
       }

@@ -89,9 +89,11 @@ export function loginCommand(): Command {
         // No flag, non-interactive environment — fail with actionable text.
         // Short message for the agent format (low-token, code-friendly);
         // verbose multi-line for humans who want to see all options.
-        const isHumanFormat =
-          (globals.format ?? (globals.human ? 'human' : null)) === 'human' ||
-          (process.stdout.isTTY && !globals.format && !globals.json);
+        // Asked of the resolved format, not re-derived from the raw flags.
+        // The hand-rolled copy that used to live here missed the TTY default
+        // for --format, and both test overrides (NODE_ENV / the force env
+        // var), so it could disagree with every other command in the process.
+        const isHumanFormat = !output.isMachineFormat();
 
         if (isHumanFormat) {
           output.error(

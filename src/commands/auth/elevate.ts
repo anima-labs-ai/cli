@@ -80,7 +80,7 @@ export function elevateCommand(): Command {
         try {
           const session = await elevateWithGrant(globals);
           const { profile, previous } = await activateSession(session, apiUrl);
-          if (globals.json) {
+          if (output.isMachineFormat()) {
             output.json({
               status: 'elevated',
               via: 'machine',
@@ -187,7 +187,7 @@ export function elevateCommand(): Command {
 
       const { profile, previous } = await activateSession(session, apiUrl);
 
-      if (globals.json) {
+      if (output.isMachineFormat()) {
         output.json({
           status: 'elevated',
           via: 'email',

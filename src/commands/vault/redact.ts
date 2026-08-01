@@ -128,7 +128,7 @@ export function redactCommand(): Command {
 
         output.debug(`Redacted ${redactionCount} secret(s)`);
 
-        if (globals.json) {
+        if (output.wantsEnvelope()) {
           output.json({
             credentialsLoaded: items.length,
             secretsChecked: uniqueSecrets.length,

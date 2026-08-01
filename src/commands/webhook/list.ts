@@ -26,7 +26,7 @@ export function listWebhooksCommand(): Command {
           cursor: opts.cursor,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

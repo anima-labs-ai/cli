@@ -41,7 +41,7 @@ export function searchRegistryCommand(): Command {
           limit: opts.limit ? Number(opts.limit) : 20,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

@@ -30,7 +30,7 @@ export function listDraftsCommand(): Command {
           agentId: opts.agent,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

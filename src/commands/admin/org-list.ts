@@ -25,7 +25,7 @@ export function orgListCommand(): Command {
         const org = await orpc.org.me({});
         const defaultOrg = await resolveConfigValue('defaultOrg');
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json({ items: [org] });
           return;
         }

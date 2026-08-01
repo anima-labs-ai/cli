@@ -24,7 +24,7 @@ export function discoverCommand(): Command {
 
         const card = await res.json() as Record<string, unknown>;
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(card);
           return;
         }

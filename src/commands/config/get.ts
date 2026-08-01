@@ -28,7 +28,7 @@ export function configGetCommand(): Command {
         const config = await getConfig();
         const profileVal = config.profiles?.[profileName]?.[key as keyof ProfileConfig];
         if (profileVal !== undefined) {
-          if (globals.json) {
+          if (output.wantsEnvelope()) {
             output.json({ key, value: profileVal, profile: profileName });
             return;
           }
@@ -41,7 +41,7 @@ export function configGetCommand(): Command {
 
       const resolved = await resolveConfigValue(key as keyof ProfileConfig);
       if (resolved !== undefined) {
-        if (globals.json) {
+        if (output.wantsEnvelope()) {
           output.json({ key, value: resolved });
           return;
         }

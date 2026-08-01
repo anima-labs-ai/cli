@@ -55,7 +55,7 @@ export function usageCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.org.usageOverview({});
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

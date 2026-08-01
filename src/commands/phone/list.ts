@@ -24,7 +24,7 @@ export function listPhoneNumbersCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const response = await orpc.phone.list({ agentId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }

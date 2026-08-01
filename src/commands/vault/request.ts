@@ -137,7 +137,7 @@ function requestCreateCommand(): Command {
         );
 
         if (!opts.wait) {
-          if (globals.json) {
+          if (output.isMachineFormat()) {
             output.json(created);
             return;
           }
@@ -153,7 +153,7 @@ function requestCreateCommand(): Command {
           return;
         }
 
-        if (!globals.json) {
+        if (!output.isMachineFormat()) {
           output.success(`Created credential request ${created.requestId}`);
           output.details([['Fill URL', created.fillUrl]]);
         }
@@ -163,7 +163,7 @@ function requestCreateCommand(): Command {
           opts.timeout * 1000,
           opts.pollInterval,
         );
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json({ ...state, requestId: created.requestId, fillUrl: created.fillUrl });
         } else {
           if (state.status === 'FULFILLED') {
@@ -216,7 +216,7 @@ function requestStatusCommand(): Command {
               `/v1/vault/credential-requests/${encodeURIComponent(requestId)}`,
             );
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(state);
           return;
         }
@@ -245,7 +245,7 @@ function requestCancelCommand(): Command {
           `/v1/vault/credential-requests/${encodeURIComponent(requestId)}/cancel`,
         );
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

@@ -42,7 +42,7 @@ export function getAgentCardCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const card = await orpc.identity.getAgentCard({ agentId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(card);
           return;
         }

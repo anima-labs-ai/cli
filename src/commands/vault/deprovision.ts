@@ -24,7 +24,7 @@ export function deprovisionCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.deprovision({ agentId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

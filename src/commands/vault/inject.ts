@@ -180,7 +180,7 @@ export function injectCommand(): Command {
         }
 
         // Step 5: Output injected text
-        if (globals.json) {
+        if (output.wantsEnvelope()) {
           output.json({
             tokensResolved: tokens.length,
             templatesResolved: templates.length,

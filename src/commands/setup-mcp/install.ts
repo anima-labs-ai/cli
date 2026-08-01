@@ -348,7 +348,7 @@ export function installMcpCommand(): Command {
 
         const endpoint = globals.url ?? REMOTE_GATEWAY_URL;
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json({
             configured: targets.map((client) => client.name as McpClientName),
             count: targets.length,

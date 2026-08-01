@@ -241,7 +241,13 @@ describe('admin commands', () => {
 
     console.log = originalLog;
     const printed = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(printed.includes('Revoked API key key_1')).toBe(true);
+    // No `--human`: tests resolve to the `agent` format, which is what a piped
+    // or scripted caller gets. The command emits the API's response as a
+    // structured document there — asserting the prose instead would only
+    // prove the human path, which is not the path a script takes.
+    expect(JSON.parse(printed.trim().split('\n').at(-1) as string)).toMatchObject({
+      success: true,
+    });
   });
 
   test('usage displays the period rollup', async () => {

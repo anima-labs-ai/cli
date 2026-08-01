@@ -63,7 +63,7 @@ async function handleVoiceSearch(
     dateTo: opts.to,
   });
 
-  if (globals.json) {
+  if (output.isMachineFormat()) {
     output.json(response);
     return;
   }
@@ -97,7 +97,7 @@ async function handleCrossChannel(
     threshold: opts.threshold ? Number(opts.threshold) : 0.3,
   });
 
-  if (globals.json) {
+  if (output.isMachineFormat()) {
     output.json(response);
     return;
   }

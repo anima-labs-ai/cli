@@ -16,7 +16,7 @@ export function getEmailCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const message = await orpc.email.get({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(message);
           return;
         }

@@ -253,6 +253,27 @@ describe('voice commands', () => {
         console.log = originalLog;
       }
 
+      // No `--human`: tests resolve to the `agent` format, the one a piped or
+      // scripted caller gets.
+      const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
+      expect(JSON.parse(output.trim().split('\n').at(-1) as string)).toMatchObject({
+        voices: [],
+      });
+    });
+
+    test('says "no voices" in prose for a human', async () => {
+      setAuthenticatedConfig(serverPort);
+      setRoute('GET', '/v1/voice/catalog', { status: 200, body: { voices: [] } });
+
+      const logSpy = mock((...args: unknown[]) => {});
+      const originalLog = console.log;
+      console.log = logSpy;
+      try {
+        await runProgram(['--human', 'voice', 'catalog']);
+      } finally {
+        console.log = originalLog;
+      }
+
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('No voices found');
     });
@@ -326,7 +347,12 @@ describe('voice commands', () => {
       }
 
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
-      expect(output).toContain('No calls found');
+      // No `--human`: tests resolve to the `agent` format, the one a piped or
+      // scripted caller gets.
+      expect(JSON.parse(output.trim().split('\n').at(-1) as string)).toMatchObject({
+        calls: [],
+        total: 0,
+      });
     });
   });
 
@@ -433,8 +459,13 @@ describe('voice commands', () => {
       }
 
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
-      expect(output).toContain('Agent line');
-      expect(output).not.toContain('Caller line');
+      // The filter has to survive into the structured payload. It used to be
+      // applied only while rendering for humans, so this exact invocation
+      // returned BOTH speakers to anyone reading the output as data.
+      const payload = JSON.parse(output.trim().split('\n').at(-1) as string) as {
+        segments: Array<{ speaker: string; text: string }>;
+      };
+      expect(payload.segments.map((s) => s.text)).toEqual(['Agent line']);
     });
   });
 
@@ -513,7 +544,12 @@ describe('voice commands', () => {
 
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('82');
-      expect(output).toContain('Resolution');
+      // No `--human`: tests resolve to the `agent` format, the one a piped or
+      // scripted caller gets.
+      expect(JSON.parse(output.trim().split('\n').at(-1) as string)).toMatchObject({
+        compositeScore: 82,
+        resolutionScore: 90,
+      });
     });
 
     test('supports json mode', async () => {
@@ -623,7 +659,12 @@ describe('voice commands', () => {
 
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
       expect(output).toContain('I can help with that order');
-      expect(output).toContain('2 result(s)');
+      // No `--human`: tests resolve to the `agent` format, the one a piped or
+      // scripted caller gets.
+      const searchPayload = JSON.parse(output.trim().split('\n').at(-1) as string) as {
+        results: unknown[];
+      };
+      expect(searchPayload.results).toHaveLength(2);
     });
 
     test('handles empty results', async () => {
@@ -644,7 +685,11 @@ describe('voice commands', () => {
       }
 
       const output = logSpy.mock.calls.map((c) => String((c as unknown[])[0])).join('\n');
-      expect(output).toContain('No results found');
+      // No `--human`: tests resolve to the `agent` format, the one a piped or
+      // scripted caller gets.
+      expect(JSON.parse(output.trim().split('\n').at(-1) as string)).toMatchObject({
+        results: [],
+      });
     });
 
     test('cross-channel search sends correct channels', async () => {

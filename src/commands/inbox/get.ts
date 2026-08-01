@@ -16,7 +16,7 @@ export function getInboxCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const inbox = await orpc.inbox.get({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(inbox);
           return;
         }

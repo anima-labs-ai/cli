@@ -40,7 +40,7 @@ export function generateCommand(): Command {
           special: opts.special,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

@@ -389,7 +389,13 @@ describe('email draft commands', () => {
     console.log = originalLog;
 
     const outputText = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(outputText.includes(`Deleted draft ${DRAFT_ID_2}`)).toBe(true);
+    // No `--human`: tests resolve to the `agent` format, which is what a piped
+    // or scripted caller gets. The command emits the API's response as a
+    // structured document there — asserting the prose instead would only
+    // prove the human path, which is not the path a script takes.
+    expect(JSON.parse(outputText.trim().split('\n').at(-1) as string)).toMatchObject({
+      id: DRAFT_ID_2,
+    });
   });
 
   test('draft get 404 explains send-deletes-the-draft semantics', async () => {

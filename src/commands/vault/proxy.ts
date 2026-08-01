@@ -144,7 +144,7 @@ export function proxyCommand(): Command {
 
         // Bind to loopback only — this proxy must never be reachable from the network.
         server.listen(port, '127.0.0.1', () => {
-          if (globals.json) {
+          if (output.isMachineFormat()) {
             output.json({ proxyToken, port, allowHosts: [...allowHosts] });
           } else {
             output.success(`Proxy listening on 127.0.0.1:${port}`);

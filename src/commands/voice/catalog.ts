@@ -27,7 +27,7 @@ export function voiceCatalogCommand(): Command {
           language: opts.language,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }
