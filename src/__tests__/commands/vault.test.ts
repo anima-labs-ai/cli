@@ -312,8 +312,19 @@ describe('vault commands', () => {
     ]);
 
     console.log = originalLog;
-    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
-    expect(parsed.id).toBe(CRED_ID_1);
+    // Search the emitted lines rather than indexing call 0: `--password` now
+    // also prints an argv-exposure warning, and a positional assertion would
+    // break on any added diagnostic rather than on a real regression.
+    const ids = logSpy.mock.calls
+      .map((call) => {
+        try {
+          return (JSON.parse(String(call.at(0))) as { id?: string }).id;
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((id): id is string => id !== undefined);
+    expect(ids).toContain(CRED_ID_1);
   });
 
   test('vault store --generate-password sends generatePassword and no password', async () => {

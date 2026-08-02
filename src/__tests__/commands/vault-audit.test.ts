@@ -89,6 +89,56 @@ describe('vault audit', () => {
     expect(printed).toContain('leaky.ts');
   });
 
+  // The command has always advertised "unresolved vault references", but the
+  // array backing that claim was declared and never written to, so the check
+  // did nothing. An unresolved `{{vault:...}}` committed to a repo is a real
+  // defect — it is the exact string `inject` now refuses to emit — and a vtk_
+  // token in a file is a leaked (if short-lived) credential.
+  test('flags an unresolved vault template', async () => {
+    const file = join(fixtureDir, 'ref.ts');
+    writeFileSync(file, 'const k = "{{vault:caaa00000000000000000crd01:login.password}}";\n');
+
+    const result = await runCapturingExit(program, ['vault', 'audit', file]);
+
+    expect(result.logs.join('\n')).toContain('{{vault:');
+  });
+
+  // Deliberately looser than inject's own parser: `{{vault:cred}}` without a
+  // field is exactly the shape inject silently ignores, so it is the shape
+  // most worth surfacing here.
+  test('flags a malformed vault template too', async () => {
+    const file = join(fixtureDir, 'ref-malformed.ts');
+    writeFileSync(file, 'const k = "{{vault:my-cred}}";\n');
+
+    const result = await runCapturingExit(program, ['vault', 'audit', file]);
+
+    expect(result.logs.join('\n')).toContain('{{vault:');
+  });
+
+  test('flags a vtk_ token left in a file', async () => {
+    const file = join(fixtureDir, 'ref-vtk.ts');
+    writeFileSync(file, `const t = "vtk_${'a'.repeat(64)}";\n`);
+
+    const result = await runCapturingExit(program, ['vault', 'audit', file]);
+
+    expect(result.logs.join('\n')).toContain('vtk_');
+  });
+
+  test('--check fails on an unresolved reference', async () => {
+    const file = join(fixtureDir, 'ref-check.ts');
+    writeFileSync(file, 'const k = "{{vault:caaa00000000000000000crd01:login.password}}";\n');
+
+    const result = await runCapturingExit(program, ['vault', 'audit', '--check', file]);
+
+    expect(result.code).toBe(1);
+  });
+
+  test('a file with neither secrets nor references still passes', async () => {
+    const result = await runCapturingExit(program, ['vault', 'audit', '--check', cleanFile]);
+
+    expect(result.code).toBeUndefined();
+  });
+
   // The `--fix` hint pointed at `am vault run`, which has never existed.
   test('--fix hint names a command that exists', async () => {
     const result = await runCapturingExit(program, ['vault', 'audit', '--fix', leakyFile]);

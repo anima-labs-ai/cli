@@ -132,6 +132,64 @@ async function scanFile(
   return findings;
 }
 
+/**
+ * Vault references that were never resolved.
+ *
+ * Deliberately looser than `inject`'s own parsers. `inject` matches
+ * `{{vault:<id>:<field>}}` and a full 64-hex `vtk_`; anything else it passes
+ * through untouched. So the shapes it ignores — `{{vault:my-cred}}` with no
+ * field, a truncated token — are precisely the ones that reach production
+ * looking like a secret and behaving like a string literal. Those are what
+ * this needs to catch.
+ */
+const VAULT_REFERENCE_PATTERNS: Array<{ name: string; regex: RegExp }> = [
+  { name: 'Unresolved vault template', regex: /\{\{vault:[^}\n]*\}\}/g },
+  { name: 'Vault ephemeral token (vtk_)', regex: /\bvtk_[A-Za-z0-9]{8,}\b/g },
+];
+
+export interface AuditRefIssue {
+  file: string;
+  line: number;
+  column: number;
+  patternName: string;
+  match: string;
+}
+
+async function scanFileForRefs(file: string): Promise<AuditRefIssue[]> {
+  const issues: AuditRefIssue[] = [];
+  let content: string;
+  try {
+    content = await fs.readFile(file, 'utf-8');
+  } catch {
+    return issues;
+  }
+
+  for (const { name, regex } of VAULT_REFERENCE_PATTERNS) {
+    regex.lastIndex = 0;
+    let m: RegExpExecArray | null = regex.exec(content);
+    while (m !== null) {
+      const idx = m.index;
+      let lineStart = 0;
+      let lineNum = 1;
+      for (let i = 0; i < idx; i++) {
+        if (content[i] === '\n') { lineNum++; lineStart = i + 1; }
+      }
+      issues.push({
+        file,
+        line: lineNum,
+        column: idx - lineStart + 1,
+        patternName: name,
+        // Shown whole: a reference is not a secret, and the id is the part
+        // that tells you which one to go and fix.
+        match: m[0].slice(0, 80),
+      });
+      m = regex.exec(content);
+    }
+  }
+
+  return issues;
+}
+
 export function auditCommand(): Command {
   return new Command('audit')
     .description('Scan files for plaintext secrets and unresolved vault references')
@@ -188,6 +246,7 @@ export function auditCommand(): Command {
         if (configPath) output.debug(`Found config: ${configPath}`);
 
         const findings: AuditFinding[] = [];
+        const refIssues: AuditRefIssue[] = [];
         const missingPaths: string[] = [];
         for (const root of roots) {
           const stat = await fs.stat(root).catch(() => null);
@@ -198,16 +257,15 @@ export function auditCommand(): Command {
           }
           if (stat.isFile()) {
             findings.push(...(await scanFile(root, vaultLiterals)));
+            refIssues.push(...(await scanFileForRefs(root)));
           } else {
             for await (const file of walk(root)) {
               findings.push(...(await scanFile(file, vaultLiterals)));
+              refIssues.push(...(await scanFileForRefs(file)));
             }
           }
         }
 
-        // Validate anima.json SecretRefs (shape + binding) without triggering
-        // real vault accesses.
-        const refIssues: Array<{ name: string; reason: string }> = [];
         if (config.secrets && Object.keys(config.secrets).length > 0) {
           for (const [name, ref] of Object.entries(config.secrets)) {
             if (ref.source === 'anima') {
@@ -220,8 +278,9 @@ export function auditCommand(): Command {
           output.json({ findings, refIssues, scanned: roots, missing: missingPaths, configPath });
         } else {
           if (findings.length === 0 && refIssues.length === 0) {
-            output.success('No plaintext secrets found.');
-          } else {
+            output.success('No plaintext secrets or unresolved vault references found.');
+          }
+          if (findings.length > 0) {
             output.warn(`Found ${findings.length} potential secret(s):`);
             // `table` and not a loop of `info`: `info` is human-format-only
             // decoration, so every agent and CI caller — the ones running the
@@ -240,6 +299,22 @@ export function auditCommand(): Command {
               for (const f of findings) output.debug(`${f.file}:${f.line}  ${f.context}`);
             }
           }
+          // Reported separately from secrets because they are a different
+          // defect: not "a secret escaped into the repo" but "a placeholder
+          // that was never filled in and will be used as if it were one".
+          if (refIssues.length > 0) {
+            output.warn(`Found ${refIssues.length} unresolved vault reference(s):`);
+            output.table(
+              ['File', 'Line', 'Column', 'Pattern', 'Reference'],
+              refIssues.map((r) => [
+                r.file,
+                String(r.line),
+                String(r.column),
+                r.patternName,
+                r.match,
+              ]),
+            );
+          }
         }
 
         if (opts.fix) {
@@ -253,8 +328,15 @@ export function auditCommand(): Command {
 
         // A path that could not be read is not a clean scan. Under `--check`
         // (the CI gate) a mistyped path must fail the build rather than
-        // reporting the green of a scan that never ran.
-        if (opts.check && (findings.length > 0 || missingPaths.length > 0)) process.exit(1);
+        // reporting the green of a scan that never ran. Unresolved references
+        // fail it too: shipping `{{vault:...}}` as a literal is the failure
+        // this command exists to catch.
+        if (
+          opts.check &&
+          (findings.length > 0 || refIssues.length > 0 || missingPaths.length > 0)
+        ) {
+          process.exit(1);
+        }
       } catch (error: unknown) {
         output.fatal(`audit failed: ${error instanceof Error ? error.message : String(error)}`);
       }

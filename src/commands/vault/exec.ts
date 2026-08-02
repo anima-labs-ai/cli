@@ -18,12 +18,6 @@ interface ExecOptions {
   cred?: string[];
   /** --as maps each --cred credentialId to an env var name; same order as --cred */
   as?: string[];
-  /**
-   * Commander quirk: `.option('--no-scrub', ...)` produces `{ scrub: boolean }`
-   * — the flag toggles a positively-named field, NOT a `noScrub: true` pair.
-   * Defaults to true; passing `--no-scrub` flips to false.
-   */
-  scrub?: boolean;
   dryRun?: boolean;
 }
 
@@ -50,7 +44,6 @@ export function execCommand(): Command {
       'Env var name for the corresponding --cred; repeatable in the same order.',
       (value, previous: string[] = []) => [...previous, value],
     )
-    .option('--no-scrub', 'Disable stdout/stderr secret scrubbing (faster, but risky)')
     .option('--dry-run', 'Show which secrets would be resolved without running the command')
     .allowExcessArguments(true)
     .passThroughOptions()
@@ -132,9 +125,7 @@ export function execCommand(): Command {
         const childEnv = { ...process.env, ...values };
         const [command, ...args] = childArgv;
 
-        // opts.scrub defaults to true; `--no-scrub` flips it to false. buildScrubPolicy
-        // takes a "noScrub" boolean, so invert: noScrub = !(scrub ?? true).
-        const scrubPolicy = buildScrubPolicy(values, !(opts.scrub ?? true));
+        const scrubPolicy = buildScrubPolicy(values);
 
         const child = spawn(command, args, {
           env: childEnv,
