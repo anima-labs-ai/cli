@@ -16,7 +16,7 @@ export function deleteDraftCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const draft = await orpc.emailDraft.delete({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(draft);
           return;
         }

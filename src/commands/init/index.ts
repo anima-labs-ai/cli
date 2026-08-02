@@ -562,7 +562,6 @@ async function runInteractiveExisting(
 async function runNonInteractive(
 	opts: InitOptions,
 	output: Output,
-	jsonMode: boolean,
 ): Promise<void> {
 	const apiKey = opts.apiKey?.trim() ?? "";
 	if (!apiKey) {
@@ -592,23 +591,18 @@ async function runNonInteractive(
 		outputFormat: parsedFormat,
 	});
 
-	// JSON mode: scripts piping `am --json init …` expect a single JSON
-	// payload on stdout, no spinners or human-readable details. Skip the
-	// pretty output entirely and emit one structured object.
-	if (jsonMode) {
-		console.log(
-			JSON.stringify(
-				{
-					apiUrl,
-					apiKeyConfigured: true,
-					defaultOrg: org,
-					defaultIdentity: identity,
-					outputFormat: parsedFormat,
-				},
-				null,
-				2,
-			),
-		);
+	// Machine formats expect a single structured document on stdout, no
+	// spinners or human-readable details. Through `output.json` so the shape
+	// follows --format; it used to hand-roll pretty JSON and therefore
+	// answered `--format yaml` with JSON.
+	if (output.isMachineFormat()) {
+		output.json({
+			apiUrl,
+			apiKeyConfigured: true,
+			defaultOrg: org,
+			defaultIdentity: identity,
+			outputFormat: parsedFormat,
+		});
 		return;
 	}
 
@@ -938,7 +932,7 @@ export function initCommand(): Command {
 			});
 
 			if (opts.nonInteractive) {
-				await runNonInteractive(opts, output, globals.json ?? false);
+				await runNonInteractive(opts, output);
 				return;
 			}
 

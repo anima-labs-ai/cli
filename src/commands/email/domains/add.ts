@@ -17,7 +17,7 @@ export function addDomainCommand(): Command {
           domain: domain.toLowerCase(),
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

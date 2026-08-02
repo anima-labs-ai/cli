@@ -24,7 +24,7 @@ export function listCredentialsCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const credentials = await orpc.identity.listCredentials({ agentId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(credentials);
           return;
         }

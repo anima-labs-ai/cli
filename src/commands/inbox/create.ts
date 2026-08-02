@@ -34,7 +34,7 @@ export function createInboxCommand(): Command {
           agentId: opts.agent,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(inbox);
           return;
         }

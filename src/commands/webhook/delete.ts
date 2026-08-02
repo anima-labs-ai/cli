@@ -16,7 +16,7 @@ export function deleteWebhookCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.webhook.delete({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

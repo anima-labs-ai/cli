@@ -64,7 +64,7 @@ export function createDraftCommand(): Command {
           references: opts.reference.length > 0 ? opts.reference : undefined,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(draft);
           return;
         }

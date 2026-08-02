@@ -19,7 +19,7 @@ export function summaryCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const summary = await orpc.voice.getSummary({ callId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(summary);
           return;
         }

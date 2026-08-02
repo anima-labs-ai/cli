@@ -21,7 +21,7 @@ export function deleteIdentityCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.agent.delete({ id: opts.id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

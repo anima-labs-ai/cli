@@ -41,7 +41,7 @@ export function updateIdentityCommand(): Command {
           metadata: opts.metadata ? parseMetadata(opts.metadata) : undefined,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(agent);
           return;
         }

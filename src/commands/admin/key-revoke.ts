@@ -30,7 +30,7 @@ export function keyRevokeCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.apiKeys.revoke({ id: opts.keyId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

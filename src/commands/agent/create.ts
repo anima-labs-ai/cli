@@ -47,7 +47,7 @@ export function createIdentityCommand(): Command {
           metadata: opts.metadata ? parseMetadata(opts.metadata) : {},
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(agent);
           return;
         }

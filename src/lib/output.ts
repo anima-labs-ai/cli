@@ -121,10 +121,19 @@ export class Output {
    */
   readonly format: OutputFormat;
   private readonly debugMode: boolean;
+  /**
+   * Whether the format was CHOSEN by the caller (`--format`, `--json`,
+   * `--human`) rather than inferred from whether stdout is a TTY. Only
+   * `wantsEnvelope()` needs it; see the note there for why the distinction
+   * has to survive `resolveFormat`.
+   */
+  private readonly formatIsExplicit: boolean;
 
   constructor(options: OutputOptions) {
     this.format = resolveFormat(options);
     this.debugMode = options.debug;
+    this.formatIsExplicit =
+      options.format !== undefined || options.human === true || options.json === true;
   }
 
   // Construct from CLI globals — propagates --human, --json, --format, --debug
@@ -141,6 +150,48 @@ export class Output {
       format: globals.format,
       debug: globals.debug ?? false,
     });
+  }
+
+  /**
+   * Does this caller want a structured document rather than prose?
+   *
+   * True for every format except `human`. Gate the machine-output path on
+   * THIS, never on the raw `--json` flag.
+   *
+   * `--json` is one of five ways to ask for structure and it is not even the
+   * common one: `resolveFormat` returns `agent` whenever stdout is not a TTY,
+   * so every piped or redirected invocation arrives with `globals.json`
+   * undefined. Commands that branched on the flag therefore sent `am … | jq`
+   * down the HUMAN path, where `output.info()` renders nothing at all — which
+   * is not a cosmetic difference but silent data loss (`address validate`
+   * dropped the API's suggested addresses entirely).
+   */
+  isMachineFormat(): boolean {
+    return this.format !== 'human';
+  }
+
+  /**
+   * Should this command WRAP its payload in a structured envelope?
+   *
+   * For the handful of commands whose plain output is ALREADY a clean machine
+   * payload — a bare scalar (`config get`), a proxied upstream body
+   * (`vault use`), rendered template text (`vault inject`, `vault redact`) —
+   * the default has to stay raw. `ORG=$(am config get defaultOrg)` and
+   * `am vault use … > out.bin` depend on it, and neither survives being
+   * wrapped in JSON. So the envelope is opt-IN: only an explicit `--json` or
+   * `--format …` asks for it, never the TTY-based default.
+   *
+   * Every other command — anything whose plain output is prose or a table —
+   * wants `isMachineFormat()` instead. There the default absolutely SHOULD
+   * flip, because the alternative is a piped caller receiving decoration and
+   * losing the data.
+   *
+   * The two predicates differ only for a non-TTY caller who passed no flags:
+   * `isMachineFormat()` is true (they get structure), `wantsEnvelope()` is
+   * false (they get the raw payload they piped for).
+   */
+  wantsEnvelope(): boolean {
+    return this.formatIsExplicit && this.isMachineFormat();
   }
 
   // Format-aware: machines get compact JSON, humans get a pretty box table.

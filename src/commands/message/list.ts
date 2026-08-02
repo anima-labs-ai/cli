@@ -45,7 +45,7 @@ export function listMessagesCommand(): Command {
           limit: opts.limit ? Number(opts.limit) : undefined,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

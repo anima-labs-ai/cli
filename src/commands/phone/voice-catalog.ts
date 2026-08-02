@@ -30,7 +30,7 @@ export function voiceCatalogCommand(): Command {
 
         const response = await orpc.voice.catalog(input);
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }

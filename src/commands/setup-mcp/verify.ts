@@ -270,7 +270,7 @@ export function verifyMcpCommand(): Command {
 
         const allOk = results.every((r) => r.status === 'ok');
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json({ results });
         } else {
           output.table(

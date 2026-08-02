@@ -287,7 +287,7 @@ function agentStartCommand(): Command {
           await fs.chmod(socketPath, 0o600);
           await fs.writeFile(PID_FILE, String(process.pid), { mode: 0o600 });
 
-          if (globals.json) {
+          if (output.isMachineFormat()) {
             output.json({ started: true, pid: process.pid, socketPath, ttlSeconds: ttl, loaded: snapshot.size });
           } else {
             output.success(`Vault daemon started (pid ${process.pid}).`);
@@ -357,12 +357,12 @@ function agentStatusCommand(): Command {
 
       const pid = await isDaemonRunning();
       if (pid === null) {
-        if (globals.json) output.json({ running: false });
+        if (output.isMachineFormat()) output.json({ running: false });
         else output.info('Daemon not running.');
         return;
       }
 
-      if (globals.json) {
+      if (output.isMachineFormat()) {
         output.json({ running: true, pid, socket: DEFAULT_SOCKET });
       } else {
         output.success(`Daemon running (pid ${pid}).`);

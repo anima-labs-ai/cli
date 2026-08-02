@@ -20,7 +20,7 @@ export function domainDeliverabilityCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.domain.deliverability({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

@@ -32,7 +32,7 @@ export function keyRotateCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.org.rotateKey({ id: orgId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

@@ -29,7 +29,7 @@ export function releasePhoneNumberCommand(): Command {
           phoneNumber: opts.number,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(response);
           return;
         }

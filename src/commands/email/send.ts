@@ -52,7 +52,7 @@ export function sendEmailCommand(): Command {
           bodyHtml: opts.html,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

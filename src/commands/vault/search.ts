@@ -55,7 +55,7 @@ export function searchCommand(): Command {
           type: opts.type,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

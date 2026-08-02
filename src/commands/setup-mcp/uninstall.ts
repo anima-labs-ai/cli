@@ -155,7 +155,7 @@ export function uninstallMcpCommand(): Command {
         const targets = await resolveTargets(globals);
         const removed = targets.filter((client) => uninstallFromClient(client));
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json({
             removed: removed.map((client) => client.name),
             count: removed.length,

@@ -45,7 +45,7 @@ function tokenCreateCommand(): Command {
           ttlSeconds: opts.ttl ? Number(opts.ttl) : undefined,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }
@@ -95,7 +95,7 @@ function tokenExchangeCommand(): Command {
         const client = await requireAuth(globals);
         const result = await exchangeVaultToken(client, opts.vtk);
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }
@@ -151,7 +151,7 @@ function tokenRevokeCommand(): Command {
           credentialId: opts.credential,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

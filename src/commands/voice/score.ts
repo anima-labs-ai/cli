@@ -30,7 +30,7 @@ export function scoreCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const score = await orpc.voice.getScore({ callId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(score);
           return;
         }

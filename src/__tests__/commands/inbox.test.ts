@@ -401,7 +401,13 @@ describe('inbox commands', () => {
     console.log = originalLog;
 
     const output = logSpy.mock.calls.map((call) => String(call.at(0))).join('\n');
-    expect(output.includes(`Inbox ${INBOX_ID_3} deleted`)).toBe(true);
+    // No `--human`: tests resolve to the `agent` format, which is what a piped
+    // or scripted caller gets. The command emits the API's response as a
+    // structured document there — asserting the prose instead would only
+    // prove the human path, which is not the path a script takes.
+    expect(JSON.parse(output.trim().split('\n').at(-1) as string)).toMatchObject({
+      success: true,
+    });
   });
 
   test('inbox get handles 404 with friendly message', async () => {

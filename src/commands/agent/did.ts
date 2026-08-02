@@ -24,7 +24,7 @@ export function getDidCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const document = await orpc.identity.getAgentDid({ agentId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(document);
           return;
         }

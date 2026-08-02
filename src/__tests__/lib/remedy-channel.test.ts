@@ -24,15 +24,14 @@ const COMMANDS_DIR = join(import.meta.dir, '..', '..', 'commands');
 /**
  * Files whose `info()`-after-`error()` is NOT a remedy.
  *
- * `address/validate.ts` prints the API's suggested addresses under a failed
- * verdict. That is DATA, not guidance, and it has a different bug: the machine
- * path is gated on the legacy `globals.json` boolean, so `--format agent` falls
- * into the human branch and loses the suggestions entirely. Converting those
- * lines to `notice()` would emit one document per suggestion and paper over the
- * real fix, which is choosing the machine path from the RESOLVED format.
- * Excluded so this guard does not silently bless it.
+ * Empty, and worth keeping empty. `address/validate.ts` used to live here
+ * because it printed the API's suggested addresses — data, not guidance —
+ * through `info()`. It was fixed at the root instead: the machine path is now
+ * chosen by the resolved format, so those callers receive the whole response
+ * with suggestions included, and the human branch renders them through
+ * `details()` where tabular data belongs.
  */
-const NOT_REMEDIES = new Set(['address/validate.ts']);
+const NOT_REMEDIES = new Set<string>([]);
 
 /** Lines to look ahead after an error() before giving up. */
 const LOOKAHEAD = 6;

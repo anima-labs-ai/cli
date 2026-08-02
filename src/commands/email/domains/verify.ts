@@ -19,7 +19,7 @@ export function verifyDomainCommand(): Command {
           domainId: id,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

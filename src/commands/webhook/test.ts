@@ -16,7 +16,7 @@ export function testWebhookCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.webhook.test({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

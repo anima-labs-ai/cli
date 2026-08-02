@@ -107,7 +107,7 @@ export function execCommand(): Command {
 
         if (opts.dryRun) {
           // Show which env vars would be set (names only, never values).
-          if (globals.json) {
+          if (output.isMachineFormat()) {
             output.json({ resolved: Object.keys(values), configPath });
           } else {
             output.success('Dry run — would set:');

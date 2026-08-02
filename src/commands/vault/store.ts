@@ -167,7 +167,7 @@ export function storeCommand(): Command {
             ...(opts.revealPolicy ? { revealPolicy: opts.revealPolicy } : {}),
           });
 
-          if (globals.json) {
+          if (output.isMachineFormat()) {
             output.json(created);
             return;
           }
@@ -224,7 +224,7 @@ export function storeCommand(): Command {
           generatePassword,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

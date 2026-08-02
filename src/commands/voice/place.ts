@@ -90,8 +90,8 @@ export function placeCallCommand(): Command {
           fromNumber: opts.fromNumber,
         });
 
-        if (globals.json) {
-          console.log(JSON.stringify(result, null, 2));
+        if (output.isMachineFormat()) {
+          output.json(result);
           return;
         }
 

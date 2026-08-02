@@ -102,11 +102,13 @@ describe('address validate exit codes', () => {
   test('exits 1 when the address is invalid', async () => {
     validateResponse = buildValidateResponse(false);
 
-    const { code, errors } = await runCapturingExit(program, [
+    // No flags: tests force the `agent` format, which is also what any piped
+    // or redirected invocation resolves to.
+    const { code, logs } = await runCapturingExit(program, [
       'address', 'validate', ADDRESS_ID, '--agent', AGENT_ID,
     ]);
 
-    expect(errors.join('\n')).toContain('Address validation failed');
+    expect(JSON.parse(logs.at(-1) as string)).toMatchObject({ valid: false });
     expect(code).toBe(1);
   });
 
@@ -117,9 +119,48 @@ describe('address validate exit codes', () => {
       'address', 'validate', ADDRESS_ID, '--agent', AGENT_ID,
     ]);
 
-    expect(logs.join('\n')).toContain('Address is valid');
+    expect(JSON.parse(logs.at(-1) as string)).toMatchObject({ valid: true });
     // `undefined` means the handler returned without exiting — a clean 0.
     expect(code).toBeUndefined();
+  });
+
+  /**
+   * The bug this command was the witness for. Its machine path used to be
+   * gated on the legacy `--json` boolean, so a caller who piped the output —
+   * resolving to the `agent` format with `--json` unset — fell into the HUMAN
+   * branch, where the API's suggested corrections were printed with
+   * `output.info()`. That renders nothing outside `human`.
+   *
+   * The caller therefore received "validation failed" and no suggestions: the
+   * single most useful part of the response, silently dropped, for the format
+   * a script is most likely to be using.
+   */
+  test('a piped caller receives the suggestions, not just the verdict', async () => {
+    validateResponse = buildValidateResponse(false);
+
+    const { logs } = await runCapturingExit(program, [
+      'address', 'validate', ADDRESS_ID, '--agent', AGENT_ID,
+    ]);
+
+    const payload = JSON.parse(logs.at(-1) as string) as {
+      suggestions: Array<{ street1: string }>;
+    };
+    expect(payload.suggestions).toHaveLength(1);
+    expect(payload.suggestions[0]?.street1).toBe('1 Market Street');
+  });
+
+  test('--human still gets prose and the suggestions as details', async () => {
+    validateResponse = buildValidateResponse(false);
+
+    const { code, errors, logs } = await runCapturingExit(program, [
+      '--human', 'address', 'validate', ADDRESS_ID, '--agent', AGENT_ID,
+    ]);
+
+    expect(errors.join('\n')).toContain('Address validation failed');
+    // Rendered through `details`, so the suggestion survives as readable text
+    // rather than a raw JSON blob.
+    expect(logs.join('\n')).toContain('1 Market Street');
+    expect(code).toBe(1);
   });
 
   test('exits 1 for an invalid address in --json mode too', async () => {

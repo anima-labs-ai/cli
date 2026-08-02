@@ -49,7 +49,7 @@ export function createWebhookCommand(): Command {
         }
         const webhook = await orpc.webhook.create(payload);
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(webhook);
           return;
         }

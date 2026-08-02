@@ -16,7 +16,7 @@ export function getDomainCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.domain.get({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

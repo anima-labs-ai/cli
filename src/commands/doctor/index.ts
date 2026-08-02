@@ -174,11 +174,10 @@ function checkMcpRegistered(): CheckResult {
   return { name: 'mcp:registered', status: 'PASS', detail: found.join('; '), durationMs };
 }
 
-function renderTable(results: CheckResult[], jsonMode: boolean): void {
-  if (jsonMode) {
-    console.log(JSON.stringify(results, null, 2));
-    return;
-  }
+/** Human rendering only. The machine path belongs to `output.json`, which
+ *  honours every format — this function used to emit pretty JSON itself and
+ *  so answered `--format yaml` with JSON. */
+function renderTable(results: CheckResult[]): void {
   const colWidth = Math.max(...results.map((r) => r.name.length)) + 2;
   console.log('');
   for (const r of results) {
@@ -250,7 +249,11 @@ export function doctorCommand(): Command {
 
       results.push(checkMcpRegistered());
 
-      renderTable(results, globals.json ?? false);
+      if (output.isMachineFormat()) {
+        output.json(results);
+      } else {
+        renderTable(results);
+      }
 
       const failed = results.filter((r) => r.status === 'FAIL').length;
       process.exit(failed > 0 ? 1 : 0);

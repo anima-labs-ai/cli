@@ -19,7 +19,7 @@ export function sendDraftCommand(): Command {
         // deleted. The response is the new Message, not the draft.
         const message = await orpc.emailDraft.send({ id });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(message);
           return;
         }

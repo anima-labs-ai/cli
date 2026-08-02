@@ -39,7 +39,7 @@ export function getCommand(): Command {
           agentId: opts.agent,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           const masked = { ...result };
           if (masked.login) {
             masked.login = { ...masked.login };

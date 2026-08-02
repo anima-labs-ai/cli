@@ -84,7 +84,7 @@ export function useCommand(): Command {
           },
         );
 
-        if (globals.json) {
+        if (output.wantsEnvelope()) {
           output.json(result);
           return;
         }

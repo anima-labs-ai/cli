@@ -124,7 +124,7 @@ async function runFullTextSearch(
     },
   });
 
-  if (globals.json) {
+  if (output.isMachineFormat()) {
     output.json(result);
     return;
   }
@@ -173,7 +173,7 @@ async function runSemanticSearch(
     threshold,
   });
 
-  if (globals.json) {
+  if (output.isMachineFormat()) {
     output.json(result);
     return;
   }

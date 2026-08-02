@@ -29,7 +29,7 @@ export function listInboxesCommand(): Command {
           query: opts.query,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

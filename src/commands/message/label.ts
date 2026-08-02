@@ -51,7 +51,7 @@ export function labelMessageCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const message = await orpc.message.updateLabels({ id, addLabels, removeLabels });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(message);
           return;
         }

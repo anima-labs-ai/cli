@@ -24,7 +24,7 @@ export function provisionCommand(): Command {
         const orpc = await requireOrpcAuth(globals);
         const result = await orpc.vault.provision({ agentId });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

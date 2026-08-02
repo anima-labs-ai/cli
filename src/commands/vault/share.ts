@@ -60,7 +60,7 @@ function shareCreateCommand(): Command {
           expiresInSeconds: opts.ttl ? Number(opts.ttl) : undefined,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }
@@ -120,7 +120,7 @@ function shareListCommand(): Command {
           direction: opts.direction,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }
@@ -177,7 +177,7 @@ function shareRevokeCommand(): Command {
           agentId: opts.agent,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

@@ -36,7 +36,7 @@ export function listEmailsCommand(): Command {
           includeSpam: opts.includeSpam,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(result);
           return;
         }

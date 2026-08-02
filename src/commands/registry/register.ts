@@ -38,7 +38,7 @@ export function registerAgentCommand(): Command {
           public: opts.public,
         });
 
-        if (globals.json) {
+        if (output.isMachineFormat()) {
           output.json(entry);
           return;
         }
