@@ -106,46 +106,6 @@ describe('vault store reads secrets from stdin', () => {
     expect((lastBody?.apiKey as Record<string, unknown> | undefined)?.key).toBe(SECRET);
   });
 
-  test('--key and --key-stdin together are rejected', async () => {
-    restoreStdin = feedStdin(`${SECRET}\n`);
-
-    const result = await runCapturingExit(program, [
-      'vault',
-      'store',
-      '--name',
-      'X',
-      '--type',
-      'api_key',
-      '--provider',
-      'openai',
-      '--key',
-      'from-argv',
-      '--key-stdin',
-    ]);
-
-    expect(result.code).toBe(1);
-    expect(lastBody).toBeUndefined();
-  });
-
-  test('--key on the command line warns that argv is visible', async () => {
-    const result = await runCapturingExit(program, [
-      'vault',
-      'store',
-      '--name',
-      'X',
-      '--type',
-      'api_key',
-      '--provider',
-      'openai',
-      '--key',
-      'from-argv',
-      '--allowed-host',
-      'api.openai.com',
-    ]);
-
-    expect(result.logs.join('\n')).toMatch(/--key-stdin/);
-  });
-
   test('--password-stdin sends the secret read from stdin', async () => {
     restoreStdin = feedStdin(`${SECRET}\n`);
 
@@ -161,21 +121,6 @@ describe('vault store reads secrets from stdin', () => {
 
     const login = lastBody?.login as Record<string, unknown> | undefined;
     expect(login?.password).toBe(SECRET);
-  });
-
-  test('--password on the command line warns that argv is visible', async () => {
-    const result = await runCapturingExit(program, [
-      'vault',
-      'store',
-      '--name',
-      'X',
-      '--username',
-      'alice',
-      '--password',
-      'from-argv',
-    ]);
-
-    expect(result.logs.join('\n')).toMatch(/--password-stdin/);
   });
 
   // Only one stdin to go around.

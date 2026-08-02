@@ -87,10 +87,6 @@ export function storeCommand(): Command {
     .option('--type <type>', 'Credential type', validateType, 'login' as CredentialType)
     .requiredOption('--name <name>', 'Credential name')
     .option('--username <user>', 'Login username')
-    .option(
-      '--password <pass>',
-      'Login password (deprecated — visible in shell history and `ps`; prefer --password-stdin)',
-    )
     .option('--password-stdin', 'Read the login password from stdin, keeping it out of argv')
     .option('--uri <url>', 'Login URL')
     .option(
@@ -107,10 +103,6 @@ export function storeCommand(): Command {
     .option('--no-numbers', 'Exclude numbers from the generated password')
     .option('--no-special', 'Exclude special characters from the generated password')
     .option('--provider <name>', 'api_key: provider name (e.g. openai, stripe)')
-    .option(
-      '--key <value>',
-      'api_key: the key value (deprecated — visible in shell history and `ps`; prefer --key-stdin)',
-    )
     .option('--key-stdin', 'api_key: read the key value from stdin, keeping it out of argv')
     .option(
       '--allowed-host <host>',
@@ -134,16 +126,15 @@ export function storeCommand(): Command {
         // Resolve the stdin-supplied secrets first, before any other
         // validation can exit — there is one stdin, so the conflicts have to
         // be settled before we try to read it.
+        if (opts.generatePassword === true && opts.passwordStdin === true) {
+          output.fatal(
+            '--generate-password and --password-stdin are mutually exclusive — omit --password-stdin to have the vault generate one',
+          );
+        }
         if (opts.passwordStdin === true && opts.keyStdin === true) {
           output.fatal(
             '--password-stdin and --key-stdin cannot be combined — stdin can only carry one secret',
           );
-        }
-        if (opts.passwordStdin === true && opts.password !== undefined) {
-          output.fatal('--password and --password-stdin are mutually exclusive');
-        }
-        if (opts.keyStdin === true && opts.key !== undefined) {
-          output.fatal('--key and --key-stdin are mutually exclusive');
         }
         if (opts.passwordStdin === true) {
           opts.password = await readSecretFromStdin('Password');
@@ -151,20 +142,6 @@ export function storeCommand(): Command {
         if (opts.keyStdin === true) {
           opts.key = await readSecretFromStdin('Key');
         }
-        // A secret that arrived as an argv element is already in the shell's
-        // history file and was readable via `ps` while this ran. We cannot
-        // undo that, so say so — the next invocation can use stdin.
-        if (opts.password !== undefined && opts.passwordStdin !== true) {
-          output.warn(
-            '--password puts the secret in argv, where it is visible in shell history and to `ps`. Use --password-stdin instead.',
-          );
-        }
-        if (opts.key !== undefined && opts.keyStdin !== true) {
-          output.warn(
-            '--key puts the secret in argv, where it is visible in shell history and to `ps`. Use --key-stdin instead.',
-          );
-        }
-
         if (opts.generatePassword && opts.type !== 'login') {
           output.fatal('--generate-password is only valid with --type login');
         }
@@ -225,9 +202,6 @@ export function storeCommand(): Command {
             ['Reveal policy', created.revealPolicy],
           ]);
           return;
-        }
-        if (opts.generatePassword && opts.password) {
-          output.fatal('--generate-password and --password are mutually exclusive — omit --password to have the vault generate one');
         }
         const generationFlagUsed =
           opts.length !== undefined ||

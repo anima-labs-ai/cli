@@ -30,8 +30,6 @@ Commands:
                                    injected into its environment
   audit [options] [paths...]       Scan files for plaintext secrets and
                                    unresolved vault references
-  reload [options]                 Reload vault snapshots on the server (use
-                                   after rotating a secret at the provider)
   proxy [options]                  Run a local proxy that injects a vault
                                    credential into outbound requests
   use [options]                    Call an API with a credential attached
