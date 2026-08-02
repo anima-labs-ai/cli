@@ -15,10 +15,13 @@
  *     limit. Past both, 402 with `resource: "voice"` in details.
  *
  * NOT gates, despite the common assumption: there is no reassigned-number
- * (RND) scrub and no calling-hour window. The RND lookup exists in the API
- * repo but is disabled in production and has never run on a real call, and
- * local time is never computed. Both obligations stay with the caller — do
- * not let this command's output imply otherwise.
+ * (RND) scrub, no Do-Not-Call scrub, and no calling-hour window. The RND
+ * lookup exists in the API repo but is disabled in production and has never
+ * run on a real call; no federal or state DNC registry is ever queried (the
+ * `telemarketing_with_dnc_scrub` consent basis records that the ORG scrubbed,
+ * it does not run one); and local time is never computed. All three
+ * obligations stay with the caller — do not let this command's output imply
+ * otherwise.
  *
  * Voice is chosen per agent (Agent.voiceId), set in the console — there is
  * no per-call voice or tier override here.
