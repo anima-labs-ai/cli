@@ -1,5 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
-import { requireNonEmptyArg } from '../../lib/args.js';
+import { boundedInt, requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -30,7 +30,7 @@ function tokenCreateCommand(): Command {
     .option('--agent <id>', 'Agent ID', requireNonEmptyArg('Agent ID'))
     .requiredOption('--credential <id>', 'Credential ID', requireNonEmptyArg('Credential ID'))
     .option('--scope <scope>', 'Token scope: autofill, proxy, export', validateScope, 'autofill' as TokenScope)
-    .option('--ttl <seconds>', 'TTL in seconds (10-3600, default 60)')
+    .option('--ttl <seconds>', 'TTL in seconds (10-3600, default 60)', boundedInt('ttl', 10, 3600))
     .action(async function (this: Command) {
       const opts = this.opts<TokenCreateOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();

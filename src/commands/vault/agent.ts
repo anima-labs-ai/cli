@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { resolveSecretRefs, loadAnimaConfig } from '../../lib/secret-ref.js';
@@ -318,7 +319,10 @@ function agentStopCommand(): Command {
 
       const pid = await isDaemonRunning();
       if (pid === null) {
-        output.info('No daemon running.');
+        // Same reason as `status`: `info` is human-format-only, so `stop`
+        // exited 0 in silence and the caller could not tell whether it had
+        // stopped a daemon or found none.
+        output.success('No daemon running.');
         return;
       }
 
@@ -357,6 +361,9 @@ function agentStatusCommand(): Command {
 
       const pid = await isDaemonRunning();
       if (pid === null) {
+        // Upstream's isMachineFormat() already routes every machine format
+        // through output.json, which is what made "not running" visible to a
+        // script again; `info` is the right shape for the human path.
         if (output.isMachineFormat()) output.json({ running: false });
         else output.info('Daemon not running.');
         return;
@@ -386,7 +393,11 @@ export function agentCommand(): Command {
 export function typeCommand(): Command {
   return new Command('type')
     .description('Ask the local daemon to type a credential into the focused window (never exposes plaintext)')
-    .requiredOption('--cred <name>', 'Logical credential name (as defined in anima.json)')
+    .requiredOption(
+      '--cred <name>',
+      'Logical credential name (as defined in anima.json)',
+      requireNonEmptyArg('Credential name'),
+    )
     .action(async function (this: Command) {
       const opts = this.opts<{ cred: string }>();
       const globals = this.optsWithGlobals<GlobalOptions>();

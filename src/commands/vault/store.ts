@@ -1,5 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
-import { requireNonEmptyArg } from '../../lib/args.js';
+import { boundedInt, requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -94,7 +94,7 @@ export function storeCommand(): Command {
     .option(
       '--length <number>',
       'Generated password length (8-128, default 24; requires --generate-password)',
-      Number.parseInt,
+      boundedInt('length', 8, 128),
     )
     .option('--no-uppercase', 'Exclude uppercase letters from the generated password')
     .option('--no-lowercase', 'Exclude lowercase letters from the generated password')
