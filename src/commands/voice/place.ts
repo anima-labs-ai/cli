@@ -8,9 +8,20 @@
  *     attestation (console → Settings → Outbound Calling & SMS). Once
  *     attested, dialing is self-serve — there is NO per-call consent flag;
  *     an un-attested org gets a 451 with the same guidance.
- *   - RND check (reassigned-number) — server-side, no CLI flag.
- *   - Time-of-day window — server-side, no CLI flag.
- *   - Per-plan daily call cap — server-side, returns 402 with upgrade.
+ *   - Per-plan MONTHLY call cap (Starter 250, Growth 1000, Enterprise
+ *     20000) plus a 5-calls-per-second ceiling — 402 and 429 respectively.
+ *   - Voice spend ceiling: calls stop at the plan's included minutes
+ *     unless the org opted in to metered overage and named a dollar
+ *     limit. Past both, 402 with `resource: "voice"` in details.
+ *
+ * NOT gates, despite the common assumption: there is no reassigned-number
+ * (RND) scrub, no Do-Not-Call scrub, and no calling-hour window. The RND
+ * lookup exists in the API repo but is disabled in production and has never
+ * run on a real call; no federal or state DNC registry is ever queried (the
+ * `telemarketing_with_dnc_scrub` consent basis records that the ORG scrubbed,
+ * it does not run one); and local time is never computed. All three
+ * obligations stay with the caller — do not let this command's output imply
+ * otherwise.
  *
  * Voice is chosen per agent (Agent.voiceId), set in the console — there is
  * no per-call voice or tier override here.
@@ -35,7 +46,7 @@ interface PlaceCallOptions {
 export function placeCallCommand(): Command {
   return new Command("place")
     .description(
-      "Place an outbound voice call (TCPA + RND + time-of-day gated server-side)",
+      "Place an outbound voice call (TCPA consent, plan caps and voice spend gated server-side)",
     )
     .requiredOption(
       "--to <number>",
@@ -104,20 +115,35 @@ export function placeCallCommand(): Command {
           // useful message rather than a generic stack trace.
           if (error.status === 503) {
             output.error(`Voice unavailable: ${error.message}`);
-            output.info(
+            output.notice(
               "If this is a fresh deploy, the phone feature may not be enabled yet, or the voice-provider credentials are missing.",
             );
           } else if (error.status === 451) {
             // TCPA consent gate — the org has not attested outbound consent.
             output.error(`Outbound not enabled: ${error.message}`);
-            output.info(
+            output.notice(
               "Complete the one-time consent attestation in the console: Settings → Outbound Calling & SMS (Starter plan and above).",
             );
           } else if (error.status === 402) {
-            output.error("Per-plan call cap reached for this billing period.");
-            output.info(
-              "Upgrade at https://console.useanima.sh/settings or wait for the next cycle.",
-            );
+            // Two different walls return 402 and the remedies are opposite:
+            // a call-count cap clears next cycle, a spend ceiling does not —
+            // telling someone to "wait for the next cycle" when they need to
+            // raise a dollar limit sends them away for a month. The server
+            // says which in details.resource.
+            const details = error.data as Record<string, unknown> | undefined;
+            if (details?.resource === 'voice') {
+              output.error(error.message);
+              output.notice(
+                'Enable metered overage or raise your spend limit in the console: Billing → Metered overage.',
+              );
+            } else {
+              output.error(
+                error.message || 'Per-plan call cap reached for this billing period.',
+              );
+              output.notice(
+                'Upgrade at https://console.useanima.sh/billing or wait for the next cycle.',
+              );
+            }
           } else if (error.status === 403) {
             output.error(`Blocked by safety gate: ${error.message}`);
           } else {

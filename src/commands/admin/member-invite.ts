@@ -31,7 +31,7 @@ export function memberInviteCommand(): Command {
       // ("this is console-only") from arriving as "Route not found", which
       // reads as a broken CLI.
       output.error('Inviting members is not available from the CLI.');
-      output.info(
+      output.notice(
         'Organization membership is managed in the console. Send invitations at https://console.useanima.sh/settings/members.',
       );
       process.exit(1);

@@ -239,7 +239,7 @@ export function tailCommand(): Command {
                 ? '[am tail] This credential cannot read the event stream.'
                 : '[am tail] Not authenticated.',
             );
-            output.info(
+            output.notice(
               error.status === 403
                 ? 'The stream is master-only. Run `am auth elevate` once to enrol this machine, or use a master key (mk_…) via `am init` → "existing API key".'
                 : 'Run `am auth login`, or configure an API key with `am init`.',
