@@ -101,30 +101,56 @@ export function parseSecretRef(name: string, raw: unknown): SecretRef {
   throw new Error(`secrets.${name}: unknown source "${String(source)}" (expected "anima" | "env" | "exec")`);
 }
 
-/** Load and validate anima.json (or a given config path). Returns empty config if file absent. */
-export async function loadAnimaConfig(startDir: string = process.cwd()): Promise<{
+async function readAnimaConfigFile(candidate: string): Promise<AnimaConfig> {
+  const buf = await fs.readFile(candidate, 'utf-8');
+  const parsed = JSON.parse(buf) as unknown;
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error(`${candidate}: expected JSON object`);
+  }
+  const raw = parsed as Record<string, unknown>;
+  const config: AnimaConfig = {};
+  if (raw.secrets && typeof raw.secrets === 'object') {
+    config.secrets = {};
+    for (const [name, val] of Object.entries(raw.secrets as Record<string, unknown>)) {
+      config.secrets[name] = parseSecretRef(name, val);
+    }
+  }
+  return config;
+}
+
+/**
+ * Load and validate anima.json.
+ *
+ * With `explicitPath` the file must exist — the caller named it, so falling
+ * back to discovery (or to an empty config) would run the command against
+ * secrets it did not ask for and never say so. Without it, walk up from
+ * `startDir` the way .gitignore/package.json lookup does, where "absent" is
+ * an ordinary answer and yields an empty config.
+ */
+export async function loadAnimaConfig(
+  startDir: string = process.cwd(),
+  explicitPath?: string,
+): Promise<{
   config: AnimaConfig;
   configPath: string | null;
 }> {
-  // Walk up directories looking for anima.json, same pattern as .gitignore/package.json.
+  if (explicitPath !== undefined) {
+    const resolved = path.resolve(explicitPath);
+    try {
+      return { config: await readAnimaConfigFile(resolved), configPath: resolved };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`Config file not found: ${resolved}`);
+      }
+      throw err;
+    }
+  }
+
   let dir = path.resolve(startDir);
   while (true) {
     const candidate = path.join(dir, 'anima.json');
     try {
-      const buf = await fs.readFile(candidate, 'utf-8');
-      const parsed = JSON.parse(buf) as unknown;
-      if (typeof parsed !== 'object' || parsed === null) {
-        throw new Error(`${candidate}: expected JSON object`);
-      }
-      const raw = parsed as Record<string, unknown>;
-      const config: AnimaConfig = {};
-      if (raw.secrets && typeof raw.secrets === 'object') {
-        config.secrets = {};
-        for (const [name, val] of Object.entries(raw.secrets as Record<string, unknown>)) {
-          config.secrets[name] = parseSecretRef(name, val);
-        }
-      }
-      return { config, configPath: candidate };
+      return { config: await readAnimaConfigFile(candidate), configPath: candidate };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     }

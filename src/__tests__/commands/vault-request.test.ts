@@ -21,7 +21,12 @@ const { createProgram } = await import('../../cli.js');
 interface RouteResponse {
   status: number;
   body: unknown | (() => unknown);
-  assert?: (ctx: { url: URL; body: unknown }) => void;
+  assert?: (ctx: {
+    url: URL;
+    body: unknown;
+    raw: string;
+    contentType: string | null;
+  }) => void;
 }
 
 let mockServer: ReturnType<typeof Bun.serve> | null = null;
@@ -110,7 +115,7 @@ describe('vault request commands', () => {
         let body: unknown;
         const text = await req.text();
         if (text) body = JSON.parse(text);
-        route.assert?.({ url, body });
+        route.assert?.({ url, body, raw: text, contentType: req.headers.get('content-type') });
 
         const responseBody = typeof route.body === 'function' ? route.body() : route.body;
         return new Response(JSON.stringify(responseBody), {
@@ -325,6 +330,37 @@ describe('vault request commands', () => {
     const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(printed).toContain('FULFILLED');
     expect(printed).toContain('cred_5');
+  });
+
+  // A POST that declares `content-type: application/json` but sends no body is
+  // a shape the API rejects with a 500, not a 404 — so `vault request cancel`
+  // could never succeed against a real server, for any request id. The old test
+  // only asserted the path was hit, which a mock server answers happily
+  // regardless of the body, so the defect shipped green.
+  test('request cancel sends a JSON body, never a bare content-type header', async () => {
+    let seenRaw: string | undefined;
+    let seenContentType: string | null | undefined;
+    setRoute('POST', '/v1/vault/credential-requests/req_4/cancel', {
+      status: 200,
+      body: { status: 'CANCELLED' },
+      assert: ({ raw, contentType }) => {
+        seenRaw = raw;
+        seenContentType = contentType;
+      },
+    });
+
+    const logSpy = mock((...args: unknown[]) => {});
+    const originalLog = console.log;
+    console.log = logSpy;
+
+    await runProgram(['--json', 'vault', 'request', 'cancel', 'req_4']);
+
+    console.log = originalLog;
+
+    if (seenContentType?.includes('application/json') === true) {
+      expect(seenRaw).not.toBe('');
+      expect(() => JSON.parse(seenRaw as string)).not.toThrow();
+    }
   });
 
   test('request cancel posts to /cancel', async () => {

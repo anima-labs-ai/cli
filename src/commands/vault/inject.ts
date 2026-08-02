@@ -127,6 +127,11 @@ export function injectCommand(): Command {
         }
 
         let result = input;
+        // References we were asked to resolve and could not. Emitting these
+        // verbatim would hand the caller a literal `{{vault:...}}` or `vtk_…`
+        // where a secret belongs, so they are a hard failure — the same
+        // fail-closed stance `exec` and `redact` already take.
+        const unresolved: string[] = [];
 
         // Step 3: Exchange tokens and substitute
         for (const token of tokens) {
@@ -139,6 +144,7 @@ export function injectCommand(): Command {
               result = result.replaceAll(token, secret);
               output.debug(`Exchanged token ${token.substring(0, 12)}... -> ${credential.name}`);
             } else {
+              unresolved.push(token);
               output.debug(`Token ${token.substring(0, 12)}... resolved but no primary secret`);
             }
           } catch (error: unknown) {
@@ -147,6 +153,7 @@ export function injectCommand(): Command {
               injectorHintShown = true;
               output.warn(INJECTOR_GATE_403_MESSAGE);
             }
+            unresolved.push(token);
             output.debug(`Failed to exchange token ${token.substring(0, 12)}...: ${msg}`);
           }
         }
@@ -172,11 +179,23 @@ export function injectCommand(): Command {
             if (value) {
               result = result.replaceAll(tmpl.template, value);
               output.debug(`Resolved template ${tmpl.template} -> [${value.length} chars]`);
+            } else {
+              unresolved.push(tmpl.template);
+              output.debug(`Template ${tmpl.template} has no value at that field`);
             }
           } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : 'Unknown error';
+            unresolved.push(tmpl.template);
             output.debug(`Failed to resolve template ${tmpl.template}: ${msg}`);
           }
+        }
+
+        if (unresolved.length > 0) {
+          output.error(
+            `Refusing to emit unresolved vault reference(s): ${unresolved.join(', ')}. ` +
+              'Nothing was written to stdout.',
+          );
+          process.exit(1);
         }
 
         // Step 5: Output injected text

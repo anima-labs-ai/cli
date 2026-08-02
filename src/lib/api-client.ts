@@ -107,11 +107,25 @@ export class ApiClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
 
+    // A request with no body must not claim `Content-Type: application/json`.
+    // The API's body parser trusts the header and fails on the empty payload,
+    // turning what should be a 404 into a 500 — which is what made
+    // `vault request cancel` unusable for every request id.
+    const serialized = body === undefined ? undefined : JSON.stringify(body);
+    const headers =
+      serialized === undefined
+        ? Object.fromEntries(
+            Object.entries(this.headers).filter(
+              ([name]) => name.toLowerCase() !== 'content-type',
+            ),
+          )
+        : this.headers;
+
     try {
       const response = await fetch(url, {
         method,
-        headers: this.headers,
-        body: body ? JSON.stringify(body) : undefined,
+        headers,
+        body: serialized,
         signal: controller.signal,
       });
 

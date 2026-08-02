@@ -188,10 +188,12 @@ export function auditCommand(): Command {
         if (configPath) output.debug(`Found config: ${configPath}`);
 
         const findings: AuditFinding[] = [];
+        const missingPaths: string[] = [];
         for (const root of roots) {
           const stat = await fs.stat(root).catch(() => null);
           if (!stat) {
             output.warn(`Path not found: ${root}`);
+            missingPaths.push(root);
             continue;
           }
           if (stat.isFile()) {
@@ -215,25 +217,44 @@ export function auditCommand(): Command {
         }
 
         if (output.isMachineFormat()) {
-          output.json({ findings, refIssues, scanned: roots, configPath });
+          output.json({ findings, refIssues, scanned: roots, missing: missingPaths, configPath });
         } else {
           if (findings.length === 0 && refIssues.length === 0) {
             output.success('No plaintext secrets found.');
           } else {
             output.warn(`Found ${findings.length} potential secret(s):`);
-            for (const f of findings) {
-              output.info(`  ${f.file}:${f.line}:${f.column}  ${f.patternName}  ${f.match}`);
-              if (globals.debug) output.info(`    ${f.context}`);
+            // `table` and not a loop of `info`: `info` is human-format-only
+            // decoration, so every agent and CI caller — the ones running the
+            // default agent format — was told a count and never which findings.
+            output.table(
+              ['File', 'Line', 'Column', 'Pattern', 'Match'],
+              findings.map((f) => [
+                f.file,
+                String(f.line),
+                String(f.column),
+                f.patternName,
+                f.match,
+              ]),
+            );
+            if (globals.debug) {
+              for (const f of findings) output.debug(`${f.file}:${f.line}  ${f.context}`);
             }
           }
         }
 
         if (opts.fix) {
-          output.info('--fix is not yet implemented. Replace findings manually, or');
-          output.info('  add them to anima.json as SecretRefs and use `am vault run -- ...`.');
+          // `warn`, not `info`: this says the command did nothing, which the
+          // caller must see in every format — silently exiting 0 from a `--fix`
+          // reads as "fixed".
+          output.warn(
+            '--fix is not yet implemented — nothing was changed. Replace findings manually, or add them to anima.json as SecretRefs and use `am vault exec -- ...`.',
+          );
         }
 
-        if (opts.check && findings.length > 0) process.exit(1);
+        // A path that could not be read is not a clean scan. Under `--check`
+        // (the CI gate) a mistyped path must fail the build rather than
+        // reporting the green of a scan that never ran.
+        if (opts.check && (findings.length > 0 || missingPaths.length > 0)) process.exit(1);
       } catch (error: unknown) {
         output.fatal(`audit failed: ${error instanceof Error ? error.message : String(error)}`);
       }
