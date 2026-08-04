@@ -68,6 +68,12 @@ interface SignUpResponse {
 	api_key: string;
 	master_key?: string;
 	auth_type: "agent_unverified" | "agent_verified" | "claimed";
+	/**
+	 * Set when sign-up was asked to provision a vault and did. Optional because
+	 * an older API returns no such field; `null` because a current API that has
+	 * the vault feature switched off returns one explicitly.
+	 */
+	vault_id?: string | null;
 }
 
 function normalizeOutputFormat(format?: string): OutputFormat | null {
@@ -118,11 +124,16 @@ async function callSignUp(
 	apiUrl: string,
 	humanEmail: string,
 	username: string,
+	provisionVault: boolean,
 ): Promise<SignUpResponse> {
 	const response = await fetch(`${apiUrl}/v1/agent/sign-up`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ human_email: humanEmail, username }),
+		body: JSON.stringify({
+			human_email: humanEmail,
+			username,
+			provision_vault: provisionVault,
+		}),
 	});
 	if (!response.ok) {
 		throw new SignUpError(response.status, await response.text());
@@ -205,7 +216,8 @@ export async function archiveCurrentSetup(): Promise<string | null> {
 	// also the answer to "how do I get back to it".
 	const base = existing.defaultIdentity ?? existing.defaultOrg ?? "previous";
 	let name = base;
-	for (let n = 2; config.profiles?.[name] !== undefined; n++) name = `${base}-${n}`;
+	for (let n = 2; config.profiles?.[name] !== undefined; n++)
+		name = `${base}-${n}`;
 
 	await saveConfig({
 		...config,
@@ -255,6 +267,17 @@ async function runInteractiveNew(
 	});
 	if (isCancel(username)) bail();
 
+	// Default yes: the vault is free, provisioning it is one row, and it is the
+	// only moment this agent can ever get one on its own — `vault provision` is
+	// master-gated and sign-up never discloses the master key. Saying no here
+	// means asking the owner to approve one later (`am vault request-access`).
+	const provisionVault = await clack.confirm({
+		message:
+			"Create an encrypted vault for this agent? (Free tier includes one.)",
+		initialValue: true,
+	});
+	if (isCancel(provisionVault)) bail();
+
 	const provisionPhone = await clack.confirm({
 		message:
 			"Provision a US phone number too? (Starter+ tier required for actual provisioning.)",
@@ -286,7 +309,12 @@ async function runInteractiveNew(
 	signupSpinner.start("Creating org + agent + inbox…");
 	let signup: SignUpResponse;
 	try {
-		signup = await callSignUp(apiUrl, humanEmail as string, username as string);
+		signup = await callSignUp(
+			apiUrl,
+			humanEmail as string,
+			username as string,
+			provisionVault as boolean,
+		);
 		signupSpinner.stop(`Inbox created: ${signup.inbox_id}`);
 	} catch (error) {
 		signupSpinner.stop("Sign-up failed.");
@@ -418,9 +446,12 @@ async function runInteractiveNew(
 		`API key:  ${signup.api_key.slice(0, 12)}…  (saved to ${getConfigDir()})`,
 	];
 	if (phoneNumber) lines.push(`Phone:    ${phoneNumber}`);
+	if (signup.vault_id) lines.push(`Vault:    ${signup.vault_id}`);
 	if (archived) {
 		lines.push("");
-		lines.push(`Your previous agent was not deleted — it is saved as a profile.`);
+		lines.push(
+			`Your previous agent was not deleted — it is saved as a profile.`,
+		);
 		lines.push(`Switch back with:  am config profile use ${archived}`);
 	}
 	if (phoneError) {
@@ -448,15 +479,49 @@ async function runInteractiveNew(
 		"1. Verify to unlock sending",
 	);
 
-	// Vault is upgrade-gated (FREE sign-up can't provision one). Surface it
-	// the same way phone is, so the capability is discoverable from init.
-	clack.note(
-		[
-			`Vault (encrypted secrets + TOTP) and extra phone numbers unlock on`,
-			`Starter+. Upgrade anytime at https://console.useanima.sh/settings.`,
-		].join("\n"),
-		"2. More capabilities",
-	);
+	// This note used to say the vault "unlocks on Starter+", which stopped being
+	// true with the 2026-07 plan change (Free includes a vault; it is telephony
+	// that starts at Starter). Worse, it was the only thing init said about the
+	// vault, so the honest version of the old message would have been "you can
+	// never have one" — sign-up could not provision a vault at all until
+	// `provision_vault` existed.
+	if (signup.vault_id) {
+		clack.note(
+			[
+				`An encrypted vault is ready. Secrets go in by reference — the agent`,
+				`uses them without ever reading them back:`,
+				``,
+				`  am vault store --name stripe-key --type api_key \\`,
+				`      --provider stripe --key-stdin --allowed-host api.stripe.com`,
+				`  am vault list`,
+			].join("\n"),
+			"2. Your vault",
+		);
+	} else if (provisionVault) {
+		// Asked for, not delivered. Say so rather than leaving the user to
+		// discover it at the first `am vault list`.
+		clack.note(
+			[
+				`A vault was requested but the API did not provision one — the vault`,
+				`feature may be disabled on this deployment. Everything else is set up.`,
+				``,
+				`Ask your org owner to approve one:  am vault request-access`,
+			].join("\n"),
+			"2. Vault not provisioned",
+		);
+	} else {
+		clack.note(
+			[
+				`No vault was created. An agent cannot provision its own vault after`,
+				`sign-up — the owner has to approve it:`,
+				``,
+				`  am vault request-access --reason "why you need it"`,
+				``,
+				`Phone numbers and extra capacity start on Starter+.`,
+			].join("\n"),
+			"2. More capabilities",
+		);
+	}
 
 	// Only commands this key can actually run. `am tail` used to be here and
 	// cannot work: /v1/events/stream is master-gated and init stores an agent
@@ -845,7 +910,9 @@ async function offerExistingSetupChoices(
 			output.error(
 				"No default organization is configured, so there is no org to add an agent to.",
 			);
-			output.notice("Set one with `am org switch <orgId>`, or run `am org list`.");
+			output.notice(
+				"Set one with `am org switch <orgId>`, or run `am org list`.",
+			);
 			process.exit(1);
 		}
 		await createAgentInCurrentOrg(existing.defaultOrg, globals, output);
