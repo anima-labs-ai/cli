@@ -7,6 +7,7 @@ import {
   deleteProfile,
   listProfiles,
   getActiveProfile,
+  redactConfig,
 } from '../../lib/config.js';
 
 export function configProfileCommand(): Command {
@@ -91,7 +92,7 @@ export function configProfileCommand(): Command {
         }
 
         if (output.isMachineFormat()) {
-          output.json(profiles);
+          output.json(redactConfig(profiles));
           return;
         }
 

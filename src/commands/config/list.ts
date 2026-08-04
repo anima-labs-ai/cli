@@ -7,6 +7,7 @@ import {
   resolveConfigValue,
   getValidConfigKeys,
   getConfigDir,
+  redactConfig,
   type ProfileConfig,
 } from '../../lib/config.js';
 
@@ -27,7 +28,7 @@ export function configListCommand(): Command {
         }
 
         if (output.isMachineFormat()) {
-          output.json(profiles);
+          output.json(redactConfig(profiles));
           return;
         }
 
@@ -66,7 +67,7 @@ export function configListCommand(): Command {
       const config = await getConfig();
 
       if (output.isMachineFormat()) {
-        output.json(config);
+        output.json(redactConfig(config));
         return;
       }
 

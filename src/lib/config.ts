@@ -104,6 +104,29 @@ export interface ProfileConfig {
   expiresAt?: string;
 }
 
+/** What a redacted credential is replaced with. Matches the vault's own convention: `get` on a login returns `password: "****"`. */
+export const REDACTED = '****';
+
+/**
+ * Strip credentials out of anything about to be serialized for a caller.
+ *
+ * Config objects carry `profiles.<name>.apiKey`, a live `sk_live_`/`mk_`
+ * credential. Structured output is the DEFAULT whenever stdout is not a TTY
+ * (see [[resolveFormat]]), so `am config list` printed that key in full to
+ * every pipe, redirect, CI log and agent transcript — while the human table
+ * beside it deliberately printed only profile names. The safe path was the one
+ * nobody scripting the CLI ever took.
+ *
+ * The value is replaced rather than deleted so the shape a consumer sees does
+ * not change, and no last-4 is kept: this output goes to logs, and a partial
+ * key still confirms which credential is where.
+ */
+export function redactConfig<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (key, val) => (key === 'apiKey' && typeof val === 'string' ? REDACTED : val)),
+  ) as T;
+}
+
 /**
  * Which layer a resolved value came from. `flag` and `env` name themselves;
  * `profile` carries the profile's name, because "from a profile" is not

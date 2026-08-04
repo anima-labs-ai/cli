@@ -10,6 +10,12 @@ Releases 0.2.x through 0.6.4 shipped without changelog entries; the record resum
 
 _Nothing yet._
 
+## [0.7.1] - 2026-08-04
+
+### Fixed
+
+- **`am config list` no longer prints a live API key.** A profile's `apiKey` is a real `sk_live_`/`mk_` credential, and the structured-output path serialized the whole config object with it intact. Structured output is the *default whenever stdout is not a TTY*, so the human at a terminal saw the safe table — which prints profile names and no keys — while every pipe, redirect, CI step and agent invocation received the key in full. Three call sites (`config list`, `config list --profiles`, `config profile list`) now redact through one helper. The value is replaced with `****` rather than removed, so the shape a consumer parses does not change, and no last-4 is kept: this output lands in logs, where a partial key still identifies which credential is deployed where. If you have run `am config list` non-interactively — in CI, piped to a file, or under an agent — treat the key as disclosed and rotate it.
+
 ## [0.7.0] - 2026-08-04
 
 ### Removed
@@ -141,7 +147,8 @@ _Nothing yet._
 - Command groups: auth, identity, email, phone, vault, config, setup-mcp, extension, admin, and init.
 - npm package metadata, changelog tracking, and smoke-test support for installation verification.
 
-[Unreleased]: https://github.com/anima-labs-ai/cli/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/anima-labs-ai/cli/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/anima-labs-ai/cli/releases/tag/v0.7.1
 [0.7.0]: https://github.com/anima-labs-ai/cli/releases/tag/v0.7.0
 [0.6.10]: https://github.com/anima-labs-ai/cli/releases/tag/v0.6.10
 [0.6.9]: https://github.com/anima-labs-ai/cli/releases/tag/v0.6.9

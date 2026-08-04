@@ -139,6 +139,75 @@ describe('config commands', () => {
     });
   });
 
+  describe('config list — credential redaction', () => {
+    // A profile's apiKey is a live sk_live_/mk_ credential. Structured output is
+    // the DEFAULT whenever stdout is not a TTY, so these are the paths that run
+    // under a pipe, in CI, and under an agent — the human table beside them
+    // prints profile names only and never leaked. Asserting on the raw stdout
+    // string, not a parsed field, because the requirement is that the secret
+    // does not appear in the output at all, by any route.
+    // Deliberately not key-shaped. Redaction matches on the `apiKey` property
+    // name, not on the value, so a realistic-looking literal buys no coverage —
+    // and a real-looking one trips GitHub push protection (it did).
+    const SECRET = 'CANARY-this-value-must-never-be-printed-0001';
+
+    function withProfileKey(): void {
+      writeAppConfig({
+        activeProfile: 'prod',
+        defaultOrg: 'prod-org',
+        profiles: {
+          prod: { apiUrl: 'https://api.useanima.sh', defaultOrg: 'prod-org', apiKey: SECRET },
+        },
+      });
+    }
+
+    async function captureJson(argv: string[]): Promise<string> {
+      const logSpy = mock((...args: unknown[]) => {});
+      const origLog = console.log;
+      console.log = logSpy;
+      program.exitOverride();
+      await program.parseAsync(['node', 'anima', ...argv]);
+      console.log = origLog;
+      return logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    }
+
+    test('config list --json never prints a profile apiKey', async () => {
+      withProfileKey();
+      const output = await captureJson(['--json', 'config', 'list']);
+
+      expect(output).not.toContain(SECRET);
+      // Redacted, not dropped — consumers still see the field exists.
+      expect(output).toContain('****');
+      // Still useful output, so this is not passing by printing nothing.
+      expect(output).toContain('prod-org');
+    });
+
+    test('config list --profiles --json never prints a profile apiKey', async () => {
+      withProfileKey();
+      const output = await captureJson(['--json', 'config', 'list', '--profiles']);
+
+      expect(output).not.toContain(SECRET);
+      expect(output).toContain('prod');
+    });
+
+    test('config profile list --json never prints a profile apiKey', async () => {
+      withProfileKey();
+      const output = await captureJson(['--json', 'config', 'profile', 'list']);
+
+      expect(output).not.toContain(SECRET);
+      expect(output).toContain('prod');
+    });
+
+    // No last-4 either: this output lands in CI logs, where a partial key still
+    // confirms which credential is deployed where.
+    test('redaction keeps no tail of the key', async () => {
+      withProfileKey();
+      const output = await captureJson(['--json', 'config', 'list']);
+
+      expect(output).not.toContain(SECRET.slice(-4));
+    });
+  });
+
   describe('config list', () => {
     test('lists all config values', async () => {
       writeAppConfig({
