@@ -26,6 +26,29 @@ import { InvalidArgumentError } from 'commander';
  * is simply wrong, and silently rewriting what the user typed would hide that.
  * It reaches the API and earns an honest 404.
  */
+/**
+ * Read a secret from stdin.
+ *
+ * Exists so a secret never has to be an argv element: `--password`/`--key` put
+ * the value in shell history and in `ps` output for the lifetime of the
+ * process. Same shape as `docker login --password-stdin`.
+ *
+ * A single trailing newline is stripped — `echo secret | am …` is the ordinary
+ * way to call this and the newline is the shell's, not the secret's. Any other
+ * whitespace is left alone: it may be part of the value.
+ */
+export async function readSecretFromStdin(label: string): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as Buffer);
+  }
+  const value = Buffer.concat(chunks).toString('utf-8').replace(/\r?\n$/, '');
+  if (value.length === 0) {
+    throw new Error(`${label} was empty on stdin`);
+  }
+  return value;
+}
+
 export function requireNonEmptyArg(label: string) {
   return (value: string): string => {
     if (value.trim() === '') {

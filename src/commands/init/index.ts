@@ -46,6 +46,12 @@ import {
 import { enrollmentFor } from "../../lib/elevation.js";
 import { handleOrpcError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
+import {
+	printAgentSummary,
+	printOutro,
+	printVaultStep,
+	printVerifyStep,
+} from "./summary.js";
 
 const DEFAULT_API_URL = "https://api.useanima.sh";
 const DEFAULT_OUTPUT_FORMAT = "table";
@@ -68,6 +74,12 @@ interface SignUpResponse {
 	api_key: string;
 	master_key?: string;
 	auth_type: "agent_unverified" | "agent_verified" | "claimed";
+	/**
+	 * Set when sign-up was asked to provision a vault and did. Optional because
+	 * an older API returns no such field; `null` because a current API that has
+	 * the vault feature switched off returns one explicitly.
+	 */
+	vault_id?: string | null;
 }
 
 function normalizeOutputFormat(format?: string): OutputFormat | null {
@@ -118,11 +130,16 @@ async function callSignUp(
 	apiUrl: string,
 	humanEmail: string,
 	username: string,
+	provisionVault: boolean,
 ): Promise<SignUpResponse> {
 	const response = await fetch(`${apiUrl}/v1/agent/sign-up`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ human_email: humanEmail, username }),
+		body: JSON.stringify({
+			human_email: humanEmail,
+			username,
+			provision_vault: provisionVault,
+		}),
 	});
 	if (!response.ok) {
 		throw new SignUpError(response.status, await response.text());
@@ -205,7 +222,8 @@ export async function archiveCurrentSetup(): Promise<string | null> {
 	// also the answer to "how do I get back to it".
 	const base = existing.defaultIdentity ?? existing.defaultOrg ?? "previous";
 	let name = base;
-	for (let n = 2; config.profiles?.[name] !== undefined; n++) name = `${base}-${n}`;
+	for (let n = 2; config.profiles?.[name] !== undefined; n++)
+		name = `${base}-${n}`;
 
 	await saveConfig({
 		...config,
@@ -255,6 +273,17 @@ async function runInteractiveNew(
 	});
 	if (isCancel(username)) bail();
 
+	// Default yes: the vault is free, provisioning it is one row, and it is the
+	// only moment this agent can ever get one on its own — `vault provision` is
+	// master-gated and sign-up never discloses the master key. Saying no here
+	// means asking the owner to approve one later (`am request vault`).
+	const provisionVault = await clack.confirm({
+		message:
+			"Create an encrypted vault for this agent? (Free tier includes one.)",
+		initialValue: true,
+	});
+	if (isCancel(provisionVault)) bail();
+
 	const provisionPhone = await clack.confirm({
 		message:
 			"Provision a US phone number too? (Starter+ tier required for actual provisioning.)",
@@ -286,7 +315,12 @@ async function runInteractiveNew(
 	signupSpinner.start("Creating org + agent + inbox…");
 	let signup: SignUpResponse;
 	try {
-		signup = await callSignUp(apiUrl, humanEmail as string, username as string);
+		signup = await callSignUp(
+			apiUrl,
+			humanEmail as string,
+			username as string,
+			provisionVault as boolean,
+		);
 		signupSpinner.stop(`Inbox created: ${signup.inbox_id}`);
 	} catch (error) {
 		signupSpinner.stop("Sign-up failed.");
@@ -405,75 +439,23 @@ async function runInteractiveNew(
 		);
 	}
 
-	// ── Summary ──
-	const lines = [
-		`Inbox:    ${signup.inbox_id}`,
-		`Agent ID: ${signup.agent_id}`,
-		`Org ID:   ${signup.organization_id}`,
-		// Read the path rather than name it: config lives wherever env-paths puts
-		// it (~/Library/Preferences/anima on macOS, $XDG_CONFIG_HOME/anima on
-		// Linux), never in the `~/.anima/config` this line used to claim. That
-		// directory does not exist, so anyone who went looking for their key
-		// after init found nothing there.
-		`API key:  ${signup.api_key.slice(0, 12)}…  (saved to ${getConfigDir()})`,
-	];
-	if (phoneNumber) lines.push(`Phone:    ${phoneNumber}`);
-	if (archived) {
-		lines.push("");
-		lines.push(`Your previous agent was not deleted — it is saved as a profile.`);
-		lines.push(`Switch back with:  am config profile use ${archived}`);
-	}
-	if (phoneError) {
-		lines.push("");
-		lines.push(`Phone:    not provisioned (${phoneError})`);
-		lines.push(
-			"         If you are on Free tier, upgrade at https://console.useanima.sh/settings.",
-		);
-	}
-
-	clack.note(lines.join("\n"), "Your new agent");
-
-	// Verification is the next required step: until the owner submits the
-	// OTP the agent is `agent_unverified` and may only email its own owner.
-	// The CLI exposes the claim via `am verify <code>` (was previously a
-	// dead-end — the OTP was sent with no command to submit it).
-	clack.note(
-		[
-			`We emailed a 6-digit code to ${humanEmail} (the agent's owner).`,
-			`Until it's verified this agent can only email its owner. To unlock`,
-			`full sending, get the code from the owner and run:`,
-			``,
-			`  am verify <code>`,
-		].join("\n"),
-		"1. Verify to unlock sending",
-	);
-
-	// Vault is upgrade-gated (FREE sign-up can't provision one). Surface it
-	// the same way phone is, so the capability is discoverable from init.
-	clack.note(
-		[
-			`Vault (encrypted secrets + TOTP) and extra phone numbers unlock on`,
-			`Starter+. Upgrade anytime at https://console.useanima.sh/settings.`,
-		].join("\n"),
-		"2. More capabilities",
-	);
-
-	// Only commands this key can actually run. `am tail` used to be here and
-	// cannot work: /v1/events/stream is master-gated and init stores an agent
-	// key, so the second thing onboarding suggested answered 403. A syntax
-	// guard (see onboard-advertised.test.ts) would not have caught that — the
-	// command exists, the credential just cannot use it — so the rule for this
-	// list is narrower than "is it real syntax": it has to work with what init
-	// just saved.
-	clack.outro(
-		[
-			"Welcome aboard. ✸  Try:",
-			'  am email send --to friend@example.com --subject "Hi" --body "I am alive"',
-			"  am agent list             (every agent in your org)",
-			"  am auth whoami            (which agent you are acting as)",
-			"  Dashboard: https://console.useanima.sh",
-		].join("\n"),
-	);
+	// ── Summary + next steps ──
+	// All presentation, so it lives in ./summary.ts; every decision above it
+	// has already been made by this point.
+	printAgentSummary({
+		inboxId: signup.inbox_id,
+		agentId: signup.agent_id,
+		organizationId: signup.organization_id,
+		apiKey: signup.api_key,
+		configDir: getConfigDir(),
+		vaultId: signup.vault_id,
+		phoneNumber,
+		phoneError,
+		archived,
+	});
+	printVerifyStep(humanEmail as string);
+	printVaultStep(signup.vault_id, provisionVault as boolean);
+	printOutro();
 }
 
 async function runInteractiveExisting(
@@ -845,7 +827,9 @@ async function offerExistingSetupChoices(
 			output.error(
 				"No default organization is configured, so there is no org to add an agent to.",
 			);
-			output.notice("Set one with `am org switch <orgId>`, or run `am org list`.");
+			output.notice(
+				"Set one with `am org switch <orgId>`, or run `am org list`.",
+			);
 			process.exit(1);
 		}
 		await createAgentInCurrentOrg(existing.defaultOrg, globals, output);

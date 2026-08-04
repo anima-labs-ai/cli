@@ -8,19 +8,18 @@
  * the terminal — and from there, often to CI logs, screen-recordings, and the
  * LLM reading the terminal.
  *
- * ## Policy: strip-by-default (Option D)
+ * ## Policy: always strip
  *
- * Scrubbing is **on** by default. Users can opt out on a per-invocation basis
- * with `--no-scrub`. Rationale:
+ * Scrubbing is unconditional and there is no opt-out. `--no-scrub` used to
+ * exist as an escape hatch for the case where the scrubber redacted output
+ * that coincidentally contained a secret substring, but it also made
+ * `am vault exec --no-scrub --cred X --as V -- sh -c 'echo $V'` a one-line
+ * plaintext read: the property that an agent can use a secret without seeing
+ * it was opt-out by a single flag. The diagnostic case is not worth that, so
+ * the flag is gone.
  *
- *   - The common failure mode is "child leaks a secret" (frequent, high blast
- *     radius). The rare failure mode is "scrubber redacts legitimate output
- *     that coincidentally contains a secret substring" (uncommon, low impact —
- *     user can re-run with `--no-scrub`).
- *   - Defaults should protect the security-critical case. `--no-scrub` is the
- *     escape hatch for the diagnostic case.
- *   - This matches the posture of 1Password's `op run` (scrub on) and is
- *     strictly safer than Doppler's `doppler run` default (scrub off).
+ * This is stricter than 1Password's `op run` (scrub on, opt-out available)
+ * and far stricter than Doppler's `doppler run` (scrub off by default).
  *
  * ## Performance notes
  *
@@ -36,8 +35,7 @@
  *      single linear pass per literal and avoids regex overhead.
  *
  * A typical `am vault exec` loads ~5 secrets; cost is negligible for normal
- * CLI output volumes. If you ever pipe >100MB/s through a child, `--no-scrub`
- * is the escape hatch.
+ * CLI output volumes.
  */
 
 export interface ScrubPolicy {
@@ -48,12 +46,6 @@ export interface ScrubPolicy {
   /** Minimum length — values shorter than this are NOT scrubbed (too many false positives). */
   minLength: number;
 }
-
-const EMPTY_POLICY: ScrubPolicy = Object.freeze({
-  literals: [],
-  replacement: '[REDACTED]',
-  minLength: 8,
-}) as ScrubPolicy;
 
 export function applyScrub(chunk: Buffer, policy: ScrubPolicy): Buffer {
   if (policy.literals.length === 0) return chunk;
@@ -71,19 +63,13 @@ export function applyScrub(chunk: Buffer, policy: ScrubPolicy): Buffer {
 /**
  * Build the scrub policy used by `am vault exec`.
  *
- * Strip-by-default: unless the caller passes `--no-scrub`, every resolved
- * secret value (of length >= minLength, deduped) becomes a literal that
- * `applyScrub` will redact from the child's stdout/stderr.
+ * Every resolved secret value (of length >= minLength, deduped) becomes a
+ * literal that `applyScrub` will redact from the child's stdout/stderr.
  *
  * The caller is responsible for plumbing the resolved values in and wiring
  * the returned policy into the child's stdio pipes.
  */
-export function buildScrubPolicy(
-  resolvedValues: Record<string, string>,
-  optsNoScrub: boolean,
-): ScrubPolicy {
-  if (optsNoScrub) return EMPTY_POLICY;
-
+export function buildScrubPolicy(resolvedValues: Record<string, string>): ScrubPolicy {
   const minLength = 8;
   // Dedupe — two env vars may map to the same value; scrubbing each independently
   // would do duplicate work on every chunk.

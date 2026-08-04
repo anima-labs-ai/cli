@@ -18,12 +18,6 @@ interface ExecOptions {
   cred?: string[];
   /** --as maps each --cred credentialId to an env var name; same order as --cred */
   as?: string[];
-  /**
-   * Commander quirk: `.option('--no-scrub', ...)` produces `{ scrub: boolean }`
-   * — the flag toggles a positively-named field, NOT a `noScrub: true` pair.
-   * Defaults to true; passing `--no-scrub` flips to false.
-   */
-  scrub?: boolean;
   dryRun?: boolean;
 }
 
@@ -50,7 +44,6 @@ export function execCommand(): Command {
       'Env var name for the corresponding --cred; repeatable in the same order.',
       (value, previous: string[] = []) => [...previous, value],
     )
-    .option('--no-scrub', 'Disable stdout/stderr secret scrubbing (faster, but risky)')
     .option('--dry-run', 'Show which secrets would be resolved without running the command')
     .allowExcessArguments(true)
     .passThroughOptions()
@@ -70,8 +63,13 @@ export function execCommand(): Command {
       try {
         const client = await requireAuth(globals);
 
-        // 1. Load secrets from anima.json (auto-discover walks up from cwd).
-        const { config, configPath } = await loadAnimaConfig();
+        // 1. Load secrets from anima.json (auto-discover walks up from cwd,
+        //    unless --config named a file, which must then exist).
+        //    Exit 2, the bad-input convention: nothing was attempted and the
+        //    remedy is a different command line.
+        const { config, configPath } = await loadAnimaConfig(process.cwd(), opts.config).catch(
+          (err: unknown) => output.fatal(err instanceof Error ? err.message : String(err), 2),
+        );
         const refs: Record<string, SecretRef> = { ...(config.secrets ?? {}) };
 
         if (configPath) output.debug(`Loaded config: ${configPath}`);
@@ -111,7 +109,13 @@ export function execCommand(): Command {
             output.json({ resolved: Object.keys(values), configPath });
           } else {
             output.success('Dry run — would set:');
-            for (const name of Object.keys(values)) output.info(`  ${name}`);
+            // `table`, not `info`: `info` renders in the human format only, so
+            // the agent format — the default for every non-TTY caller — got
+            // "would set:" followed by nothing at all.
+            output.table(
+              ['Variable'],
+              Object.keys(values).map((name) => [name]),
+            );
           }
           return;
         }
@@ -121,9 +125,7 @@ export function execCommand(): Command {
         const childEnv = { ...process.env, ...values };
         const [command, ...args] = childArgv;
 
-        // opts.scrub defaults to true; `--no-scrub` flips it to false. buildScrubPolicy
-        // takes a "noScrub" boolean, so invert: noScrub = !(scrub ?? true).
-        const scrubPolicy = buildScrubPolicy(values, !(opts.scrub ?? true));
+        const scrubPolicy = buildScrubPolicy(values);
 
         const child = spawn(command, args, {
           env: childEnv,

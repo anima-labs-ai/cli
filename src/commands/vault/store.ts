@@ -1,5 +1,5 @@
 import { Command, InvalidArgumentError } from 'commander';
-import { requireNonEmptyArg } from '../../lib/args.js';
+import { boundedInt, readSecretFromStdin, requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { requireAuth, type GlobalOptions } from '../../lib/auth.js';
 import { ApiError } from '../../lib/api-client.js';
@@ -20,6 +20,8 @@ interface StoreOptions {
   name: string;
   username?: string;
   password?: string;
+  passwordStdin?: boolean;
+  keyStdin?: boolean;
   uri?: string;
   generatePassword?: boolean;
   length?: number;
@@ -85,7 +87,7 @@ export function storeCommand(): Command {
     .option('--type <type>', 'Credential type', validateType, 'login' as CredentialType)
     .requiredOption('--name <name>', 'Credential name')
     .option('--username <user>', 'Login username')
-    .option('--password <pass>', 'Login password')
+    .option('--password-stdin', 'Read the login password from stdin, keeping it out of argv')
     .option('--uri <url>', 'Login URL')
     .option(
       '--generate-password',
@@ -94,14 +96,14 @@ export function storeCommand(): Command {
     .option(
       '--length <number>',
       'Generated password length (8-128, default 24; requires --generate-password)',
-      Number.parseInt,
+      boundedInt('length', 8, 128),
     )
     .option('--no-uppercase', 'Exclude uppercase letters from the generated password')
     .option('--no-lowercase', 'Exclude lowercase letters from the generated password')
     .option('--no-numbers', 'Exclude numbers from the generated password')
     .option('--no-special', 'Exclude special characters from the generated password')
     .option('--provider <name>', 'api_key: provider name (e.g. openai, stripe)')
-    .option('--key <value>', 'api_key: the key value (stored encrypted, read back masked)')
+    .option('--key-stdin', 'api_key: read the key value from stdin, keeping it out of argv')
     .option(
       '--allowed-host <host>',
       'api_key: host the key may be brokered to via `vault use` (repeatable; fail-closed without any)',
@@ -121,12 +123,32 @@ export function storeCommand(): Command {
       const output = Output.fromGlobals(globals);
 
       try {
+        // Resolve the stdin-supplied secrets first, before any other
+        // validation can exit — there is one stdin, so the conflicts have to
+        // be settled before we try to read it.
+        if (opts.generatePassword === true && opts.passwordStdin === true) {
+          output.fatal(
+            '--generate-password and --password-stdin are mutually exclusive — omit --password-stdin to have the vault generate one',
+          );
+        }
+        if (opts.passwordStdin === true && opts.keyStdin === true) {
+          output.fatal(
+            '--password-stdin and --key-stdin cannot be combined — stdin can only carry one secret',
+          );
+        }
+        if (opts.passwordStdin === true) {
+          opts.password = await readSecretFromStdin('Password');
+        }
+        if (opts.keyStdin === true) {
+          opts.key = await readSecretFromStdin('Key');
+        }
         if (opts.generatePassword && opts.type !== 'login') {
           output.fatal('--generate-password is only valid with --type login');
         }
         const apiKeyFlagUsed =
           opts.provider !== undefined ||
           opts.key !== undefined ||
+          opts.keyStdin === true ||
           opts.allowedHost.length > 0 ||
           opts.authHeader !== undefined ||
           opts.authScheme !== undefined;
@@ -180,9 +202,6 @@ export function storeCommand(): Command {
             ['Reveal policy', created.revealPolicy],
           ]);
           return;
-        }
-        if (opts.generatePassword && opts.password) {
-          output.fatal('--generate-password and --password are mutually exclusive — omit --password to have the vault generate one');
         }
         const generationFlagUsed =
           opts.length !== undefined ||

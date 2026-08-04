@@ -4,22 +4,23 @@ import pkg from "../package.json" with { type: "json" };
 import { a2aCommands } from "./commands/a2a/index.js";
 import { addressCommands } from "./commands/address/index.js";
 import { adminCommands } from "./commands/admin/index.js";
+import { agentCommands } from "./commands/agent/index.js";
 import { authCommands } from "./commands/auth/index.js";
 import { completionCommand } from "./commands/completion/index.js";
 import { configCommands } from "./commands/config/index.js";
+import { demoCommand } from "./commands/demo/index.js";
 import { doctorCommand } from "./commands/doctor/index.js";
 import { emailCommands } from "./commands/email/index.js";
 import { extensionCommands } from "./commands/extension/index.js";
 import { generateCommand } from "./commands/generate/index.js";
-import { agentCommands } from "./commands/agent/index.js";
 import { inboxCommands } from "./commands/inbox/index.js";
 import { initCommand } from "./commands/init/index.js";
 import { messageCommand } from "./commands/message/index.js";
 import { onboardCommand } from "./commands/onboard/index.js";
 import { orgCommands } from "./commands/org/index.js";
-import { demoCommand } from "./commands/demo/index.js";
 import { phoneCommands } from "./commands/phone/index.js";
 import { registryCommands } from "./commands/registry/index.js";
+import { requestCommands } from "./commands/request/index.js";
 import { securityCommands } from "./commands/security/index.js";
 import { setupMcpCommands } from "./commands/setup-mcp/index.js";
 import { tailCommand } from "./commands/tail/index.js";
@@ -78,6 +79,7 @@ export function createProgram(): Command {
 	program.addCommand(phoneCommands());
 	program.addCommand(registryCommands());
 	program.addCommand(vaultCommands());
+	program.addCommand(requestCommands());
 	program.addCommand(configCommands());
 	program.addCommand(setupMcpCommands());
 	program.addCommand(extensionCommands());
@@ -160,7 +162,7 @@ if (isDirectExecution) {
 				// the user what actually went wrong — append a concrete hint.
 				if (commanderError.code === "commander.excessArguments") {
 					console.error(
-						'Hint: option values with spaces must be quoted. ' +
+						"Hint: option values with spaces must be quoted. " +
 							'Example: --street1 "123 Main St" (not --street1 123 Main St).',
 					);
 					process.exit(1);

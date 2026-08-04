@@ -23,7 +23,6 @@ import { execCommand } from './exec.js';
 import { useCommand } from './use.js';
 import { requestCommand } from './request.js';
 import { auditCommand } from './audit.js';
-import { reloadCommand } from './reload.js';
 import { proxyCommand } from './proxy.js';
 import { agentCommand, typeCommand } from './agent.js';
 
@@ -54,7 +53,6 @@ export function vaultCommands(): Command {
   // New in v0.5 — zero-knowledge execution primitives
   cmd.addCommand(execCommand());
   cmd.addCommand(auditCommand());
-  cmd.addCommand(reloadCommand());
   cmd.addCommand(proxyCommand());
   cmd.addCommand(useCommand());
   cmd.addCommand(requestCommand());

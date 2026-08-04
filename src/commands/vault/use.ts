@@ -6,6 +6,24 @@ import { ApiError } from '../../lib/api-client.js';
 
 type UseMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD';
 
+/**
+ * The broker refuses a non-https target server-side (`insecure_scheme`), so
+ * this only moves the same answer earlier — before a credential-bearing
+ * request is assembled, and with the flag named.
+ */
+function validateUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new InvalidArgumentError(`url must be an absolute URL, got "${value}"`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new InvalidArgumentError(`url must use https, got "${parsed.protocol}//"`);
+  }
+  return value;
+}
+
 function validateMethod(value: string): UseMethod {
   const method = value.toUpperCase();
   if (
@@ -63,7 +81,7 @@ export function useCommand(): Command {
     .option('--agent <id>', 'Agent ID (optional with an agent-bound key)', requireNonEmptyArg('Agent ID'))
     .requiredOption('--credential <id>', 'Credential ID to broker the call with', requireNonEmptyArg('Credential ID'))
     .option('--method <method>', 'HTTP method: GET, POST, PUT, PATCH, DELETE, HEAD', validateMethod, 'GET' as UseMethod)
-    .requiredOption('--url <url>', 'Absolute https:// URL (host must be on the credential allowlist)')
+    .requiredOption('--url <url>', 'Absolute https:// URL (host must be on the credential allowlist)', validateUrl)
     .option('-H, --header <header>', 'Extra request header "Name: value" (repeatable; auth headers are replaced by the credential)', collectHeader, {})
     .option('--body <body>', 'Raw request body (encode JSON yourself)')
     .action(async function (this: Command) {

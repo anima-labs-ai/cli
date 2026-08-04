@@ -55,6 +55,24 @@ function writeAuthConfig(port: number): void {
   writeFileSync(authPath, JSON.stringify({ token: 'test-token', apiUrl: `http://localhost:${port}` }));
 }
 
+/** Stand in for piped stdin — `--password-stdin` reads the secret from it. */
+function feedStdin(text: string): () => void {
+  const original = Object.getOwnPropertyDescriptor(process, 'stdin');
+  Object.defineProperty(process, 'stdin', {
+    configurable: true,
+    value: {
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from(text, 'utf-8');
+      },
+    },
+  });
+  return () => {
+    if (original) Object.defineProperty(process, 'stdin', original);
+  };
+}
+
+let restoreStdin: (() => void) | null = null;
+
 async function runProgram(args: string[]): Promise<void> {
   try {
     await program.parseAsync(['node', 'anima', ...args]);
@@ -181,6 +199,8 @@ describe('vault commands', () => {
   });
 
   afterEach(() => {
+    restoreStdin?.();
+    restoreStdin = null;
     mockServer?.stop();
     mockServer = null;
     clearRoutes();
@@ -299,6 +319,7 @@ describe('vault commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
+    restoreStdin = feedStdin('secret\n');
     await runProgram([
       '--json',
       'vault',
@@ -307,13 +328,23 @@ describe('vault commands', () => {
       '--type', 'login',
       '--name', 'GitHub',
       '--username', 'octocat',
-      '--password', 'secret',
       '--uri', 'https://github.com',
+      '--password-stdin',
     ]);
 
     console.log = originalLog;
-    const parsed = JSON.parse(String(logSpy.mock.calls.at(0)?.at(0) ?? '{}')) as { id: string };
-    expect(parsed.id).toBe(CRED_ID_1);
+    // Search the emitted lines rather than indexing call 0, so this fails on a
+    // real regression rather than on any diagnostic printed ahead of the JSON.
+    const ids = logSpy.mock.calls
+      .map((call) => {
+        try {
+          return (JSON.parse(String(call.at(0))) as { id?: string }).id;
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((id): id is string => id !== undefined);
+    expect(ids).toContain(CRED_ID_1);
   });
 
   test('vault store --generate-password sends generatePassword and no password', async () => {
@@ -382,7 +413,7 @@ describe('vault commands', () => {
     expect(logSpy.mock.calls.length).toBeGreaterThan(0);
   });
 
-  test('vault store rejects --password combined with --generate-password', async () => {
+  test('vault store rejects --password-stdin combined with --generate-password', async () => {
     let apiCalled = false;
     setRoute('POST', '/v1/vault/credentials', {
       status: 200,
@@ -404,7 +435,7 @@ describe('vault commands', () => {
       'store',
       '--agent', AGENT_ID_1,
       '--name', 'Conflicting',
-      '--password', 'hunter2',
+      '--password-stdin',
       '--generate-password',
     ]);
 

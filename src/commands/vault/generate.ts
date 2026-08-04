@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { requireNonEmptyArg } from '../../lib/args.js';
+import { boundedInt, requireNonEmptyArg } from '../../lib/args.js';
 import { Output } from '../../lib/output.js';
 import { type GlobalOptions } from '../../lib/auth.js';
 import { ORPCError, requireOrpcAuth } from '../../lib/orpc.js';
@@ -17,7 +17,7 @@ export function generateCommand(): Command {
   return new Command('generate')
     .description('Generate password')
     .option('--agent <id>', 'Agent ID (optional with agent API key)', requireNonEmptyArg('Agent ID'))
-    .option('--length <number>', 'Password length (4-128)', Number.parseInt)
+    .option('--length <number>', 'Password length (4-128)', boundedInt('length', 4, 128))
     .option('--uppercase', 'Include uppercase letters')
     .option('--lowercase', 'Include lowercase letters')
     .option('--numbers', 'Include numbers')

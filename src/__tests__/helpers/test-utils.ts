@@ -169,6 +169,14 @@ export interface CapturedExit {
   code: number | undefined;
   logs: string[];
   errors: string[];
+  /**
+   * Raw `process.stdout.write` output. Separate from `logs` because the
+   * commands that pipe data — `inject`, `redact` — write the payload directly
+   * rather than through `console.log`, so asserting on `logs` alone silently
+   * passes no matter what they emit.
+   */
+  stdout: string[];
+  stderr: string[];
 }
 
 /**
@@ -207,7 +215,13 @@ export async function runCapturingExit(program: Command, argv: string[]): Promis
     captured.restore();
   }
 
-  return { code, logs: captured.logs, errors: captured.errors };
+  return {
+    code,
+    logs: captured.logs,
+    errors: captured.errors,
+    stdout: captured.stdout,
+    stderr: captured.stderr,
+  };
 }
 
 export function createTestContext(): TestContext {

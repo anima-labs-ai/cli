@@ -18,6 +18,22 @@ mock.module('env-paths', () => ({
 
 const { createProgram } = await import('../../cli.js');
 
+/** `--key-stdin` reads the secret from stdin; stand one in. */
+function feedStdin(text: string): () => void {
+  const original = Object.getOwnPropertyDescriptor(process, 'stdin');
+  Object.defineProperty(process, 'stdin', {
+    configurable: true,
+    value: {
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from(text, 'utf-8');
+      },
+    },
+  });
+  return () => {
+    if (original) Object.defineProperty(process, 'stdin', original);
+  };
+}
+
 interface RouteResponse {
   status: number;
   body: unknown;
@@ -140,6 +156,7 @@ describe('vault store --type api_key', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
+    const restore = feedStdin('sk_live_x\n');
     const code = await runProgram([
       '--json',
       'vault',
@@ -150,8 +167,7 @@ describe('vault store --type api_key', () => {
       'Stripe key',
       '--provider',
       'stripe',
-      '--key',
-      'sk_live_x',
+      '--key-stdin',
       '--allowed-host',
       'api.stripe.com',
       '--allowed-host',
@@ -162,6 +178,7 @@ describe('vault store --type api_key', () => {
       'brokered',
     ]);
 
+    restore();
     console.log = originalLog;
 
     expect(code).toBeUndefined();
@@ -173,7 +190,7 @@ describe('vault store --type api_key', () => {
     expect(seenBody?.revealPolicy).toBe('brokered');
   });
 
-  test('api_key requires --provider and --key', async () => {
+  test('api_key requires --provider and --key-stdin', async () => {
     const errSpy = mock((...args: unknown[]) => {});
     const originalErr = console.error;
     console.error = errSpy;
