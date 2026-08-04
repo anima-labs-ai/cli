@@ -270,7 +270,7 @@ async function runInteractiveNew(
 	// Default yes: the vault is free, provisioning it is one row, and it is the
 	// only moment this agent can ever get one on its own — `vault provision` is
 	// master-gated and sign-up never discloses the master key. Saying no here
-	// means asking the owner to approve one later (`am vault request-access`).
+	// means asking the owner to approve one later (`am request vault`).
 	const provisionVault = await clack.confirm({
 		message:
 			"Create an encrypted vault for this agent? (Free tier includes one.)",
@@ -505,7 +505,7 @@ async function runInteractiveNew(
 				`A vault was requested but the API did not provision one — the vault`,
 				`feature may be disabled on this deployment. Everything else is set up.`,
 				``,
-				`Ask your org owner to approve one:  am vault request-access`,
+				`Ask your owner to approve one:  am request vault --reason "…"`,
 			].join("\n"),
 			"2. Vault not provisioned",
 		);
@@ -515,7 +515,7 @@ async function runInteractiveNew(
 				`No vault was created. An agent cannot provision its own vault after`,
 				`sign-up — the owner has to approve it:`,
 				``,
-				`  am vault request-access --reason "why you need it"`,
+				`  am request vault --reason "why you need it"`,
 				``,
 				`Phone numbers and extra capacity start on Starter+.`,
 			].join("\n"),
