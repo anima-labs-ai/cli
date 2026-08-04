@@ -46,6 +46,12 @@ import {
 import { enrollmentFor } from "../../lib/elevation.js";
 import { handleOrpcError, requireOrpcAuth } from "../../lib/orpc.js";
 import { Output } from "../../lib/output.js";
+import {
+	printAgentSummary,
+	printOutro,
+	printVaultStep,
+	printVerifyStep,
+} from "./summary.js";
 
 const DEFAULT_API_URL = "https://api.useanima.sh";
 const DEFAULT_OUTPUT_FORMAT = "table";
@@ -433,112 +439,23 @@ async function runInteractiveNew(
 		);
 	}
 
-	// ── Summary ──
-	const lines = [
-		`Inbox:    ${signup.inbox_id}`,
-		`Agent ID: ${signup.agent_id}`,
-		`Org ID:   ${signup.organization_id}`,
-		// Read the path rather than name it: config lives wherever env-paths puts
-		// it (~/Library/Preferences/anima on macOS, $XDG_CONFIG_HOME/anima on
-		// Linux), never in the `~/.anima/config` this line used to claim. That
-		// directory does not exist, so anyone who went looking for their key
-		// after init found nothing there.
-		`API key:  ${signup.api_key.slice(0, 12)}…  (saved to ${getConfigDir()})`,
-	];
-	if (phoneNumber) lines.push(`Phone:    ${phoneNumber}`);
-	if (signup.vault_id) lines.push(`Vault:    ${signup.vault_id}`);
-	if (archived) {
-		lines.push("");
-		lines.push(
-			`Your previous agent was not deleted — it is saved as a profile.`,
-		);
-		lines.push(`Switch back with:  am config profile use ${archived}`);
-	}
-	if (phoneError) {
-		lines.push("");
-		lines.push(`Phone:    not provisioned (${phoneError})`);
-		lines.push(
-			"         If you are on Free tier, upgrade at https://console.useanima.sh/settings.",
-		);
-	}
-
-	clack.note(lines.join("\n"), "Your new agent");
-
-	// Verification is the next required step: until the owner submits the
-	// OTP the agent is `agent_unverified` and may only email its own owner.
-	// The CLI exposes the claim via `am verify <code>` (was previously a
-	// dead-end — the OTP was sent with no command to submit it).
-	clack.note(
-		[
-			`We emailed a 6-digit code to ${humanEmail} (the agent's owner).`,
-			`Until it's verified this agent can only email its owner. To unlock`,
-			`full sending, get the code from the owner and run:`,
-			``,
-			`  am verify <code>`,
-		].join("\n"),
-		"1. Verify to unlock sending",
-	);
-
-	// This note used to say the vault "unlocks on Starter+", which stopped being
-	// true with the 2026-07 plan change (Free includes a vault; it is telephony
-	// that starts at Starter). Worse, it was the only thing init said about the
-	// vault, so the honest version of the old message would have been "you can
-	// never have one" — sign-up could not provision a vault at all until
-	// `provision_vault` existed.
-	if (signup.vault_id) {
-		clack.note(
-			[
-				`An encrypted vault is ready. Secrets go in by reference — the agent`,
-				`uses them without ever reading them back:`,
-				``,
-				`  am vault store --name stripe-key --type api_key \\`,
-				`      --provider stripe --key-stdin --allowed-host api.stripe.com`,
-				`  am vault list`,
-			].join("\n"),
-			"2. Your vault",
-		);
-	} else if (provisionVault) {
-		// Asked for, not delivered. Say so rather than leaving the user to
-		// discover it at the first `am vault list`.
-		clack.note(
-			[
-				`A vault was requested but the API did not provision one — the vault`,
-				`feature may be disabled on this deployment. Everything else is set up.`,
-				``,
-				`Ask your owner to approve one:  am request vault --reason "…"`,
-			].join("\n"),
-			"2. Vault not provisioned",
-		);
-	} else {
-		clack.note(
-			[
-				`No vault was created. An agent cannot provision its own vault after`,
-				`sign-up — the owner has to approve it:`,
-				``,
-				`  am request vault --reason "why you need it"`,
-				``,
-				`Phone numbers and extra capacity start on Starter+.`,
-			].join("\n"),
-			"2. More capabilities",
-		);
-	}
-
-	// Only commands this key can actually run. `am tail` used to be here and
-	// cannot work: /v1/events/stream is master-gated and init stores an agent
-	// key, so the second thing onboarding suggested answered 403. A syntax
-	// guard (see onboard-advertised.test.ts) would not have caught that — the
-	// command exists, the credential just cannot use it — so the rule for this
-	// list is narrower than "is it real syntax": it has to work with what init
-	// just saved.
-	clack.outro(
-		[
-			"Welcome aboard. ✸  Try:",
-			'  am email send --to friend@example.com --subject "Hi" --body "I am alive"',
-			"  am agent list             (every agent in your org)",
-			"  am auth whoami            (which agent you are acting as)",
-			"  Dashboard: https://console.useanima.sh",
-		].join("\n"),
-	);
+	// ── Summary + next steps ──
+	// All presentation, so it lives in ./summary.ts; every decision above it
+	// has already been made by this point.
+	printAgentSummary({
+		inboxId: signup.inbox_id,
+		agentId: signup.agent_id,
+		organizationId: signup.organization_id,
+		apiKey: signup.api_key,
+		configDir: getConfigDir(),
+		vaultId: signup.vault_id,
+		phoneNumber,
+		phoneError,
+		archived,
+	});
+	printVerifyStep(humanEmail as string);
+	printVaultStep(signup.vault_id, provisionVault as boolean);
+	printOutro();
 }
 
 async function runInteractiveExisting(
