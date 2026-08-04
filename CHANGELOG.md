@@ -74,6 +74,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - `anima setup-mcp verify --ping` now probes `{origin}/health`; the previous `/mcp/health` rewrite 404'd against every endpoint, so `--ping` always reported remote configs as unreachable.
 - `anima security scan` / `anima security events` without `--org` now derive the organization from auth (via org.me) as the flag help always promised, instead of sending an invalid request.
 
+### Removed
+
+- **`--no-scrub` is gone from every command that had it.** It disabled stdout/stderr secret scrubbing, which is the one thing standing between a vault secret and the terminal. A flag whose only effect is to print secrets should not exist; there is no replacement.
+- **`anima vault store --password` and `--key` are removed.** Passing a secret as an argv value leaks it to the process table, the shell history file and any `ps`-reading sibling process. Use `--password-stdin` / `--key-stdin`, which read the secret from stdin and never materialize it in an inspectable place.
+- **`anima vault reload` is removed.** It forced a server-side snapshot cache refresh that no longer exists; the command had been a no-op that reported success.
+- **`anima inbox update --unlink-agent` is removed.** An inbox now belongs to exactly one agent, so there is no unlinked state to set it to — the API dropped `agentId`'s nullability and a `null` is rejected. `--agent <id>` still moves an inbox to a different agent (409 if that agent already has one).
+
+### Added
+
+- `anima request vault|phone` — ask the agent's owner to provision a vault or a phone number, for the case where the agent hits a capability it is not allowed to grant itself. The owner is emailed and approves or declines in the console. Declines are soft (the agent may ask again) and a pending request expires after 7 days.
+- `anima request list|status|cancel` — inspect and withdraw the agent's own requests. `anima request approve|decline` are owner-side and require a master key.
+- `anima vault store --password-stdin` / `--key-stdin` — read the secret from stdin instead of argv.
+- `anima init` now asks whether to provision a vault and creates the first one during sign-up, closing the dead end where a fresh agent could neither use a vault nor provision one (vault provisioning is master-key-gated by design).
+
+### Fixed
+
+- `anima request cancel` sent a body-less POST that the API answered with a 500; it now sends the empty object the route expects.
+- `anima vault audit --check` no longer reports success when the path it was given does not exist, `--fix` actually writes its fixes, and unresolved vault references are surfaced rather than silently counted as clean.
+- `anima vault inject` and `anima vault exec --config` now fail loud on an unreadable or malformed config instead of continuing with an empty environment.
+- `anima daemon status` / `stop` no longer exit silently when no daemon is running, and every id-taking argument now rejects an empty string.
+
 ## [0.1.0] - 2025-03-25
 
 ### Added
