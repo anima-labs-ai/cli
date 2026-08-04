@@ -304,12 +304,18 @@ describe('inbox commands', () => {
     expect(parsed.displayName).toBe('Sales');
   });
 
-  test('inbox update clear flags send explicit nulls', async () => {
+  // --clear-display-name must send an explicit null, not omit the key: omitting
+  // it means "leave unchanged". agentId has no such flag — an inbox belongs to
+  // exactly one agent, so there is no unlinked state to clear it to, and the
+  // contract dropped its nullability. Asserting agentId is absent is the point:
+  // sending null would now be a 400.
+  test('--clear-display-name sends an explicit null and never touches agentId', async () => {
     setRoute('PATCH', `/v1/inboxes/${INBOX_ID_1}`, {
       status: 200,
-      body: buildInboxResponse({ id: INBOX_ID_1, displayName: null, agentId: null }),
+      body: buildInboxResponse({ id: INBOX_ID_1, displayName: null }),
       assert: ({ body }) => {
-        expect(body).toMatchObject({ displayName: null, agentId: null });
+        expect(body).toMatchObject({ displayName: null });
+        expect(body).not.toHaveProperty('agentId');
       },
     });
 
@@ -317,14 +323,7 @@ describe('inbox commands', () => {
     const originalLog = console.log;
     console.log = logSpy;
 
-    await runProgram([
-      '--json',
-      'inbox',
-      'update',
-      INBOX_ID_1,
-      '--clear-display-name',
-      '--unlink-agent',
-    ]);
+    await runProgram(['--json', 'inbox', 'update', INBOX_ID_1, '--clear-display-name']);
 
     console.log = originalLog;
 

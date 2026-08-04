@@ -8,7 +8,6 @@ interface UpdateInboxOptions {
   displayName?: string;
   clearDisplayName?: boolean;
   agent?: string;
-  unlinkAgent?: boolean;
 }
 
 export function updateInboxCommand(): Command {
@@ -17,8 +16,7 @@ export function updateInboxCommand(): Command {
     .argument('<id>', 'Inbox ID', requireNonEmptyArg('Inbox ID'))
     .option('--display-name <name>', 'New display name (max 128 characters)')
     .option('--clear-display-name', 'Clear the display name')
-    .option('--agent <id>', 'Agent ID to associate with the inbox', requireNonEmptyArg('Agent ID'))
-    .option('--unlink-agent', 'Remove the agent association')
+    .option('--agent <id>', 'Move the inbox to a different agent', requireNonEmptyArg('Agent ID'))
     .action(async function (this: Command, id: string) {
       const opts = this.opts<UpdateInboxOptions>();
       const globals = this.optsWithGlobals<GlobalOptions>();
@@ -27,16 +25,8 @@ export function updateInboxCommand(): Command {
       if (opts.displayName !== undefined && opts.clearDisplayName) {
         output.fatal('--display-name and --clear-display-name are mutually exclusive.');
       }
-      if (opts.agent !== undefined && opts.unlinkAgent) {
-        output.fatal('--agent and --unlink-agent are mutually exclusive.');
-      }
-      if (
-        opts.displayName === undefined &&
-        !opts.clearDisplayName &&
-        opts.agent === undefined &&
-        !opts.unlinkAgent
-      ) {
-        output.fatal('Nothing to update. Pass --display-name, --clear-display-name, --agent, or --unlink-agent.');
+      if (opts.displayName === undefined && !opts.clearDisplayName && opts.agent === undefined) {
+        output.fatal('Nothing to update. Pass --display-name, --clear-display-name, or --agent.');
       }
 
       try {
@@ -47,9 +37,7 @@ export function updateInboxCommand(): Command {
         } else if (opts.displayName !== undefined) {
           payload.displayName = opts.displayName;
         }
-        if (opts.unlinkAgent) {
-          payload.agentId = null;
-        } else if (opts.agent !== undefined) {
+        if (opts.agent !== undefined) {
           payload.agentId = opts.agent;
         }
         const inbox = await orpc.inbox.update(payload);
