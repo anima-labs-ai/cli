@@ -32,22 +32,6 @@ interface OnboardOptions {
 }
 
 /**
- * Every command `onboard` tells the caller to run next.
- *
- * Hoisted out of the response body for the same reason `demo` keeps its
- * `ADVERTISED_COMMANDS` in one place: onboard-advertised syntax is the first
- * thing a new user types, so it has to be real, and the only way to keep it
- * real is to let a test walk it against the actual commander tree.
- *
- * It was not real. `demo` lost its `--only-<flow>` flags when it became a
- * single email walkthrough, but this list still advertised
- * `anima demo --only-email` (and `--only-x402`, whose flow no longer exists at
- * all), so following onboarding's own instructions produced "error: unknown
- * option '--only-email'".
- *
- * Index 0 is the verification step, which is emitted conditionally.
- */
-/**
  * The "What you can do" block printed by the human onboarding flow.
  *
  * Hoisted for the same reason as ONBOARD_NEXT_STEPS below: a claim a test
@@ -73,8 +57,24 @@ export const CAPABILITY_MATRIX = [
 	"Phone      US numbers, SMS, voice",
 	"Vault      encrypted secrets, egress-time injection, TOTP",
 	"Addresses  structural validation for billing/shipping",
-];
+] as const;
 
+/**
+ * Every command `onboard` tells the caller to run next.
+ *
+ * Hoisted out of the response body for the same reason `demo` keeps its
+ * `ADVERTISED_COMMANDS` in one place: onboard-advertised syntax is the first
+ * thing a new user types, so it has to be real, and the only way to keep it
+ * real is to let a test walk it against the actual commander tree.
+ *
+ * It was not real. `demo` lost its `--only-<flow>` flags when it became a
+ * single email walkthrough, but this list still advertised
+ * `anima demo --only-email` (and `--only-x402`, whose flow no longer exists at
+ * all), so following onboarding's own instructions produced "error: unknown
+ * option '--only-email'".
+ *
+ * Index 0 is the verification step, which is emitted conditionally.
+ */
 export const ONBOARD_NEXT_STEPS = [
 	{
 		command: "anima verify <code>",

@@ -23,7 +23,14 @@ import { describe, test, expect } from "bun:test";
 import { CAPABILITY_MATRIX } from "../../commands/onboard/index.js";
 
 /**
- * Vendor names that must not appear in anything the CLI prints.
+ * Vendor names that must not appear in the capability matrix.
+ *
+ * Scope is deliberately that one constant, not "anything the CLI prints". The
+ * other surface that leaked a vendor — the Provider column on `phone list` and
+ * `phone provision` — is guarded by the type system instead: the field is gone
+ * from PhoneIdentityOutput/PhoneProvisionOutput in @anima/contracts, so
+ * reprinting it stops compiling once .anima-ref is bumped. Hand-written display
+ * copy has no such backstop, which is why it gets a test.
  *
  * Mirrors the denylist the API already applies to the voice catalog
  * (apps/api voice-crud.test.ts), plus the storage and postal vendors the CLI
