@@ -10,8 +10,8 @@
  *   1. Verify authentication (offer `anima auth login` or `anima init` if not)
  *   2. Greet + show identity (whoami)
  *   3. Show capability matrix at the user's plan tier
- *   4. Offer to run quick demos in test mode (test email send, x402 sandbox
- *      fetch). User opts in/out per demo.
+ *   4. Offer to run a quick demo in test mode (email send walkthrough).
+ *      User opts in/out. There is no x402 demo — x402 is out of scope.
  *   5. MCP install status — offer to wire Claude Code / Cursor / etc.
  *   6. Print summary with next-step commands.
  *
@@ -30,6 +30,34 @@ interface OnboardOptions {
 	skipDemo?: boolean;
 	skipMcp?: boolean;
 }
+
+/**
+ * The "What you can do" block printed by the human onboarding flow.
+ *
+ * Hoisted for the same reason as ONBOARD_NEXT_STEPS below: a claim a test
+ * cannot import is a claim nothing checks, and this block drifted twice while
+ * the next-step list beside it was guarded.
+ *
+ * Two rules, both learned the hard way.
+ *
+ * No vendor names. Which carrier, speech vendor or vault engine sits behind a
+ * capability is a sub-processor disclosure, not onboarding copy — naming them
+ * published our supply chain to every CLI user and pinned us to vendors we are
+ * free to swap. The API already holds this line for the voice catalog
+ * (apps/api voice-crud.test.ts asserts the wire response names no provider);
+ * the CLI did not.
+ *
+ * No capability we do not have. This block advertised "x402/MPP HTTP 402
+ * settlement" while x402 is out of scope and the wallet scopes are off for
+ * customers, and credited address checks to USPS when the validator is
+ * structural only and never contacts a postal provider.
+ */
+export const CAPABILITY_MATRIX = [
+	"Email      send + receive, custom domains, DKIM/SPF/DMARC",
+	"Phone      US numbers, SMS, voice",
+	"Vault      encrypted secrets, egress-time injection, TOTP",
+	"Addresses  structural validation for billing/shipping",
+] as const;
 
 /**
  * Every command `onboard` tells the caller to run next.
@@ -221,16 +249,7 @@ export function onboardCommand(): Command {
 			}
 
 			// ── Step 3: Capability matrix ──
-			clack.note(
-				[
-					"Email      send + receive, custom domains, DKIM/SPF/DMARC",
-					"Phone      US numbers, SMS, voice (Telnyx/Deepgram/ElevenLabs)",
-					"Vault      Bitwarden-backed secrets, egress-time injection, TOTP",
-					"Addresses  USPS-validated billing/shipping",
-					"x402/MPP   HTTP 402 settlement, machine payments protocol",
-				].join("\n"),
-				"What you can do",
-			);
+			clack.note(CAPABILITY_MATRIX.join("\n"), "What you can do");
 
 			// ── Step 4: Demos ──
 			if (!opts.skipDemo) {

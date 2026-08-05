@@ -65,7 +65,7 @@ export function createProgram(): Command {
 		.option("--debug", "Enable debug output", false)
 		.option(
 			"--test",
-			"Test mode — server uses test fixtures (no real outbound email/SMS, x402 sandbox settlement). Sent as X-Anima-Test-Mode: 1.",
+			"Test mode — server uses test fixtures (no real outbound email/SMS). Sent as X-Anima-Test-Mode: 1.",
 			false,
 		)
 		.option("--token <token>", "API token (overrides stored auth)")

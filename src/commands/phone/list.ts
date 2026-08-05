@@ -35,12 +35,11 @@ export function listPhoneNumbersCommand(): Command {
         }
 
         output.table(
-          ['Number', 'Provider', 'Capabilities', 'Primary', 'Status'],
+          ['Number', 'Capabilities', 'Primary', 'Status'],
           response.items.map((item) => {
             const caps = [item.capabilities.sms && 'sms', item.capabilities.mms && 'mms', item.capabilities.voice && 'voice'].filter(Boolean).join(',');
             return [
               item.phoneNumber,
-              item.provider,
               caps,
               item.isPrimary ? 'Yes' : 'No',
               item.tenDlcStatus,
