@@ -282,7 +282,7 @@ describe('voice commands', () => {
       setAuthenticatedConfig(serverPort);
       setRoute('GET', '/v1/voice/catalog', {
         status: 200,
-        body: { voices: [buildVoice({ id: 'v1', name: 'Test', provider: 'telnyx', tier: 'basic', language: 'en' })] },
+        body: { voices: [buildVoice({ id: 'v1', name: 'Test', language: 'en' })] },
       });
 
       const logSpy = mock((...args: unknown[]) => {});

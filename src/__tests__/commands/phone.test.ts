@@ -73,7 +73,6 @@ function buildPhoneIdentityResponse(
   return {
     id: PHONE_ID_1,
     phoneNumber: '+14155550124',
-    provider: 'TELNYX',
     providerId: 'tnyx_abc',
     capabilities: { sms: true, mms: false, voice: false },
     tenDlcStatus: 'NOT_REQUIRED',
@@ -90,7 +89,6 @@ function buildProvisionResponse(
   return {
     id: PHONE_ID_1,
     phoneNumber: '+14155550124',
-    provider: 'TELNYX',
     providerId: 'tnyx_abc',
     capabilities: { sms: true, mms: false, voice: false },
     tenDlcStatus: 'NOT_REQUIRED',
