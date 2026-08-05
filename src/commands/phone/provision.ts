@@ -95,7 +95,6 @@ export function provisionPhoneNumberCommand(): Command {
         output.details([
           ['ID', response.id],
           ['Number', response.phoneNumber],
-          ['Provider', response.provider],
           ['Capabilities', caps],
           ['Primary', response.isPrimary ? 'Yes' : 'No'],
           ['10DLC Status', response.tenDlcStatus],
