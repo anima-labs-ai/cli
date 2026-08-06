@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const testConfigDir = join(import.meta.dir, '.test-config-elevation');
@@ -165,6 +165,111 @@ describe('owner grants', () => {
         profiles: { work: { apiKey: 'ak_agent' } },
       });
       expect(await elevation.hasLiveSession()).toBe(false);
+    });
+  });
+
+  /**
+   * Ephemeral elevation — the credential lives for one call and no longer.
+   *
+   * The standing window is the thing being closed. Parking a privileged key in
+   * a profile and marking it active hands master authority to *everything* that
+   * runs `am` on this machine for the next hour — including an agent shelling
+   * out, which can then read every vault secret and mint itself a permanent
+   * master key via `apiKeys.create`. The human-presence dialog is not the leak;
+   * persistence is. So these assert that the credential is reachable from
+   * exactly one place — inside the callback — and from nowhere afterwards.
+   */
+  describe('ephemeral elevation', () => {
+    // Distinctive on purpose: a canary that would be unmistakable in a config
+    // file, so a substring search cannot collide with anything else on disk.
+    const CANARY = 'mk_canary_must_never_persist_7f3a91';
+    const SESSION = { apiKey: CANARY, apiKeyId: 'akid_canary', expiresAt: FUTURE };
+
+    /**
+     * Every byte this CLI can leave under its config dir, concatenated.
+     *
+     * Deliberately raw text rather than `getConfig()`: a getter only answers
+     * for the shapes it knows about, and the requirement here is stronger than
+     * "no elevated profile". The credential must not be in those files at all,
+     * by any route — a stray top-level field, a profile under an unexpected
+     * name, a half-written migration blob.
+     */
+    function configDirBytes(): string {
+      return readdirSync(testConfigDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => readFileSync(join(testConfigDir, entry.name), 'utf8'))
+        .join('\n');
+    }
+
+    /**
+     * Record every secret written to the store from here on.
+     *
+     * The config-file assertion alone would not catch the route that matters.
+     * `saveConfig` strips every profile `apiKey` out of the file and into the
+     * secure store, so `activateSession` — the persistence being removed —
+     * leaves the credential in the keychain and only its metadata in
+     * config.json. A file-only check would call that clean.
+     */
+    function recordStoreWrites(): string[] {
+      const written: string[] = [];
+      const realSet = memoryStore.setSecret.bind(memoryStore);
+      const realGated = memoryStore.setGatedSecret.bind(memoryStore);
+      memoryStore.setSecret = async (account: string, secret: string) => {
+        written.push(secret);
+        return realSet(account, secret);
+      };
+      memoryStore.setGatedSecret = async (account: string, secret: string) => {
+        written.push(secret);
+        return realGated(account, secret);
+      };
+      return written;
+    }
+
+    test('the credential is nowhere on disk once the call returns', async () => {
+      const writes = recordStoreWrites();
+
+      await elevation.withElevation(SESSION, async () => {
+        // A command doing ordinary work while elevated. Writing config from
+        // inside the window is what an elevated command actually does, and it
+        // is the one call that could carry the credential to disk behind the
+        // caller's back — so the assertions below read a real, written file
+        // rather than an empty directory that would pass by default.
+        //
+        // Spread over the current config, the way every real caller does,
+        // rather than passing a bare object. A bare one rewrites config.json
+        // wholesale and so erases anything `withElevation` had persisted
+        // before the callback ran — which silently disarmed this test until a
+        // deliberate persist-the-key experiment failed to turn it red.
+        await config.saveConfig({ ...(await config.getConfig()), defaultOrg: ORG });
+      });
+
+      expect(configDirBytes()).not.toContain(CANARY);
+      expect(writes.join('\n')).not.toContain(CANARY);
+    });
+
+    test('the credential is readable inside the callback and not after it', async () => {
+      expect(elevation.currentElevatedKey()).toBeUndefined();
+
+      const insideCallback = await elevation.withElevation(SESSION, async (session) => {
+        expect(session.apiKey).toBe(CANARY);
+        return elevation.currentElevatedKey();
+      });
+
+      expect(insideCallback).toBe(CANARY);
+      expect(elevation.currentElevatedKey()).toBeUndefined();
+    });
+
+    test('a throwing callback still releases the credential', async () => {
+      await expect(
+        elevation.withElevation(SESSION, async () => {
+          throw new Error('the gated call failed');
+        }),
+      ).rejects.toThrow('the gated call failed');
+
+      // Releasing only on the success path would rebuild the standing window in
+      // miniature: one failed admin command and the key stays live for the rest
+      // of the process, which is precisely the state this design removes.
+      expect(elevation.currentElevatedKey()).toBeUndefined();
     });
   });
 });

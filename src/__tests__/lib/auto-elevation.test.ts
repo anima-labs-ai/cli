@@ -10,9 +10,23 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { GlobalOptions } from '../../lib/auth.js';
+import { type ElevatedSession, currentElevatedKey } from '../../lib/elevation.js';
 import { ORPCError, type AnimaClient, withAutoElevation } from '../../lib/orpc.js';
 
 const OPTS = {} as GlobalOptions;
+
+/**
+ * What a successful step-up now hands back.
+ *
+ * A boolean used to be enough because the credential went into a profile and
+ * the retry picked it up from there. It is not enough now: the credential has
+ * no home outside the retry, so it has to travel as a value.
+ */
+const SESSION: ElevatedSession = {
+  apiKey: 'mk_elevated',
+  apiKeyId: 'akid_elevated',
+  expiresAt: '2999-01-01T00:00:00.000Z',
+};
 
 function masterRequired(): ORPCError<string, unknown> {
   return new ORPCError('MASTER_KEY_REQUIRED', { status: 403, message: 'Master key required' });
@@ -43,21 +57,33 @@ function pathProxyClient(onCall: (path: string[]) => Promise<unknown>): AnimaCli
 describe('withAutoElevation', () => {
   test('elevates once and retries when the server demands master', async () => {
     let calls = 0;
+    let keyDuringRetry: string | undefined;
     const client = fakeClient(async () => {
       calls += 1;
       if (calls === 1) throw masterRequired();
+      keyDuringRetry = currentElevatedKey();
       return { id: 'agent_1' };
     });
 
     let elevations = 0;
     const wrapped = withAutoElevation(client, OPTS, async () => {
       elevations += 1;
-      return true;
+      return SESSION;
     });
 
     expect(await wrapped.agent.create({} as never)).toEqual({ id: 'agent_1' } as never);
     expect(calls).toBe(2);
     expect(elevations).toBe(1);
+
+    // The retry has to happen *inside* the elevation window. Nothing else pins
+    // this: the step-up no longer writes the credential anywhere, so a retry
+    // issued outside the window would go out unprivileged and be refused
+    // again, with the wrapper reporting success at having elevated.
+    expect(keyDuringRetry).toBe(SESSION.apiKey);
+
+    // And the window closes with the call. A key still live here is a key the
+    // next command on this machine inherits.
+    expect(currentElevatedKey()).toBeUndefined();
   });
 
   test('a second refusal is final — it does not prompt again', async () => {
@@ -70,7 +96,7 @@ describe('withAutoElevation', () => {
     let elevations = 0;
     const wrapped = withAutoElevation(client, OPTS, async () => {
       elevations += 1;
-      return true;
+      return SESSION;
     });
 
     await expect(wrapped.agent.create({} as never)).rejects.toThrow('Master key required');
@@ -78,14 +104,19 @@ describe('withAutoElevation', () => {
     // would climb until the stack or the user's patience gave out.
     expect(calls).toBe(2);
     expect(elevations).toBe(1);
+
+    // The refused retry must still have released the credential. This is the
+    // path that matters most: a privileged command failing is the everyday way
+    // a key would get stranded live for the rest of the process.
+    expect(currentElevatedKey()).toBeUndefined();
   });
 
   test('when elevation is unavailable the original error surfaces', async () => {
     const client = fakeClient(async () => {
       throw masterRequired();
     });
-    // Not enrolled, grant revoked, no keychain — all report false.
-    const wrapped = withAutoElevation(client, OPTS, async () => false);
+    // Not enrolled, grant revoked, no keychain — all report null.
+    const wrapped = withAutoElevation(client, OPTS, async () => null);
 
     // The server's own message reaches the user rather than a wrapper error
     // about elevation, because MASTER_KEY_REQUIRED already carries the fix.
@@ -100,7 +131,7 @@ describe('withAutoElevation', () => {
     let elevations = 0;
     const wrapped = withAutoElevation(client, OPTS, async () => {
       elevations += 1;
-      return true;
+      return SESSION;
     });
 
     await expect(wrapped.agent.create({} as never)).rejects.toThrow('No such agent');
@@ -120,7 +151,7 @@ describe('withAutoElevation', () => {
     const wrapped = withAutoElevation(
       pathProxyClient(async (path) => ({ path })),
       OPTS,
-      async () => true,
+      async () => SESSION,
     );
 
     const resolved = await (async () => wrapped)();
@@ -147,7 +178,7 @@ describe('withAutoElevation', () => {
     let elevations = 0;
     const wrapped = withAutoElevation(client, OPTS, async () => {
       elevations += 1;
-      return true;
+      return SESSION;
     });
 
     expect(await wrapped.agent.create({} as never)).toEqual({
@@ -162,7 +193,7 @@ describe('withAutoElevation', () => {
     let elevations = 0;
     const wrapped = withAutoElevation(client, OPTS, async () => {
       elevations += 1;
-      return true;
+      return SESSION;
     });
 
     expect(await wrapped.agent.create({} as never)).toEqual({ id: 'agent_1' } as never);

@@ -226,6 +226,51 @@ export async function elevateWithGrant(opts: GlobalOptions): Promise<ElevatedSes
   };
 }
 
+/**
+ * The privileged credential currently in force, if any.
+ *
+ * Held in memory, for the span of one call, and nowhere else.
+ *
+ * The alternative — {@link activateSession} — parks the credential in a profile
+ * and marks that profile active, which grants master authority to *everything*
+ * running `am` on this machine until it lapses. The keychain gate does not
+ * narrow that: it is paid once, by the human who elevated, and the window it
+ * opens is inherited by every later process, an agent shelling out included.
+ * Inside that window the agent reads every vault secret, and `apiKeys.create`
+ * lets it mint itself a permanent master key that outlives the session
+ * entirely. So the window, not the exchange, is what has to go.
+ *
+ * Process memory is the right place because it is exactly as wide as the
+ * authority should be: one command, one dialog, one use. Nothing survives the
+ * process, so nothing is left for the next one to inherit.
+ */
+let elevatedKey: string | undefined;
+
+export function currentElevatedKey(): string | undefined {
+  return elevatedKey;
+}
+
+/**
+ * Run `fn` with the elevated credential in force, then drop it.
+ *
+ * The release is in a `finally` rather than after the call because a failed
+ * privileged command is the likeliest way in. A trailing assignment would leave
+ * the credential live for the rest of the process on every throw — the standing
+ * window again, rebuilt in miniature and reachable by making one admin command
+ * fail.
+ */
+export async function withElevation<T>(
+  session: ElevatedSession,
+  fn: (session: ElevatedSession) => Promise<T>,
+): Promise<T> {
+  elevatedKey = session.apiKey;
+  try {
+    return await fn(session);
+  } finally {
+    elevatedKey = undefined;
+  }
+}
+
 /** The profile a privileged session lands in. */
 export function elevatedProfileName(orgId: string | undefined): string {
   return orgId ? `${orgId}-${ELEVATED_PROFILE_SUFFIX}` : ELEVATED_PROFILE_SUFFIX;
