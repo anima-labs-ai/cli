@@ -517,4 +517,111 @@ describe('config', () => {
       expect(auth.apiKey).toBe('sk_live_master');
     });
   });
+
+  // A machine that elevated with the previous CLI (0.7.1 or earlier) has an
+  // `<org>-elevated` profile sitting in config.json with a live master
+  // credential behind it in the keychain — see the comment on
+  // ELEVATED_PROFILE_SUFFIX. Elevation is per-command now and nothing writes
+  // such a profile any more, so shipping that change without cleaning up
+  // existing ones would leave every such machine holding standing master
+  // authority indefinitely, which is exactly what this release removes.
+  describe('purgeElevatedProfiles', () => {
+    /** Distinctive so a leftover match can only mean the purge failed. */
+    const MASTER_CANARY = 'mk_live_canary_should_be_purged';
+
+    test('removes the elevated profile and keeps the normal one', async () => {
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(Object.keys(cfg.profiles ?? {})).toEqual(['work']);
+      expect(cfg.profiles?.work.apiKey).toBe('ak_work');
+    });
+
+    test('purges the elevated profile’s secret from the credential store, not just config.json', async () => {
+      await config.saveConfig({
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+        },
+      });
+      expect(await memoryStore.getSecret('profile:org-elevated')).not.toBeNull();
+
+      await config.purgeElevatedProfiles();
+
+      // The raw store, not a config.ts getter: getConfig()/getActiveProfile()
+      // only look at the keychain for profiles still named in config.json, so
+      // they cannot tell a deleted entry apart from one merely orphaned by the
+      // JSON-only cleanup this test exists to rule out.
+      expect(await memoryStore.getSecret('profile:org-elevated')).toBeNull();
+    });
+
+    test('clears activeProfile when it pointed at the purged profile', async () => {
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      // Not left pointing at a profile that no longer exists.
+      expect(cfg.activeProfile).toBeUndefined();
+    });
+
+    test('leaves activeProfile alone when it pointed at a normal profile', async () => {
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(cfg.activeProfile).toBe('work');
+    });
+
+    test('a config with nothing to purge is left undisturbed', async () => {
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: { work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' } },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(cfg.activeProfile).toBe('work');
+      expect(cfg.profiles?.work.apiKey).toBe('ak_work');
+      expect(await memoryStore.getSecret('profile:work')).not.toBeNull();
+    });
+
+    test('running it twice is safe — the second call is a no-op', async () => {
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(Object.keys(cfg.profiles ?? {})).toEqual(['work']);
+      expect(cfg.activeProfile).toBeUndefined();
+      expect(await memoryStore.getSecret('profile:work')).not.toBeNull();
+    });
+  });
 });

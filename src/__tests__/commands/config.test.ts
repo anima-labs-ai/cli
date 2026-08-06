@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { createProgram } from '../../cli.js';
-import { runCapturingExit } from '../helpers/test-utils.js';
+import { runCapturingExit, captureOutput } from '../helpers/test-utils.js';
 import { resetPathsCache, setPathsOverride } from '../../lib/config.js';
 import type { Command } from 'commander';
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
@@ -402,6 +402,34 @@ describe('config commands', () => {
       ]);
       expect(errors.join('\n')).toContain('does not exist');
       expect(code).toBe(1);
+    });
+  });
+
+  // Proves the cli.ts wiring, not just the config.ts function in isolation.
+  // `completion` is deliberately unrelated to config/auth and never reads
+  // config itself — if this still purges the stale profile, the cleanup is
+  // truly global (a preAction hook on the root program), not something that
+  // only happens to run for `config` commands.
+  describe('startup purges a stale elevated profile', () => {
+    test('an unrelated command (completion) still purges it', async () => {
+      writeAppConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: 'mk_stale_master' },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      program.exitOverride();
+      const captured = captureOutput();
+      await program.parseAsync(['node', 'anima', 'completion', 'bash']);
+      captured.restore();
+
+      const onDisk = readAppConfig();
+      const profiles = onDisk.profiles as Record<string, unknown>;
+      expect(profiles['org-elevated']).toBeUndefined();
+      expect(profiles.work).toBeDefined();
+      expect(onDisk.activeProfile).toBeUndefined();
     });
   });
 });

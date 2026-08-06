@@ -572,6 +572,49 @@ export function isElevatedProfileName(name: string): boolean {
   return name === ELEVATED_PROFILE_SUFFIX || name.endsWith(`-${ELEVATED_PROFILE_SUFFIX}`);
 }
 
+/**
+ * Remove any profile an older CLI's `auth elevate` left behind, from both
+ * config.json and the keychain.
+ *
+ * A machine that elevated with 0.7.1 or earlier still has such a profile
+ * sitting on disk with a live master credential behind it — nothing writes
+ * one any more now that elevation is per-command (see `elevation.ts`), but
+ * shipping that change alone would leave every such machine holding standing
+ * master authority indefinitely, which is exactly what this release removes.
+ *
+ * Meant to be called once at startup, before anything reads config — see the
+ * `preAction` hook in `cli.ts`. No-op, and keychain-free, when there is
+ * nothing to purge: the common case for both fresh installs and machines that
+ * never elevated or were already cleaned up by a prior run.
+ */
+export async function purgeElevatedProfiles(): Promise<void> {
+  const config = await getConfig();
+  const names = Object.keys(config.profiles ?? {}).filter(isElevatedProfileName);
+  if (names.length === 0) return;
+
+  // Keychain first, same ordering as `deleteProfile`: best-effort per entry,
+  // since a backend that's temporarily unavailable must not block the file
+  // cleanup below — that cleanup is what stops the profile being selectable
+  // again even if the orphaned secret has to wait for a later run.
+  for (const name of names) {
+    try {
+      await store().deleteSecret(accountForProfile(name));
+    } catch {
+      // Backend unavailable — proceed anyway.
+    }
+  }
+
+  const profiles = { ...config.profiles };
+  for (const name of names) delete profiles[name];
+
+  const activeProfile =
+    config.activeProfile !== undefined && names.includes(config.activeProfile)
+      ? undefined
+      : config.activeProfile;
+
+  await saveConfig({ ...config, profiles, activeProfile });
+}
+
 /** Session profiles already warned about, so the notice is emitted once per run. */
 const _warnedExpiredProfiles = new Set<string>();
 
