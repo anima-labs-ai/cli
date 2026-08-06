@@ -10,6 +10,16 @@ Releases 0.2.x through 0.6.4 shipped without changelog entries; the record resum
 
 _Nothing yet._
 
+## [0.8.0] - 2026-08-06
+
+### Removed
+
+- **`am auth elevate` is gone.** It parked an admin credential in a persisted profile for about an hour, so anything on the machine running `am` — including an agent — inherited master authority for that window. Elevation is now inline and per-command: the command that needs admin rights asks for your password itself, uses the credential for that one call, and discards it. Nothing is stored. Machines not yet enrolled enrol on first use, so the emailed-code step still exists — it just no longer has a command of its own.
+
+### Fixed
+
+- **Elevated profiles left by earlier versions are purged on first run of 0.8.0.** `am auth elevate` used to persist one in config.json with a live master credential behind it in the keychain; both are now deleted automatically, and if the purged profile was active, the CLI falls back to your ordinary credential instead of pointing at a profile that no longer exists.
+
 ## [0.7.1] - 2026-08-04
 
 ### Fixed
@@ -147,7 +157,8 @@ _Nothing yet._
 - Command groups: auth, identity, email, phone, vault, config, setup-mcp, extension, admin, and init.
 - npm package metadata, changelog tracking, and smoke-test support for installation verification.
 
-[Unreleased]: https://github.com/anima-labs-ai/cli/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/anima-labs-ai/cli/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/anima-labs-ai/cli/releases/tag/v0.8.0
 [0.7.1]: https://github.com/anima-labs-ai/cli/releases/tag/v0.7.1
 [0.7.0]: https://github.com/anima-labs-ai/cli/releases/tag/v0.7.0
 [0.6.10]: https://github.com/anima-labs-ai/cli/releases/tag/v0.6.10
