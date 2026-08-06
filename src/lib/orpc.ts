@@ -20,7 +20,7 @@ import { OpenAPILink } from '@orpc/openapi-client/fetch';
 
 import { type GlobalOptions, ensureAuthHeaders, resolveApiUrl } from './auth.js';
 import { getAuthConfig } from './config.js';
-import { activateSession, elevateWithGrant, hasLiveSession } from './elevation.js';
+import { type ElevatedSession, elevateWithGrant, withElevation } from './elevation.js';
 import type { Output } from './output.js';
 
 export { ORPCError };
@@ -63,15 +63,19 @@ const GENERIC_WIRE_CODES: ReadonlySet<string> = new Set([
  * MASTER_KEY_REQUIRED gates ~100 endpoints, and the server's message lists
  * three routes to master capability without saying which is available to
  * *this* caller — for an org created by `am init`, the answer is none of
- * them. `am auth elevate` is the CLI's own answer, so it belongs here rather
- * than repeated at every call site that might hit the wall.
+ * them. Stepping up from the terminal is the CLI's own answer, so it belongs
+ * here rather than repeated at every call site that might hit the wall.
  */
 const TYPED_CODE_HINTS: Readonly<Record<string, string>> = {
-  // Reaching this means auto-elevation did not run or did not help: the
-  // machine is not enrolled, its grant was refused, or this is a pipe/CI where
-  // a password dialog cannot be answered. Enrolling is the fix for all three.
+  // Reaching this means auto-elevation did not run or did not help. The most
+  // common reason by far is that there was no terminal to prompt in: the
+  // step-up asks the OS for the login password, and a pipe, a CI job or an
+  // agent has no way to answer. Naming a command would be worse than useless
+  // here — every route to admin access goes through that same dialog, so the
+  // only thing that changes the outcome is *where* the command is run.
   MASTER_KEY_REQUIRED:
-    'This needs admin access. Run `am auth elevate` once to enrol this machine.\n',
+    'This needs admin access. Run it from an interactive terminal, where it ' +
+    'will ask for your password.\n',
 };
 
 /**
@@ -182,6 +186,14 @@ export async function requireOrpcAuth(opts: GlobalOptions): Promise<AnimaClient>
   // it would hang until timeout rather than fail outright. Interactive use is
   // the only place the prompt is a question rather than a stall — so the
   // decision to wrap lives here, and the wrapper itself stays pure.
+  //
+  // `stderr`, while enrolment in `elevation.ts` gates on `stdin`. They disagree
+  // on purpose, because they guard different prompts: the OS password dialog is
+  // a window, not a terminal read, so `am agent create < /dev/null` on an
+  // enrolled Mac can still answer it — gating that on stdin would break a flow
+  // that works. Enrolment really does read stdin, so stdin is what it checks.
+  // Anything new that prompts has to pick the stream its own prompt reads from,
+  // not copy whichever of these it saw first.
   if (!process.stderr.isTTY) return client;
   return withAutoElevation(client, opts);
 }
@@ -194,23 +206,26 @@ function isMasterKeyRequired(error: unknown): boolean {
 /**
  * Step up, once, in response to a refusal — or report that we cannot.
  *
- * Bails when a privileged session is already live: the failing request went out
- * under it and was still refused, so this is a genuine permissions answer and
- * elevating again would only add a password prompt to a command that is going
- * to fail anyway.
+ * Returns the session rather than a boolean because the credential now has a
+ * lifetime the caller has to bound. There is no longer a persisted session for
+ * a later request to pick up, so the key has to travel from here to the one
+ * call that needs it and stop there.
+ *
+ * There is deliberately no "already elevated, skip the dialog" check. That
+ * check existed because a session lasted an hour, which is the same reason it
+ * had to go: for that hour every process on the machine ran as master,
+ * including an agent shelling out to `am`. Every master-gated command now pays
+ * one dialog. That is the cost of the authority being no wider than the command
+ * that asked for it.
  */
-async function elevateForRetry(opts: GlobalOptions): Promise<boolean> {
-  if (await hasLiveSession()) return false;
+async function elevateForRetry(opts: GlobalOptions): Promise<ElevatedSession | null> {
   try {
-    const session = await elevateWithGrant(opts);
-    const auth = await getAuthConfig();
-    await activateSession(session, resolveApiUrl(opts, auth.apiUrl));
-    return true;
+    return await elevateWithGrant(opts);
   } catch {
     // Not enrolled, grant revoked, exchange refused — all end the same way for
     // the caller: they see the server's own MASTER_KEY_REQUIRED message, which
-    // already points at `am auth elevate`.
-    return false;
+    // already says what admin access needs.
+    return null;
   }
 }
 
@@ -225,9 +240,14 @@ async function elevateForRetry(opts: GlobalOptions): Promise<boolean> {
  * privileged commands would have started drifting immediately.
  *
  * Retrying on the same client is deliberate and safe: `OpenAPILink` resolves
- * `url()` and `headers()` per request, so the second attempt reads the freshly
- * written profile and goes out under the elevated key. Rebuilding the client
- * would work too, and would only obscure that.
+ * `url()` and `headers()` per request, so the second attempt resolves its
+ * credential inside the elevation window rather than from anything left on
+ * disk. Rebuilding the client would work too, and would only obscure that.
+ *
+ * What makes the retry privileged is `ensureAuthHeaders` reading the in-process
+ * key: nothing is written down, so the second attempt is privileged only while
+ * `withElevation` is on the stack. A holder nothing consumed would look
+ * identical here and fail identically to the first attempt.
  *
  * The retry is not itself wrapped, so a command can prompt at most once.
  */
@@ -237,7 +257,7 @@ export function withAutoElevation(
   // Injected so a test can drive the retry logic without a keychain, a server,
   // or a `mock.module` on elevation.js — wholesale-mocking a module in this
   // repo silently drops the test file the moment that module gains an export.
-  elevate: (opts: GlobalOptions) => Promise<boolean> = elevateForRetry,
+  elevate: (opts: GlobalOptions) => Promise<ElevatedSession | null> = elevateForRetry,
 ): AnimaClient {
   const wrap = <T extends object>(target: T): T =>
     new Proxy(target, {
@@ -292,12 +312,18 @@ export function withAutoElevation(
         } catch (error: unknown) {
           if (!isMasterKeyRequired(error)) throw error;
           process.stderr.write('This needs admin access — authenticating…\n');
-          if (!(await elevate(opts))) throw error;
+          const session = await elevate(opts);
+          if (session === null) throw error;
           // Deliberately the raw target, not the wrapped member: a second
           // refusal under the elevated key is a real answer, and re-entering
           // the wrapper here would prompt in a loop against a server that has
           // already said no.
-          return Reflect.apply(call, thisArg, args);
+          //
+          // Inside `withElevation` so the credential is in force for exactly
+          // this request and released the moment it settles — including when
+          // it throws, which is the case that would otherwise leave a
+          // privileged key live for the rest of the process.
+          return withElevation(session, () => Reflect.apply(call, thisArg, args));
         }
       },
     });

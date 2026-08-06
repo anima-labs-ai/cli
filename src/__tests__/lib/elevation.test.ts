@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const testConfigDir = join(import.meta.dir, '.test-config-elevation');
@@ -121,50 +121,239 @@ describe('owner grants', () => {
     expect(elevation.canHoldGrant()).toBe(false);
   });
 
-  describe('live session', () => {
-    async function withSession(expiresAt: string | undefined) {
-      await config.saveConfig({
-        defaultOrg: ORG,
-        activeProfile: elevation.elevatedProfileName(ORG),
-        profiles: {
-          [elevation.elevatedProfileName(ORG)]: { apiKey: 'sk_live_session', expiresAt },
-        },
-      });
+  /**
+   * Enrolment runs inline now, on first use, rather than behind its own
+   * command. That is a better place for it in a terminal and a strictly worse
+   * one everywhere else: the code has to be read out of an inbox and typed
+   * back, so a CI job or an agent driving `am` would sit on a prompt nothing
+   * is ever going to answer. A step-up that hangs is worse than one that
+   * fails — the job burns its timeout and reports nothing usable.
+   */
+  describe('inline enrolment', () => {
+    /**
+     * Hold the stdin state across the awaits the code under test performs.
+     *
+     * This helper was synchronous, and `fn()` returns a promise: the `finally`
+     * restored the real terminal's state while `elevateWithGrant` was still
+     * inside its first `await getAuthConfig()`, so the guard below it ran under
+     * whatever stdin the developer happened to have. Both tests then proved
+     * nothing — they passed on ambient non-TTY, and on a machine with a
+     * terminal they took the enrolment path and called the *live production
+     * API*, which is how this was found. A test whose subject is decided by the
+     * ambient terminal is worse than no test, and one that reaches production
+     * when the ambient differs is worse again.
+     */
+    async function withStdinTty<T>(isTTY: boolean, fn: () => Promise<T>): Promise<T> {
+      const original = process.stdin.isTTY;
+      process.stdin.isTTY = isTTY;
+      try {
+        return await fn();
+      } finally {
+        process.stdin.isTTY = original;
+      }
     }
 
-    test('an unexpired elevated profile counts as live', async () => {
-      await withSession(FUTURE);
-      expect(await elevation.hasLiveSession()).toBe(true);
+    /**
+     * Every request attempted while the trap is installed.
+     *
+     * Belt to the helper's braces, and the stronger half of the pair: pinning
+     * stdin makes the tests deterministic, but this makes reaching the network
+     * *impossible* rather than merely unintended, and turns "no call was made"
+     * into an assertion instead of an assumption. The guard is precisely a
+     * promise that nothing goes out, so that is what gets checked.
+     */
+    let attempted: string[] = [];
+    const realFetch = globalThis.fetch;
+
+    beforeEach(async () => {
+      attempted = [];
+      globalThis.fetch = (async (input: unknown) => {
+        attempted.push(String(input));
+        throw new Error('the test reached the network');
+      }) as unknown as typeof fetch;
+
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({ defaultOrg: ORG });
     });
 
-    test('an expired one does not', async () => {
-      await withSession('2020-01-01T00:00:00.000Z');
-      // This is what stops auto-elevation short-circuiting on a dead session
-      // and reporting a permissions error the user could have fixed.
-      expect(await elevation.hasLiveSession()).toBe(false);
+    afterEach(() => {
+      globalThis.fetch = realFetch;
     });
 
-    test('a session with no recorded expiry is dead, not eternal', async () => {
-      await withSession(undefined);
+    test('with no terminal to type the code into, it fails before asking for a code', async () => {
+      await withStdinTty(false, async () => {
+        const error = await elevation.elevateWithGrant({}).catch((e: unknown) => e);
 
-      // The credential path already treats an expiry-less session profile as
-      // lapsed — they were written by a CLI that did not record one, so their
-      // 15-minute key is long dead. This has to agree, and for the opposite
-      // reason to the expired case above: if it reported "live", the retry
-      // logic would skip the step-up believing the failing request had already
-      // gone out under a privileged key. It had not — the credential path
-      // rejected this profile and sent the agent key — so the user would get a
-      // bare MASTER_KEY_REQUIRED and no prompt, on every command, forever.
-      expect(await elevation.hasLiveSession()).toBe(false);
-    });
-
-    test('an ordinary profile is not a privileged session', async () => {
-      await config.saveConfig({
-        defaultOrg: ORG,
-        activeProfile: 'work',
-        profiles: { work: { apiKey: 'ak_agent' } },
+        expect(error).toBeInstanceOf(elevation.NotEnrolledError);
+        // The message has to name the reason, not just the refusal: the operator
+        // reading a CI log needs to know a human has to run this once, from a
+        // terminal, and that nothing about the job's configuration will fix it.
+        expect((error as Error).message).toContain('interactive');
       });
-      expect(await elevation.hasLiveSession()).toBe(false);
+
+      // Nothing left the process. Requesting a code and *then* discovering
+      // there is nowhere to type it would email the organization owner on every
+      // CI run — noise the owner cannot act on and did not ask for.
+      expect(attempted).toEqual([]);
+    });
+
+    test('with a terminal it goes ahead and asks for the code', async () => {
+      // The other half of the guard. Without this, `if (true) throw` passes the
+      // test above, and enrolment would be unreachable everywhere — the CLI
+      // would have no route to admin access at all on a fresh machine.
+      await withStdinTty(true, async () => {
+        await expect(elevation.elevateWithGrant({})).rejects.toThrow('reached the network');
+      });
+
+      expect(attempted).toHaveLength(1);
+      expect(attempted[0]).toContain('/v1/agent/elevate/request');
+    });
+
+    test('a marker with no secret behind it is cleared before giving up', async () => {
+      await elevation.recordEnrollment(ORG, 'sk_live_grant', FUTURE);
+      // The keychain entry removed out from under us — Keychain Access, a
+      // migration, a wiped login keychain.
+      await memoryStore.deleteSecret(GRANT_ACCOUNT);
+
+      await withStdinTty(false, async () => {
+        await expect(elevation.elevateWithGrant({})).rejects.toBeInstanceOf(
+          elevation.NotEnrolledError,
+        );
+      });
+
+      // Leaving the marker would send every later step-up looking for a secret
+      // that is not there, and reporting the wrong reason for failing.
+      expect(await elevation.enrollmentFor(ORG)).toBeUndefined();
+      // And it has to give up *here*, not one step later. Without the assertion
+      // this test passed with the terminal guard deleted: the enrolment attempt
+      // it then made failed on its own and still raised NotEnrolledError, so
+      // every assertion above held while the behaviour under test was gone.
+      expect(attempted).toEqual([]);
+    });
+  });
+
+  /**
+   * Ephemeral elevation — the credential lives for one call and no longer.
+   *
+   * The standing window is the thing being closed. Parking a privileged key in
+   * a profile and marking it active hands master authority to *everything* that
+   * runs `am` on this machine for the next hour — including an agent shelling
+   * out, which can then read every vault secret and mint itself a permanent
+   * master key via `apiKeys.create`. The human-presence dialog is not the leak;
+   * persistence is. So these assert that the credential is reachable from
+   * exactly one place — inside the callback — and from nowhere afterwards.
+   */
+  describe('ephemeral elevation', () => {
+    // Distinctive on purpose: a canary that would be unmistakable in a config
+    // file, so a substring search cannot collide with anything else on disk.
+    const CANARY = 'mk_canary_must_never_persist_7f3a91';
+    const SESSION = { apiKey: CANARY, apiKeyId: 'akid_canary', expiresAt: FUTURE };
+
+    /**
+     * Every byte this CLI can leave under its config dir, concatenated.
+     *
+     * Deliberately raw text rather than `getConfig()`: a getter only answers
+     * for the shapes it knows about, and the requirement here is stronger than
+     * "no elevated profile". The credential must not be in those files at all,
+     * by any route — a stray top-level field, a profile under an unexpected
+     * name, a half-written migration blob.
+     */
+    function configDirBytes(): string {
+      return readdirSync(testConfigDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => readFileSync(join(testConfigDir, entry.name), 'utf8'))
+        .join('\n');
+    }
+
+    /**
+     * Record every secret written to the store from here on.
+     *
+     * The config-file assertion alone would not catch the route that matters.
+     * `saveConfig` strips every profile `apiKey` out of the file and into the
+     * secure store, so the profile-parking this replaced left the credential in
+     * the keychain and only its metadata in config.json. A file-only check
+     * would call that clean.
+     */
+    function recordStoreWrites(): string[] {
+      const written: string[] = [];
+      const realSet = memoryStore.setSecret.bind(memoryStore);
+      const realGated = memoryStore.setGatedSecret.bind(memoryStore);
+      memoryStore.setSecret = async (account: string, secret: string) => {
+        written.push(secret);
+        return realSet(account, secret);
+      };
+      memoryStore.setGatedSecret = async (account: string, secret: string) => {
+        written.push(secret);
+        return realGated(account, secret);
+      };
+      return written;
+    }
+
+    test('the credential is nowhere on disk once the call returns', async () => {
+      const writes = recordStoreWrites();
+
+      await elevation.withElevation(SESSION, async () => {
+        // A command doing ordinary work while elevated. Writing config from
+        // inside the window is what an elevated command actually does, and it
+        // is the one call that could carry the credential to disk behind the
+        // caller's back — so the assertions below read a real, written file
+        // rather than an empty directory that would pass by default.
+        //
+        // Spread over the current config, the way every real caller does,
+        // rather than passing a bare object. A bare one rewrites config.json
+        // wholesale and so erases anything `withElevation` had persisted
+        // before the callback ran — which silently disarmed this test until a
+        // deliberate persist-the-key experiment failed to turn it red.
+        await config.saveConfig({ ...(await config.getConfig()), defaultOrg: ORG });
+      });
+
+      expect(configDirBytes()).not.toContain(CANARY);
+      expect(writes.join('\n')).not.toContain(CANARY);
+    });
+
+    test('the credential is readable inside the callback and not after it', async () => {
+      expect(elevation.currentElevatedKey()).toBeUndefined();
+
+      const insideCallback = await elevation.withElevation(SESSION, async (session) => {
+        expect(session.apiKey).toBe(CANARY);
+        return elevation.currentElevatedKey();
+      });
+
+      expect(insideCallback).toBe(CANARY);
+      expect(elevation.currentElevatedKey()).toBeUndefined();
+    });
+
+    test('overlapping elevations are refused rather than silently swapped', async () => {
+      const second = { ...SESSION, apiKey: 'mk_a_different_key' };
+
+      await elevation.withElevation(SESSION, async () => {
+        // The shape a `Promise.all` of two master-gated calls would produce.
+        // Allowing it would overwrite the key this window is running on, and
+        // the first window to finish would clear the slot out from under the
+        // other — a request sent under the wrong credential, or under none,
+        // reported as an unexplained refusal.
+        await expect(elevation.withElevation(second, async () => 'unreachable')).rejects.toThrow(
+          'already in force',
+        );
+
+        // And the refusal must not disturb the window it was refused from.
+        expect(elevation.currentElevatedKey()).toBe(CANARY);
+      });
+
+      expect(elevation.currentElevatedKey()).toBeUndefined();
+    });
+
+    test('a throwing callback still releases the credential', async () => {
+      await expect(
+        elevation.withElevation(SESSION, async () => {
+          throw new Error('the gated call failed');
+        }),
+      ).rejects.toThrow('the gated call failed');
+
+      // Releasing only on the success path would rebuild the standing window in
+      // miniature: one failed admin command and the key stays live for the rest
+      // of the process, which is precisely the state this design removes.
+      expect(elevation.currentElevatedKey()).toBeUndefined();
     });
   });
 });

@@ -15,9 +15,11 @@ mock.module('env-paths', () => ({
 }));
 
 import type { InMemorySecureStore } from '../../lib/secure-store.js';
+import { validateAdvertisedCommand } from '../helpers/advertised-commands.js';
 
 const config = await import('../../lib/config.js');
 const secureStore = await import('../../lib/secure-store.js');
+const { createProgram } = await import('../../cli.js');
 
 let memoryStore: InMemorySecureStore;
 
@@ -404,11 +406,11 @@ describe('config', () => {
   });
 
   // The bug these lock down: profiles carried a credential that nothing in the
-  // request path ever read. `am auth elevate` stored a working master key under
-  // `profile:<name>`, marked that profile active, and every later command still
-  // authenticated as the agent — so `am tail` reported "master key required"
-  // immediately after a successful elevation. Any of these failing means the
-  // active profile has gone back to being decorative.
+  // request path ever read. The elevate command of the day stored a working
+  // master key under `profile:<name>`, marked that profile active, and every
+  // later command still authenticated as the agent — so `am tail` reported
+  // "master key required" immediately after a successful elevation. Any of
+  // these failing means the active profile has gone back to being decorative.
   describe('active profile drives the credential', () => {
     const ISO_PAST = '2020-01-01T00:00:00.000Z';
     const ISO_FUTURE = '2999-01-01T00:00:00.000Z';
@@ -465,7 +467,7 @@ describe('config', () => {
         activeProfile: 'elevated',
         profiles: { elevated: { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' } },
       });
-      // `elevatedProfileName(undefined)` produces a bare `elevated`, which a
+      // With no default org the old naming produced a bare `elevated`, which a
       // plain `-elevated` suffix check would miss — leaving exactly the
       // org-less setup unable to recover from a stale session.
       expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');
@@ -515,6 +517,154 @@ describe('config', () => {
       // session would silently outrank the profile the user just selected.
       expect(auth.token).toBeUndefined();
       expect(auth.apiKey).toBe('sk_live_master');
+    });
+
+    /**
+     * The expiry notice tells the user how to retire the profile, and that
+     * sentence is advertised syntax — held to the same rule as the `demo` and
+     * `onboard` guards: do not print a command the CLI cannot run.
+     *
+     * Newly load-bearing. The notice used to point at `am auth elevate`; when
+     * that command was deleted it was rewritten to point at `am config profile
+     * clear`, and the only guard that covered `clear` lived in the elevate
+     * command's own test file and went with it. The CLI was left advertising a
+     * command with nothing pinning its existence — which is exactly how
+     * `am config profile use default` shipped.
+     */
+    test('the expiry notice advertises a command that exists', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' },
+        },
+      });
+
+      const written: string[] = [];
+      const realWrite = process.stderr.write;
+      process.stderr.write = ((chunk: unknown) => {
+        written.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write;
+      try {
+        await config.getAuthConfig();
+      } finally {
+        process.stderr.write = realWrite;
+      }
+
+      // Read out of the real notice rather than restated here. A test that
+      // hardcodes the command it expects stays green while the message beside
+      // it says something else entirely.
+      const advertised = written.join('').match(/`([^`]+)`/)?.[1];
+      expect(advertised).toBeDefined();
+      expect(validateAdvertisedCommand(createProgram(), advertised as string)).toEqual([]);
+    });
+  });
+
+  // A machine that elevated with the previous CLI (0.7.1 or earlier) has an
+  // `<org>-elevated` profile sitting in config.json with a live master
+  // credential behind it in the keychain — see the comment on
+  // ELEVATED_PROFILE_SUFFIX. Elevation is per-command now and nothing writes
+  // such a profile any more, so shipping that change without cleaning up
+  // existing ones would leave every such machine holding standing master
+  // authority indefinitely, which is exactly what this release removes.
+  describe('purgeElevatedProfiles', () => {
+    /** Distinctive so a leftover match can only mean the purge failed. */
+    const MASTER_CANARY = 'mk_live_canary_should_be_purged';
+
+    test('removes the elevated profile and keeps the normal one', async () => {
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(Object.keys(cfg.profiles ?? {})).toEqual(['work']);
+      expect(cfg.profiles?.work.apiKey).toBe('ak_work');
+    });
+
+    test('purges the elevated profile’s secret from the credential store, not just config.json', async () => {
+      await config.saveConfig({
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+        },
+      });
+      expect(await memoryStore.getSecret('profile:org-elevated')).not.toBeNull();
+
+      await config.purgeElevatedProfiles();
+
+      // The raw store, not a config.ts getter: getConfig()/getActiveProfile()
+      // only look at the keychain for profiles still named in config.json, so
+      // they cannot tell a deleted entry apart from one merely orphaned by the
+      // JSON-only cleanup this test exists to rule out.
+      expect(await memoryStore.getSecret('profile:org-elevated')).toBeNull();
+    });
+
+    test('clears activeProfile when it pointed at the purged profile', async () => {
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      // Not left pointing at a profile that no longer exists.
+      expect(cfg.activeProfile).toBeUndefined();
+    });
+
+    test('leaves activeProfile alone when it pointed at a normal profile', async () => {
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(cfg.activeProfile).toBe('work');
+    });
+
+    test('a config with nothing to purge is left undisturbed', async () => {
+      await config.saveConfig({
+        activeProfile: 'work',
+        profiles: { work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' } },
+      });
+
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(cfg.activeProfile).toBe('work');
+      expect(cfg.profiles?.work.apiKey).toBe('ak_work');
+      expect(await memoryStore.getSecret('profile:work')).not.toBeNull();
+    });
+
+    test('running it twice is safe — the second call is a no-op', async () => {
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: MASTER_CANARY },
+          work: { apiUrl: 'https://api.useanima.sh', apiKey: 'ak_work' },
+        },
+      });
+
+      await config.purgeElevatedProfiles();
+      await config.purgeElevatedProfiles();
+
+      const cfg = await config.getConfig();
+      expect(Object.keys(cfg.profiles ?? {})).toEqual(['work']);
+      expect(cfg.activeProfile).toBeUndefined();
+      expect(await memoryStore.getSecret('profile:work')).not.toBeNull();
     });
   });
 });

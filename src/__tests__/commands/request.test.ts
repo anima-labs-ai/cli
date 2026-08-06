@@ -285,8 +285,11 @@ describe("am request", () => {
 		const { code, logs } = await runProgram(["request", "approve", "preq_1"]);
 		expect(code).toBe(1);
 		// Using an agent key here is the likeliest mistake, so the message has to
-		// carry the remedy rather than only the refusal.
-		expect(logs.join("\n")).toContain("am auth elevate");
+		// carry the remedy rather than only the refusal. The remedy is no longer a
+		// command to run — elevation happens inside the failing command — so what
+		// has to reach the user is where to run it from.
+		expect(logs.join("\n")).toContain("interactive terminal");
+		expect(logs.join("\n")).toContain("mk_");
 	});
 
 	test("empty request ids are rejected before any call is made", async () => {

@@ -36,7 +36,7 @@ import { requireNonEmptyArg } from '../../lib/args.js';
 import { ApiError } from '../../lib/api-client.js';
 import { type GlobalOptions, resolveApiUrl } from '../../lib/auth.js';
 import { getAuthConfig } from '../../lib/config.js';
-import { activateSession, elevateWithGrant } from '../../lib/elevation.js';
+import { elevateWithGrant, withElevation } from '../../lib/elevation.js';
 import { Output } from '../../lib/output.js';
 
 interface StreamEvent {
@@ -199,65 +199,77 @@ export function tailCommand(): Command {
 
       let attempts = 0;
       let backoff = INITIAL_BACKOFF_MS;
-      while (!controller.signal.aborted) {
-        try {
-          await streamOnce(apiUrl, credential, opts, controller.signal, output);
-          // streamOnce only returns by abort or throw; reaching here is unexpected.
-          break;
-        } catch (error) {
-          if (controller.signal.aborted) break;
 
-          // 401/403 will not become 200 by waiting. Retrying a permission
-          // error five times with backoff buried the actual problem under
-          // "disconnected … attempt 1/5" and took ~30s to reach a verdict the
-          // first response already gave. `/v1/events/stream` calls
-          // requireMaster, and the key `am init` stores is an agent key.
-          if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-            // The stream is master-only, and the key `am init` stores is an
-            // agent key — so 403 is the expected first answer here, not an
-            // anomaly. Step up and reconnect rather than reporting a dead end.
-            // Once only: a second 403 under an elevated key is a real refusal.
-            if (error.status === 403 && !elevationAttempted && process.stderr.isTTY) {
-              elevationAttempted = true;
-              output.info('[am tail] The stream needs admin access — authenticating…');
-              try {
-                const session = await elevateWithGrant(globals);
-                await activateSession(session, apiUrl);
-                credential = session.apiKey;
-                // Straight back into the loop: this is a fresh credential, not
-                // a flaky connection, so the backoff would only add delay.
-                continue;
-              } catch (elevationError: unknown) {
-                output.warn(
-                  elevationError instanceof Error ? elevationError.message : String(elevationError),
-                );
+      // A named loop rather than a bare `while`, so the elevation branch can
+      // re-enter it *inside* `withElevation`. Every other command holds a
+      // privileged credential for one request; `tail` holds one connection open
+      // for as long as the user watches it, so the window has to be the stream
+      // rather than the reconnect that opened it.
+      const streamLoop = async (): Promise<void> => {
+        while (!controller.signal.aborted) {
+          try {
+            await streamOnce(apiUrl, credential, opts, controller.signal, output);
+            // streamOnce only returns by abort or throw; reaching here is unexpected.
+            break;
+          } catch (error) {
+            if (controller.signal.aborted) break;
+
+            // 401/403 will not become 200 by waiting. Retrying a permission
+            // error five times with backoff buried the actual problem under
+            // "disconnected … attempt 1/5" and took ~30s to reach a verdict the
+            // first response already gave. `/v1/events/stream` calls
+            // requireMaster, and the key `am init` stores is an agent key.
+            if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+              // The stream is master-only, and the key `am init` stores is an
+              // agent key — so 403 is the expected first answer here, not an
+              // anomaly. Step up and reconnect rather than reporting a dead end.
+              // Once only: a second 403 under an elevated key is a real refusal.
+              if (error.status === 403 && !elevationAttempted && process.stderr.isTTY) {
+                elevationAttempted = true;
+                output.info('[am tail] The stream needs admin access — authenticating…');
+                try {
+                  const session = await elevateWithGrant(globals);
+                  credential = session.apiKey;
+                  // Straight back into the loop: this is a fresh credential, not
+                  // a flaky connection, so the backoff would only add delay. Back
+                  // in *under* the elevation, so the key is in force for the rest
+                  // of the stream and released the moment it ends — including
+                  // when it ends by throwing.
+                  return withElevation(session, streamLoop);
+                } catch (elevationError: unknown) {
+                  output.warn(
+                    elevationError instanceof Error ? elevationError.message : String(elevationError),
+                  );
+                }
               }
+
+              output.error(
+                error.status === 403
+                  ? '[am tail] This credential cannot read the event stream.'
+                  : '[am tail] Not authenticated.',
+              );
+              output.notice(
+                error.status === 403
+                  ? 'The stream is master-only. Run it from an interactive terminal, where it can ask for admin access, or use a master key (mk_…) via `am init` → "existing API key".'
+                  : 'Run `am auth login`, or configure an API key with `am init`.',
+              );
+              process.exit(1);
             }
 
-            output.error(
-              error.status === 403
-                ? '[am tail] This credential cannot read the event stream.'
-                : '[am tail] Not authenticated.',
+            attempts += 1;
+            const message = error instanceof Error ? error.message : String(error);
+            if (attempts > MAX_RECONNECT_ATTEMPTS) {
+              output.fatal(`[am tail] giving up after ${attempts} attempts: ${message}`);
+            }
+            output.warn(
+              `[am tail] disconnected (${message}); retrying in ${backoff}ms (attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS})`,
             );
-            output.notice(
-              error.status === 403
-                ? 'The stream is master-only. Run `am auth elevate` once to enrol this machine, or use a master key (mk_…) via `am init` → "existing API key".'
-                : 'Run `am auth login`, or configure an API key with `am init`.',
-            );
-            process.exit(1);
+            await new Promise((res) => setTimeout(res, backoff));
+            backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
           }
-
-          attempts += 1;
-          const message = error instanceof Error ? error.message : String(error);
-          if (attempts > MAX_RECONNECT_ATTEMPTS) {
-            output.fatal(`[am tail] giving up after ${attempts} attempts: ${message}`);
-          }
-          output.warn(
-            `[am tail] disconnected (${message}); retrying in ${backoff}ms (attempt ${attempts}/${MAX_RECONNECT_ATTEMPTS})`,
-          );
-          await new Promise((res) => setTimeout(res, backoff));
-          backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
         }
-      }
+      };
+
+      await streamLoop();
     });
 }

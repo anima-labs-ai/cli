@@ -28,6 +28,33 @@ import { vaultCommands } from "./commands/vault/index.js";
 import { verifyCommand } from "./commands/verify/index.js";
 import { voiceCommands } from "./commands/voice/index.js";
 import { webhookCommands } from "./commands/webhook/index.js";
+import { purgeElevatedProfiles } from "./lib/config.js";
+
+/**
+ * Runs once before whichever command's action handler is about to execute —
+ * wired below via `.hook("preAction", ...)`, which Commander calls exactly
+ * once per invocation regardless of subcommand nesting, and never for
+ * `--help` or a bare `am` (both resolve before any action handler is
+ * dispatched, so there's nothing to purge for). Cleans up a profile a
+ * pre-0.7.2 `auth elevate` may have left behind — see `purgeElevatedProfiles`
+ * for why this can't wait for the user to notice.
+ *
+ * Caught and downgraded to a warning rather than left to propagate: this is
+ * unrelated housekeeping riding along on the command the user actually typed,
+ * and a failure in it (e.g. an unwritable config dir) must never be what
+ * stops that command from running.
+ */
+async function purgeElevatedProfilesOnStartup(): Promise<void> {
+	try {
+		await purgeElevatedProfiles();
+	} catch (error: unknown) {
+		process.stderr.write(
+			`[anima] warning: failed to clean up a stale elevated-session profile (${
+				error instanceof Error ? error.message : String(error)
+			}).\n`,
+		);
+	}
+}
 
 export function createProgram(): Command {
 	const program = new Command();
@@ -39,6 +66,7 @@ export function createProgram(): Command {
 		// Required so `am vault exec -- <cmd>` passes child-command flags through
 		// to spawn() instead of being interpreted by us. Cascades to all subcommands.
 		.enablePositionalOptions()
+		.hook("preAction", purgeElevatedProfilesOnStartup)
 		.option(
 			"--human",
 			"Pretty-print for humans (tables, colors). Default output is agent format (compact JSON).",

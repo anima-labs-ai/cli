@@ -69,18 +69,18 @@ Primary binary: **`anima`**. Short alias: **`am`**.
 anima auth login          # Authenticate with Anima
 anima auth logout         # Clear stored credentials
 anima auth whoami         # Show current org, agent, and how each was resolved
-anima auth elevate        # Get temporary admin access for privileged commands
 ```
 
 Some operations — creating an agent, rotating keys, `anima tail` — need admin
-rights that the agent key from `anima init` does not carry. You do not normally
-run `anima auth elevate` yourself: those commands step up on demand, and macOS
-asks for your login password.
+rights that the agent key from `anima init` does not carry. There is no command
+to run first: those commands step up on demand, and macOS asks for your login
+password.
 
 The first step-up emails a code to the organization owner and **enrols this
-machine**. Enrolment stores a grant in your keychain behind a human-presence
-gate, so later step-ups need no email — just the password prompt. A step-up
-lasts 15 minutes, like `sudo`, so a run of admin commands only prompts once.
+machine**, inline, at the moment you need it. Enrolment stores a grant in your
+keychain behind a human-presence gate, so later step-ups need no email — just
+the password prompt. Admin access lasts for the one command that asked for it
+and is never written down, so each one prompts.
 
 An agent driving the CLI holds the API key and can run every command, but it
 cannot answer a system password dialog. That is the boundary. Note the gate is
@@ -88,7 +88,11 @@ local: it governs release of the grant on this machine, and the server cannot
 verify a human was present.
 
 Enrolment is macOS-only. Elsewhere the CLI refuses to store a grant rather than
-pretend it is protected, and `anima auth elevate` keeps using the emailed code.
+pretend it is protected, and every step-up keeps using the emailed code.
+
+Enrolment needs an interactive terminal once, because the code has to be typed
+back in. A CI job or an agent driving `am` fails with that explanation rather
+than blocking on a prompt nothing will answer.
 
 ### `agent` — Manage agents
 
