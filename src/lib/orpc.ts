@@ -76,6 +76,26 @@ const TYPED_CODE_HINTS: Readonly<Record<string, string>> = {
   MASTER_KEY_REQUIRED:
     'This needs admin access. Run it from an interactive terminal, where it ' +
     'will ask for your password.\n',
+
+  // An agent hit a master gate and a request was filed for its owner. This is
+  // NOT the same wall as MASTER_KEY_REQUIRED, and conflating them is the whole
+  // reason it gets its own hint: there, the caller could step up themselves;
+  // here, someone else has to act, and retrying sooner changes nothing.
+  //
+  // No command is named. Filing again returns the same request rather than
+  // notifying the owner twice, so "run X to check" would invite a poll loop
+  // that achieves nothing. The server's own message carries the request id.
+  APPROVAL_PENDING:
+    'Waiting on your owner to approve this. Re-run it unchanged once they ' +
+    'have — asking again in the meantime does not notify them twice.\n',
+
+  // A standing decision of NEVER. Deliberately worded as settled rather than
+  // pending: unlike APPROVAL_PENDING nothing is in flight, and an agent that
+  // treats this as "retry later" will retry forever. Changing it needs a human
+  // in the console, which is why no CLI command is offered.
+  APPROVAL_DENIED:
+    'Your owner has set this operation to Never for this agent. Retrying will ' +
+    'not change that — it has to be changed in the console.\n',
 };
 
 /**

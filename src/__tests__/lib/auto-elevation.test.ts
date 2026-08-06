@@ -200,3 +200,60 @@ describe('withAutoElevation', () => {
     expect(elevations).toBe(0);
   });
 });
+
+/**
+ * The approval codes are a different wall from MASTER_KEY_REQUIRED, and the
+ * retry wrapper must not confuse them.
+ *
+ * MASTER_KEY_REQUIRED means "you could step up yourself", so a password prompt
+ * is the right answer. APPROVAL_PENDING means someone ELSE has to act, and
+ * APPROVAL_DENIED means they already decided no. Prompting for a password on
+ * either would ask an agent — the only principal that can receive them — for
+ * something it cannot provide, and then retry a call the server has no
+ * intention of allowing yet.
+ */
+describe('withAutoElevation and the approval codes', () => {
+  test('APPROVAL_PENDING does not trigger elevation or a retry', async () => {
+    let calls = 0;
+    const client = fakeClient(async () => {
+      calls += 1;
+      throw new ORPCError('APPROVAL_PENDING', {
+        status: 403,
+        message: 'agent.delete needs your owner’s approval.',
+      });
+    });
+
+    let elevations = 0;
+    const wrapped = withAutoElevation(client, OPTS, async () => {
+      elevations += 1;
+      return SESSION;
+    });
+
+    await expect(wrapped.agent.create({} as never)).rejects.toThrow('approval');
+    expect(elevations).toBe(0);
+    // Exactly one attempt: a retry here would re-file against a server that
+    // returns the same pending request, achieving nothing but noise.
+    expect(calls).toBe(1);
+  });
+
+  test('APPROVAL_DENIED does not trigger elevation or a retry', async () => {
+    let calls = 0;
+    const client = fakeClient(async () => {
+      calls += 1;
+      throw new ORPCError('APPROVAL_DENIED', {
+        status: 403,
+        message: 'This operation is set to Never for this agent.',
+      });
+    });
+
+    let elevations = 0;
+    const wrapped = withAutoElevation(client, OPTS, async () => {
+      elevations += 1;
+      return SESSION;
+    });
+
+    await expect(wrapped.agent.create({} as never)).rejects.toThrow('Never');
+    expect(elevations).toBe(0);
+    expect(calls).toBe(1);
+  });
+});
