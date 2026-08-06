@@ -131,26 +131,56 @@ describe('owner grants', () => {
    */
   describe('inline enrolment', () => {
     /**
-     * Pinned explicitly, both ways. `bun test` inherits the developer's stdin,
-     * so this is a TTY when run from a terminal and not in CI — and the branch
-     * being tested is the one that otherwise blocks forever.
+     * Hold the stdin state across the awaits the code under test performs.
+     *
+     * This helper was synchronous, and `fn()` returns a promise: the `finally`
+     * restored the real terminal's state while `elevateWithGrant` was still
+     * inside its first `await getAuthConfig()`, so the guard below it ran under
+     * whatever stdin the developer happened to have. Both tests then proved
+     * nothing — they passed on ambient non-TTY, and on a machine with a
+     * terminal they took the enrolment path and called the *live production
+     * API*, which is how this was found. A test whose subject is decided by the
+     * ambient terminal is worse than no test, and one that reaches production
+     * when the ambient differs is worse again.
      */
-    function withStdinTty<T>(isTTY: boolean, fn: () => T): T {
+    async function withStdinTty<T>(isTTY: boolean, fn: () => Promise<T>): Promise<T> {
       const original = process.stdin.isTTY;
       process.stdin.isTTY = isTTY;
       try {
-        return fn();
+        return await fn();
       } finally {
         process.stdin.isTTY = original;
       }
     }
 
+    /**
+     * Every request attempted while the trap is installed.
+     *
+     * Belt to the helper's braces, and the stronger half of the pair: pinning
+     * stdin makes the tests deterministic, but this makes reaching the network
+     * *impossible* rather than merely unintended, and turns "no call was made"
+     * into an assertion instead of an assumption. The guard is precisely a
+     * promise that nothing goes out, so that is what gets checked.
+     */
+    let attempted: string[] = [];
+    const realFetch = globalThis.fetch;
+
     beforeEach(async () => {
+      attempted = [];
+      globalThis.fetch = (async (input: unknown) => {
+        attempted.push(String(input));
+        throw new Error('the test reached the network');
+      }) as unknown as typeof fetch;
+
       await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
       await config.saveConfig({ defaultOrg: ORG });
     });
 
-    test('with no terminal to type the code into, it fails rather than prompting', async () => {
+    afterEach(() => {
+      globalThis.fetch = realFetch;
+    });
+
+    test('with no terminal to type the code into, it fails before asking for a code', async () => {
       await withStdinTty(false, async () => {
         const error = await elevation.elevateWithGrant({}).catch((e: unknown) => e);
 
@@ -160,6 +190,23 @@ describe('owner grants', () => {
         // terminal, and that nothing about the job's configuration will fix it.
         expect((error as Error).message).toContain('interactive');
       });
+
+      // Nothing left the process. Requesting a code and *then* discovering
+      // there is nowhere to type it would email the organization owner on every
+      // CI run — noise the owner cannot act on and did not ask for.
+      expect(attempted).toEqual([]);
+    });
+
+    test('with a terminal it goes ahead and asks for the code', async () => {
+      // The other half of the guard. Without this, `if (true) throw` passes the
+      // test above, and enrolment would be unreachable everywhere — the CLI
+      // would have no route to admin access at all on a fresh machine.
+      await withStdinTty(true, async () => {
+        await expect(elevation.elevateWithGrant({})).rejects.toThrow('reached the network');
+      });
+
+      expect(attempted).toHaveLength(1);
+      expect(attempted[0]).toContain('/v1/agent/elevate/request');
     });
 
     test('a marker with no secret behind it is cleared before giving up', async () => {
@@ -177,6 +224,11 @@ describe('owner grants', () => {
       // Leaving the marker would send every later step-up looking for a secret
       // that is not there, and reporting the wrong reason for failing.
       expect(await elevation.enrollmentFor(ORG)).toBeUndefined();
+      // And it has to give up *here*, not one step later. Without the assertion
+      // this test passed with the terminal guard deleted: the enrolment attempt
+      // it then made failed on its own and still raised NotEnrolledError, so
+      // every assertion above held while the behaviour under test was gone.
+      expect(attempted).toEqual([]);
     });
   });
 
@@ -268,6 +320,26 @@ describe('owner grants', () => {
       });
 
       expect(insideCallback).toBe(CANARY);
+      expect(elevation.currentElevatedKey()).toBeUndefined();
+    });
+
+    test('overlapping elevations are refused rather than silently swapped', async () => {
+      const second = { ...SESSION, apiKey: 'mk_a_different_key' };
+
+      await elevation.withElevation(SESSION, async () => {
+        // The shape a `Promise.all` of two master-gated calls would produce.
+        // Allowing it would overwrite the key this window is running on, and
+        // the first window to finish would clear the slot out from under the
+        // other — a request sent under the wrong credential, or under none,
+        // reported as an unexplained refusal.
+        await expect(elevation.withElevation(second, async () => 'unreachable')).rejects.toThrow(
+          'already in force',
+        );
+
+        // And the refusal must not disturb the window it was refused from.
+        expect(elevation.currentElevatedKey()).toBe(CANARY);
+      });
+
       expect(elevation.currentElevatedKey()).toBeUndefined();
     });
 

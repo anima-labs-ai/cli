@@ -186,6 +186,14 @@ export async function requireOrpcAuth(opts: GlobalOptions): Promise<AnimaClient>
   // it would hang until timeout rather than fail outright. Interactive use is
   // the only place the prompt is a question rather than a stall — so the
   // decision to wrap lives here, and the wrapper itself stays pure.
+  //
+  // `stderr`, while enrolment in `elevation.ts` gates on `stdin`. They disagree
+  // on purpose, because they guard different prompts: the OS password dialog is
+  // a window, not a terminal read, so `am agent create < /dev/null` on an
+  // enrolled Mac can still answer it — gating that on stdin would break a flow
+  // that works. Enrolment really does read stdin, so stdin is what it checks.
+  // Anything new that prompts has to pick the stream its own prompt reads from,
+  // not copy whichever of these it saw first.
   if (!process.stderr.isTTY) return client;
   return withAutoElevation(client, opts);
 }

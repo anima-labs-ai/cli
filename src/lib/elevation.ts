@@ -199,6 +199,14 @@ async function enrollThisMachine(
   // driving `am` would otherwise sit on a prompt that nothing is ever going to
   // answer. Failing here costs a command; hanging costs the job's timeout and
   // tells the operator nothing about why.
+  //
+  // `stdin`, because that is the stream `clack.text` below actually reads.
+  // `requireOrpcAuth` gates on `stderr` for the opposite and equally deliberate
+  // reason — see the note there.
+  //
+  // Before the request, not after: discovering there is nowhere to type the
+  // code only once it has been sent would email the organization owner on every
+  // CI run, about a step-up that was never going to complete.
   if (!process.stdin.isTTY) {
     throw new NotEnrolledError(
       canHoldGrant()
@@ -379,11 +387,33 @@ export function currentElevatedKey(): string | undefined {
  * the credential live for the rest of the process on every throw — the standing
  * window again, rebuilt in miniature and reachable by making one admin command
  * fail.
+ *
+ * A single module-level slot cannot describe two overlapping windows, and it is
+ * a `Promise.all` of two master-gated calls away from having to. The two ways
+ * that could go both fail quietly: the second elevation overwrites the first, so
+ * a request goes out under a key that was not minted for it; and the first
+ * window to finish clears the slot, so the other call is unprivileged again
+ * mid-flight and is refused for reasons nothing on screen explains. Both are
+ * credential bugs that look like flaky network errors.
+ *
+ * So overlap throws. Nothing overlaps today — the oRPC retry runs one call and
+ * `tail` re-enters its own loop exactly once — which is the argument for
+ * refusing rather than for building the AsyncLocalStorage-shaped thing that
+ * would actually support it. If concurrent elevation is ever wanted, this
+ * failure is where to start; until then a loud stop beats a silent swap.
  */
 export async function withElevation<T>(
   session: ElevatedSession,
   fn: (session: ElevatedSession) => Promise<T>,
 ): Promise<T> {
+  if (elevatedKey !== undefined) {
+    throw new Error(
+      'An elevation is already in force. Elevated credentials are held in one ' +
+        'process-wide slot, so overlapping privileged calls would send each other’s ' +
+        'keys; run them one at a time.',
+    );
+  }
+
   elevatedKey = session.apiKey;
   try {
     return await fn(session);

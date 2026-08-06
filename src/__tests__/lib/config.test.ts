@@ -15,9 +15,11 @@ mock.module('env-paths', () => ({
 }));
 
 import type { InMemorySecureStore } from '../../lib/secure-store.js';
+import { validateAdvertisedCommand } from '../helpers/advertised-commands.js';
 
 const config = await import('../../lib/config.js');
 const secureStore = await import('../../lib/secure-store.js');
+const { createProgram } = await import('../../cli.js');
 
 let memoryStore: InMemorySecureStore;
 
@@ -515,6 +517,47 @@ describe('config', () => {
       // session would silently outrank the profile the user just selected.
       expect(auth.token).toBeUndefined();
       expect(auth.apiKey).toBe('sk_live_master');
+    });
+
+    /**
+     * The expiry notice tells the user how to retire the profile, and that
+     * sentence is advertised syntax — held to the same rule as the `demo` and
+     * `onboard` guards: do not print a command the CLI cannot run.
+     *
+     * Newly load-bearing. The notice used to point at `am auth elevate`; when
+     * that command was deleted it was rewritten to point at `am config profile
+     * clear`, and the only guard that covered `clear` lived in the elevate
+     * command's own test file and went with it. The CLI was left advertising a
+     * command with nothing pinning its existence — which is exactly how
+     * `am config profile use default` shipped.
+     */
+    test('the expiry notice advertises a command that exists', async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({
+        activeProfile: 'org-elevated',
+        profiles: {
+          'org-elevated': { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' },
+        },
+      });
+
+      const written: string[] = [];
+      const realWrite = process.stderr.write;
+      process.stderr.write = ((chunk: unknown) => {
+        written.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write;
+      try {
+        await config.getAuthConfig();
+      } finally {
+        process.stderr.write = realWrite;
+      }
+
+      // Read out of the real notice rather than restated here. A test that
+      // hardcodes the command it expects stays green while the message beside
+      // it says something else entirely.
+      const advertised = written.join('').match(/`([^`]+)`/)?.[1];
+      expect(advertised).toBeDefined();
+      expect(validateAdvertisedCommand(createProgram(), advertised as string)).toEqual([]);
     });
   });
 
