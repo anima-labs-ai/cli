@@ -238,7 +238,7 @@ function noHumanPresenceGate(platform: NodeJS.Platform, backend: string): never 
     platform,
     `${backend} encrypts secrets at rest, but cannot require a human to be present before releasing one.`,
     'Storing an owner grant here would look protected while being readable by anything running as you. ' +
-      'Use `am auth elevate` with the emailed code on this platform instead.',
+      'On this platform each step-up uses the code emailed to the organization owner instead.',
   );
 }
 

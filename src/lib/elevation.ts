@@ -31,15 +31,9 @@
  *     using the emailed code.
  */
 
+import * as clack from '@clack/prompts';
 import { type GlobalOptions, resolveApiUrl } from './auth.js';
-import {
-  ELEVATED_PROFILE_SUFFIX,
-  getAuthConfig,
-  getConfig,
-  profileCredentialLapsed,
-  saveConfig,
-  secureStore as store,
-} from './config.js';
+import { getAuthConfig, getConfig, saveConfig, secureStore as store } from './config.js';
 
 /** Keychain account holding an org's grant. Namespaced so it cannot collide
  *  with auth.json's host-keyed accounts or `profile:<name>` entries. */
@@ -51,6 +45,21 @@ export interface ElevatedSession {
   apiKey: string;
   apiKeyId: string;
   expiresAt: string;
+}
+
+/** `/v1/agent/elevate/request` — where the enrolment code was emailed. */
+interface ElevateRequestResponse {
+  sent_to: string;
+  expires_at: string;
+}
+
+/** `/v1/agent/elevate` — the grant fields appear only when `enroll` was asked for. */
+interface ElevateWireResponse {
+  api_key: string;
+  api_key_id: string;
+  expires_at: string;
+  grant?: string;
+  grant_expires_at?: string;
 }
 
 /** Raised when elevation cannot even be attempted, with the way forward. */
@@ -161,11 +170,127 @@ export async function readGrant(orgId: string): Promise<string | null> {
 }
 
 /**
- * Trade this machine's grant for a short-lived master credential.
+ * Spend an emailed code to enrol this machine, and return the credential that
+ * exchange already yields.
  *
- * Throws {@link NotEnrolledError} when there is nothing to trade, so callers
- * can tell "you need to enrol" apart from "the exchange was refused" — the
- * first is a one-command fix, the second may mean a revoked grant.
+ * This used to be `am auth elevate`. It stopped deserving a command of its own
+ * once the credential lived for a single call: "elevate" is no longer a state
+ * you enter and then work inside, so there is nothing for a standalone command
+ * to hand back. What remains is a once-per-machine setup step, and the moment
+ * to run it is the moment the user turns out to need it.
+ *
+ * The emailed code is deliberately only this. As a *recurring* factor it is
+ * weak here — Anima sells agents with mailbox access, so the thing being gated
+ * may be able to read the gate — and it takes the human out of the terminal
+ * every time. Spent once for a grant, it becomes something an agent cannot
+ * satisfy at all: a system password dialog it has no way to answer.
+ *
+ * Called over raw fetch, like `init`'s sign-up call, because these endpoints
+ * are agent-self-service and the CLI's contract pin (.anima-ref) does not carry
+ * them yet.
+ */
+async function enrollThisMachine(
+  apiUrl: string,
+  credential: string,
+  orgId: string,
+): Promise<ElevatedSession> {
+  // No terminal, no enrolment — and saying so is the whole point. The code has
+  // to be read out of an inbox and typed back in, so a CI job or an agent
+  // driving `am` would otherwise sit on a prompt that nothing is ever going to
+  // answer. Failing here costs a command; hanging costs the job's timeout and
+  // tells the operator nothing about why.
+  if (!process.stdin.isTTY) {
+    throw new NotEnrolledError(
+      canHoldGrant()
+        ? 'This machine is not enrolled for admin access. Enrolling emails a code to the ' +
+          'organization owner that has to be typed back in, so it needs an interactive ' +
+          'terminal — once. Run an admin command from a terminal first.'
+        : `${store().name} cannot gate a secret on human presence, so no grant is kept here ` +
+          'and every step-up needs the code emailed to the organization owner. Run this from ' +
+          'an interactive terminal.',
+    );
+  }
+
+  const requested = await post<ElevateRequestResponse>(
+    apiUrl,
+    '/v1/agent/elevate/request',
+    credential,
+    {},
+  );
+  if (!requested.ok) {
+    throw new NotEnrolledError(
+      requested.status === 404
+        ? `Could not request a step-up code: ${requested.message} This API does not offer ` +
+          'step-up yet. Use a master key (mk_…) via `am init` → "existing API key".'
+        : `Could not request a step-up code: ${requested.message}`,
+    );
+  }
+
+  process.stderr.write(
+    `Code sent to ${requested.data.sent_to}. It expires at ${requested.data.expires_at}.\n`,
+  );
+
+  const answer = await clack.text({
+    message: 'Enter the code from the owner’s email:',
+    placeholder: '123456',
+    validate: (value) => {
+      if (!/^\d{6}$/.test((value ?? '').trim())) return 'Six digits.';
+    },
+  });
+  if (clack.isCancel(answer)) {
+    throw new NotEnrolledError('Cancelled. No code was used; request a new one when ready.');
+  }
+  const code = (answer as string).trim();
+
+  // Only ask for a grant when this machine can actually gate one. On a backend
+  // without a human-presence gate the grant would be a 90-day credential
+  // sitting in storage that anything running as the user can read — strictly
+  // worse than the emailed code it would replace.
+  const wantGrant = canHoldGrant();
+
+  const elevated = await post<ElevateWireResponse>(apiUrl, '/v1/agent/elevate', credential, {
+    otp_code: code,
+    ...(wantGrant ? { enroll: true } : {}),
+  });
+  if (!elevated.ok) {
+    throw new Error(`Step-up failed: ${elevated.message}`);
+  }
+
+  if (wantGrant && elevated.data.grant && elevated.data.grant_expires_at) {
+    try {
+      await recordEnrollment(orgId, elevated.data.grant, elevated.data.grant_expires_at);
+      process.stderr.write(
+        'This machine is now enrolled. Later admin commands ask for your login password ' +
+          'instead of emailing a code.\n',
+      );
+    } catch (err: unknown) {
+      // Enrolment is an optimisation on top of a step-up that already worked.
+      // Losing it costs another email next time, which is worth far less than
+      // throwing away the credential the user has just earned.
+      process.stderr.write(
+        `This machine could not be enrolled: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
+  }
+
+  return {
+    apiKey: elevated.data.api_key,
+    apiKeyId: elevated.data.api_key_id,
+    expiresAt: elevated.data.expires_at,
+  };
+}
+
+/**
+ * Trade this machine's grant for a short-lived master credential, enrolling
+ * first when there is no usable grant to trade.
+ *
+ * Every route to "no grant" ends in the same place — enrol and continue —
+ * rather than in an error naming a command to run next. There is no such
+ * command any more, and there is nothing a second invocation would know that
+ * this one does not.
+ *
+ * Throws {@link NotEnrolledError} when enrolment cannot even be attempted: no
+ * credential, no org, or no terminal to type the code into.
  */
 export async function elevateWithGrant(opts: GlobalOptions): Promise<ElevatedSession> {
   const auth = await getAuthConfig();
@@ -179,27 +304,23 @@ export async function elevateWithGrant(opts: GlobalOptions): Promise<ElevatedSes
   if (!orgId) {
     throw new NotEnrolledError('No organization is configured. Run `am init` first.');
   }
+
+  const apiUrl = resolveApiUrl(opts, auth.apiUrl);
+
   if (!(await enrollmentFor(orgId))) {
-    throw new NotEnrolledError(
-      canHoldGrant()
-        ? 'This machine is not enrolled for admin access yet. Run `am auth elevate` once to enrol.'
-        : `${store().name} cannot gate a secret on human presence, so no grant is kept here. ` +
-          'Run `am auth elevate` and use the emailed code.',
-    );
+    return enrollThisMachine(apiUrl, credential, orgId);
   }
 
   const grant = await readGrant(orgId);
   if (grant === null) {
     // Marker present, secret gone — the keychain entry was removed out from
-    // under us. Clear the marker so the next run asks for enrolment instead of
-    // repeating this.
+    // under us. Clear the marker, then enrol: the user did not choose this
+    // state and cannot see it, so reporting it and stopping would only make
+    // them re-run the command that is already running.
     await forgetEnrollment(orgId);
-    throw new NotEnrolledError(
-      'The stored admin grant is gone from your keychain. Run `am auth elevate` to enrol again.',
-    );
+    return enrollThisMachine(apiUrl, credential, orgId);
   }
 
-  const apiUrl = resolveApiUrl(opts, auth.apiUrl);
   const result = await post<{ api_key: string; api_key_id: string; expires_at: string }>(
     apiUrl,
     '/v1/agent/elevate',
@@ -209,12 +330,12 @@ export async function elevateWithGrant(opts: GlobalOptions): Promise<ElevatedSes
   if (!result.ok) {
     // A refused grant is spent: revoked, expired, or issued for another org.
     // Dropping it locally keeps the next command from prompting for a secret
-    // the server has already said it will not accept.
+    // the server has already said it will not accept. Say why before falling
+    // back to the code, or the email arrives with no explanation.
     if (result.status === 403) {
       await forgetEnrollment(orgId);
-      throw new NotEnrolledError(
-        `${result.message} Run \`am auth elevate\` to enrol this machine again.`,
-      );
+      process.stderr.write(`${result.message} Enrolling this machine again.\n`);
+      return enrollThisMachine(apiUrl, credential, orgId);
     }
     throw new Error(`Step-up failed: ${result.message}`);
   }
@@ -231,14 +352,14 @@ export async function elevateWithGrant(opts: GlobalOptions): Promise<ElevatedSes
  *
  * Held in memory, for the span of one call, and nowhere else.
  *
- * The alternative — {@link activateSession} — parks the credential in a profile
- * and marks that profile active, which grants master authority to *everything*
- * running `am` on this machine until it lapses. The keychain gate does not
- * narrow that: it is paid once, by the human who elevated, and the window it
- * opens is inherited by every later process, an agent shelling out included.
- * Inside that window the agent reads every vault secret, and `apiKeys.create`
- * lets it mint itself a permanent master key that outlives the session
- * entirely. So the window, not the exchange, is what has to go.
+ * What this replaced parked the credential in a profile and marked that profile
+ * active, which granted master authority to *everything* running `am` on this
+ * machine until it lapsed. The keychain gate does not narrow that: it is paid
+ * once, by the human who elevated, and the window it opens is inherited by
+ * every later process, an agent shelling out included. Inside that window the
+ * agent reads every vault secret, and `apiKeys.create` lets it mint itself a
+ * permanent master key that outlives the session entirely. So the window, not
+ * the exchange, is what had to go.
  *
  * Process memory is the right place because it is exactly as wide as the
  * authority should be: one command, one dialog, one use. Nothing survives the
@@ -269,72 +390,4 @@ export async function withElevation<T>(
   } finally {
     elevatedKey = undefined;
   }
-}
-
-/** The profile a privileged session lands in. */
-export function elevatedProfileName(orgId: string | undefined): string {
-  return orgId ? `${orgId}-${ELEVATED_PROFILE_SUFFIX}` : ELEVATED_PROFILE_SUFFIX;
-}
-
-/**
- * Park a privileged session in its own profile and switch to it.
- *
- * Not written over the active credential: this key expires in minutes, and
- * overwriting the agent key with it would leave the machine holding a dead
- * credential and no obvious way back.
- */
-export async function activateSession(
-  session: ElevatedSession,
-  apiUrl: string,
-): Promise<{ profile: string; previous: string | undefined }> {
-  const config = await getConfig();
-  const previous = config.activeProfile;
-  const name = elevatedProfileName(config.defaultOrg);
-
-  await saveConfig({
-    ...config,
-    activeProfile: name,
-    profiles: {
-      ...config.profiles,
-      [name]: {
-        apiUrl,
-        apiKey: session.apiKey,
-        defaultOrg: config.defaultOrg,
-        defaultIdentity: config.defaultIdentity,
-        outputFormat: config.outputFormat,
-        expiresAt: session.expiresAt,
-      },
-    },
-  });
-
-  return { profile: name, previous: previous === name ? undefined : previous };
-}
-
-/**
- * True when a privileged session is already active and still valid, so a
- * caller can skip the dialog entirely.
- *
- * This is what makes the flow behave like `sudo` rather than prompting on every
- * command in a sequence: the first admin command in a burst asks for the
- * password, the rest ride the session until it lapses.
- *
- * Liveness is decided by `profileCredentialLapsed`, the same predicate the
- * credential path uses, rather than re-derived here. Re-deriving it is what
- * this function used to do, and the two answers disagreed on exactly the case
- * that matters: a session profile with no recorded `expiresAt` — written by a
- * CLI that did not record one — counted as live here and as dead there. The
- * effect was the opposite of a missing prompt. The credential path rejected the
- * profile and sent the agent key, the server answered MASTER_KEY_REQUIRED, and
- * this function then told the retry logic a session was already running, so no
- * step-up was attempted and the command failed with nothing the user could act
- * on. The comment in `elevateForRetry` — "the failing request went out under
- * it" — was false in precisely that case.
- */
-export async function hasLiveSession(): Promise<boolean> {
-  const config = await getConfig();
-  const active = config.activeProfile;
-  if (!active) return false;
-  const profile = config.profiles?.[active];
-  if (!profile?.apiKey || active !== elevatedProfileName(config.defaultOrg)) return false;
-  return !profileCredentialLapsed(active, profile);
 }

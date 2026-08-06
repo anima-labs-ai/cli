@@ -404,11 +404,11 @@ describe('config', () => {
   });
 
   // The bug these lock down: profiles carried a credential that nothing in the
-  // request path ever read. `am auth elevate` stored a working master key under
-  // `profile:<name>`, marked that profile active, and every later command still
-  // authenticated as the agent — so `am tail` reported "master key required"
-  // immediately after a successful elevation. Any of these failing means the
-  // active profile has gone back to being decorative.
+  // request path ever read. The elevate command of the day stored a working
+  // master key under `profile:<name>`, marked that profile active, and every
+  // later command still authenticated as the agent — so `am tail` reported
+  // "master key required" immediately after a successful elevation. Any of
+  // these failing means the active profile has gone back to being decorative.
   describe('active profile drives the credential', () => {
     const ISO_PAST = '2020-01-01T00:00:00.000Z';
     const ISO_FUTURE = '2999-01-01T00:00:00.000Z';
@@ -465,7 +465,7 @@ describe('config', () => {
         activeProfile: 'elevated',
         profiles: { elevated: { apiUrl: 'https://api.useanima.sh', apiKey: 'sk_live_master' } },
       });
-      // `elevatedProfileName(undefined)` produces a bare `elevated`, which a
+      // With no default org the old naming produced a bare `elevated`, which a
       // plain `-elevated` suffix check would miss — leaving exactly the
       // org-less setup unable to recover from a stale session.
       expect((await config.getAuthConfig()).apiKey).toBe('ak_agent');

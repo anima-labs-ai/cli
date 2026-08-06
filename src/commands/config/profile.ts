@@ -41,8 +41,8 @@ export function configProfileCommand(): Command {
         // There was no way back. `use` requires a profile that exists, and
         // "normal" is not a profile called `default` — it is `activeProfile`
         // being unset, which only `delete` produced, and only by destroying
-        // the profile. `am auth elevate` consequently signed off with
-        // `am config profile use default`, a command that always failed.
+        // the profile. The elevate command of the day consequently signed off
+        // with `am config profile use default`, a command that always failed.
         const active = await getActiveProfile();
         if (!active) {
           output.success('No profile was active — already using your top-level config.');
@@ -52,7 +52,7 @@ export function configProfileCommand(): Command {
         try {
           await clearActiveProfile();
           // Named, because the point of the command is usually "get me off
-          // whatever elevate switched me to" and the answer is worth seeing.
+          // whatever switched me here" and the answer is worth seeing.
           output.success(`Stopped using profile "${active.name}". Now on your top-level config.`);
         } catch (err: unknown) {
           output.fatal(err instanceof Error ? err.message : String(err));

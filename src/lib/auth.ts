@@ -4,6 +4,7 @@ import {
   getAuthConfig,
   saveAuthConfig,
 } from './config.js';
+import { currentElevatedKey } from './elevation.js';
 import {
   isOAuthAccessToken,
   OAuthRefreshError,
@@ -243,6 +244,10 @@ export async function requireAuth(opts: GlobalOptions): Promise<ApiClient> {
 // (`ensureFreshOAuthToken`) between successive calls in the same process
 // without rebuilding the client. `ensureAuthHeaders` is the bridge.
 //
+// Per-request resolution is also what lets an in-flight elevation reach the
+// wire: the retry inside `withElevation` calls back in here and gets the
+// privileged key, without anything having been written down for it to read.
+//
 // Pass `{ requireToken: true }` to mirror `requireAuth`'s eager check —
 // surfaces the "not authenticated" error before the first network call
 // instead of letting the server return a confusing 401.
@@ -251,6 +256,30 @@ export async function ensureAuthHeaders(
   opts: GlobalOptions,
   { requireToken = false }: { requireToken?: boolean } = {},
 ): Promise<Record<string, string>> {
+  // An elevation in flight outranks every other layer — flag, env, profile,
+  // auth.json. Not a precedence preference: the elevated key exists *because*
+  // the credential the chain below would pick was just refused, so deferring to
+  // it would send the retry out under the very key the server rejected and make
+  // the step-up a no-op that still charged the user a password dialog.
+  //
+  // `ANIMA_API_KEY` is the case that makes this explicit. It wins outright
+  // everywhere else here, and letting it win during elevation would leave
+  // auto-elevation silently inert for anyone driving the CLI from the
+  // environment — which is most agents and every CI job.
+  //
+  // Returning early also keeps `ensureFreshOAuthToken` out of the window. The
+  // elevated key is a short-lived master key, not an OAuth access token; there
+  // is nothing to refresh, and a rotation mid-elevation would only be a network
+  // round-trip whose result this request cannot use.
+  const elevated = currentElevatedKey();
+  if (elevated !== undefined) {
+    const headers: Record<string, string> = { Authorization: `Bearer ${elevated}` };
+    if (opts.test) {
+      headers['X-Anima-Test-Mode'] = '1';
+    }
+    return headers;
+  }
+
   const auth = await ensureFreshOAuthToken(opts);
 
   const explicitApiKey = process.env.ANIMA_API_KEY;

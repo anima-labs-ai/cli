@@ -97,9 +97,9 @@ export interface ProfileConfig {
   defaultIdentity?: string;
   outputFormat?: 'table' | 'json' | 'yaml';
   /**
-   * When this profile's credential stops working, ISO-8601. Only set for
-   * profiles holding a short-lived key (`am auth elevate` mints a 15-minute
-   * one); a durable profile leaves it undefined and never expires.
+   * When this profile's credential stops working, ISO-8601. Only ever set on
+   * the session profiles an older CLI's `auth elevate` wrote, which held a
+   * 15-minute key; a durable profile leaves it undefined and never expires.
    */
   expiresAt?: string;
 }
@@ -553,18 +553,19 @@ export async function getAuthConfig(): Promise<AuthConfig> {
 /**
  * Suffix marking a profile as a privileged *session* rather than an identity.
  *
- * Only `am auth elevate` writes one. Lives here rather than in elevation.ts
- * because `activeProfileCredential` has to recognise one, and elevation.ts
- * already depends on this module — the other direction would be a cycle.
+ * Nothing writes one any more — elevation is per-command and keeps its
+ * credential in process memory. This stays because machines that elevated with
+ * an older CLI still have such a profile marked active, and
+ * `activeProfileCredential` has to recognise it to stand it down.
  */
 export const ELEVATED_PROFILE_SUFFIX = 'elevated';
 
 /**
  * Is this profile a privileged session rather than a durable identity?
  *
- * Matches both names `elevatedProfileName` can produce: `<orgId>-elevated`,
- * and the bare `elevated` used when no default org is set. Exported so the two
- * are decided in one place — a predicate that missed the bare form would leave
+ * Matches both names the old naming could produce: `<orgId>-elevated`, and the
+ * bare `elevated` used when no default org was set. Exported so the two are
+ * decided in one place — a predicate that missed the bare form would leave
  * exactly the org-less setup unable to recover from a stale session.
  */
 export function isElevatedProfileName(name: string): boolean {
@@ -618,10 +619,10 @@ export function profileCredentialLapsed(name: string, profile: ProfileConfig): b
  * Profiles were always meant to switch identity — `am init` writes one per
  * org and `am config profile show` prints its API key — but nothing in the
  * credential path ever read one back. `getAuthConfig` sourced the key solely
- * from auth.json, so `am config profile use X` and `am auth elevate` both
- * changed which profile was *marked* active while every request kept going
- * out under auth.json's key. `am tail` after a successful elevate still got
- * "master key required" for exactly this reason: the master key was sitting
+ * from auth.json, so `am config profile use X` and the elevate command of the
+ * day both changed which profile was *marked* active while every request kept
+ * going out under auth.json's key. `am tail` after a successful elevate still
+ * got "master key required" for exactly this reason: the master key was sitting
  * in the keychain under `profile:<name>`, which no caller read.
  *
  * Fixing it here rather than in `ensureAuthHeaders` keeps one source of truth
@@ -653,7 +654,8 @@ async function activeProfileCredential(): Promise<{ apiKey: string; apiUrl?: str
       _warnedExpiredProfiles.add(active.name);
       process.stderr.write(
         `[anima] admin session "${active.name}" has expired; using your default credential instead. ` +
-          'Run `am auth elevate` when you next need admin access.\n',
+          'Admin commands now ask for access themselves, so nothing needs re-elevating — ' +
+          '`am config profile clear` retires this profile for good.\n',
       );
     }
     return null;

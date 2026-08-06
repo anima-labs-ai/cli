@@ -236,10 +236,10 @@ async function elevateForRetry(opts: GlobalOptions): Promise<ElevatedSession | n
  * credential inside the elevation window rather than from anything left on
  * disk. Rebuilding the client would work too, and would only obscure that.
  *
- * Note the window is currently only *held*: the credential path does not read
- * {@link currentElevatedKey} yet, so the retry still goes out under the
- * ordinary credential. That wiring lands with the removal of
- * `activateSession`, which is what supplies the elevated key today.
+ * What makes the retry privileged is `ensureAuthHeaders` reading the in-process
+ * key: nothing is written down, so the second attempt is privileged only while
+ * `withElevation` is on the stack. A holder nothing consumed would look
+ * identical here and fail identically to the first attempt.
  *
  * The retry is not itself wrapped, so a command can prompt at most once.
  */

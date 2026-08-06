@@ -121,50 +121,62 @@ describe('owner grants', () => {
     expect(elevation.canHoldGrant()).toBe(false);
   });
 
-  describe('live session', () => {
-    async function withSession(expiresAt: string | undefined) {
-      await config.saveConfig({
-        defaultOrg: ORG,
-        activeProfile: elevation.elevatedProfileName(ORG),
-        profiles: {
-          [elevation.elevatedProfileName(ORG)]: { apiKey: 'sk_live_session', expiresAt },
-        },
-      });
+  /**
+   * Enrolment runs inline now, on first use, rather than behind its own
+   * command. That is a better place for it in a terminal and a strictly worse
+   * one everywhere else: the code has to be read out of an inbox and typed
+   * back, so a CI job or an agent driving `am` would sit on a prompt nothing
+   * is ever going to answer. A step-up that hangs is worse than one that
+   * fails — the job burns its timeout and reports nothing usable.
+   */
+  describe('inline enrolment', () => {
+    /**
+     * Pinned explicitly, both ways. `bun test` inherits the developer's stdin,
+     * so this is a TTY when run from a terminal and not in CI — and the branch
+     * being tested is the one that otherwise blocks forever.
+     */
+    function withStdinTty<T>(isTTY: boolean, fn: () => T): T {
+      const original = process.stdin.isTTY;
+      process.stdin.isTTY = isTTY;
+      try {
+        return fn();
+      } finally {
+        process.stdin.isTTY = original;
+      }
     }
 
-    test('an unexpired elevated profile counts as live', async () => {
-      await withSession(FUTURE);
-      expect(await elevation.hasLiveSession()).toBe(true);
+    beforeEach(async () => {
+      await config.saveAuthConfig({ apiUrl: 'https://api.useanima.sh', apiKey: 'ak_agent' });
+      await config.saveConfig({ defaultOrg: ORG });
     });
 
-    test('an expired one does not', async () => {
-      await withSession('2020-01-01T00:00:00.000Z');
-      // This is what stops auto-elevation short-circuiting on a dead session
-      // and reporting a permissions error the user could have fixed.
-      expect(await elevation.hasLiveSession()).toBe(false);
-    });
+    test('with no terminal to type the code into, it fails rather than prompting', async () => {
+      await withStdinTty(false, async () => {
+        const error = await elevation.elevateWithGrant({}).catch((e: unknown) => e);
 
-    test('a session with no recorded expiry is dead, not eternal', async () => {
-      await withSession(undefined);
-
-      // The credential path already treats an expiry-less session profile as
-      // lapsed — they were written by a CLI that did not record one, so their
-      // 15-minute key is long dead. This has to agree, and for the opposite
-      // reason to the expired case above: if it reported "live", the retry
-      // logic would skip the step-up believing the failing request had already
-      // gone out under a privileged key. It had not — the credential path
-      // rejected this profile and sent the agent key — so the user would get a
-      // bare MASTER_KEY_REQUIRED and no prompt, on every command, forever.
-      expect(await elevation.hasLiveSession()).toBe(false);
-    });
-
-    test('an ordinary profile is not a privileged session', async () => {
-      await config.saveConfig({
-        defaultOrg: ORG,
-        activeProfile: 'work',
-        profiles: { work: { apiKey: 'ak_agent' } },
+        expect(error).toBeInstanceOf(elevation.NotEnrolledError);
+        // The message has to name the reason, not just the refusal: the operator
+        // reading a CI log needs to know a human has to run this once, from a
+        // terminal, and that nothing about the job's configuration will fix it.
+        expect((error as Error).message).toContain('interactive');
       });
-      expect(await elevation.hasLiveSession()).toBe(false);
+    });
+
+    test('a marker with no secret behind it is cleared before giving up', async () => {
+      await elevation.recordEnrollment(ORG, 'sk_live_grant', FUTURE);
+      // The keychain entry removed out from under us — Keychain Access, a
+      // migration, a wiped login keychain.
+      await memoryStore.deleteSecret(GRANT_ACCOUNT);
+
+      await withStdinTty(false, async () => {
+        await expect(elevation.elevateWithGrant({})).rejects.toBeInstanceOf(
+          elevation.NotEnrolledError,
+        );
+      });
+
+      // Leaving the marker would send every later step-up looking for a secret
+      // that is not there, and reporting the wrong reason for failing.
+      expect(await elevation.enrollmentFor(ORG)).toBeUndefined();
     });
   });
 
@@ -206,9 +218,9 @@ describe('owner grants', () => {
      *
      * The config-file assertion alone would not catch the route that matters.
      * `saveConfig` strips every profile `apiKey` out of the file and into the
-     * secure store, so `activateSession` — the persistence being removed —
-     * leaves the credential in the keychain and only its metadata in
-     * config.json. A file-only check would call that clean.
+     * secure store, so the profile-parking this replaced left the credential in
+     * the keychain and only its metadata in config.json. A file-only check
+     * would call that clean.
      */
     function recordStoreWrites(): string[] {
       const written: string[] = [];

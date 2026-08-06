@@ -88,7 +88,7 @@ function handleError(output: Output, error: unknown, action: string): never {
 			// The single most likely mistake with approve/decline, and the message
 			// has to name the fix rather than just the refusal.
 			output.error(
-				`${error.message} (approve/decline need a master credential — use an mk_ key or run \`am auth elevate\`)`,
+				`${error.message} (approve/decline need a master credential — use an mk_ key, or run this from an interactive terminal where it can ask for admin access)`,
 			);
 		} else if (error.status === 404) {
 			output.error("Provisioning request not found.");
