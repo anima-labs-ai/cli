@@ -20,6 +20,7 @@ import { onboardCommand } from "./commands/onboard/index.js";
 import { orgCommands } from "./commands/org/index.js";
 import { phoneCommands } from "./commands/phone/index.js";
 import { registryCommands } from "./commands/registry/index.js";
+import { permissionsCommands } from "./commands/permissions/index.js";
 import { requestCommands } from "./commands/request/index.js";
 import { securityCommands } from "./commands/security/index.js";
 import { setupMcpCommands } from "./commands/setup-mcp/index.js";
@@ -108,6 +109,7 @@ export function createProgram(): Command {
 	program.addCommand(registryCommands());
 	program.addCommand(vaultCommands());
 	program.addCommand(requestCommands());
+	program.addCommand(permissionsCommands());
 	program.addCommand(configCommands());
 	program.addCommand(setupMcpCommands());
 	program.addCommand(extensionCommands());
